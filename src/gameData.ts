@@ -1,0 +1,44 @@
+import {
+  Crosshair, Eye, Fingerprint, HeartPulse, Radio, Shield, Skull, Users,
+} from 'lucide-react';
+
+export type RoleName =
+  | 'Mafia'
+  | 'Doctor'
+  | 'Detective'
+  | 'Good Informant'
+  | 'Bad Informant'
+  | 'Old Lady with Shotgun'
+  | 'Citizen';
+
+export type Role = {
+  id: string;
+  name: RoleName;
+  displayName: string;
+  faction: 'citizens' | 'mafia';
+  description: string;
+  ability: string;
+  cardImage: string;
+  team: 'town' | 'mafia' | 'wildcard';
+  icon: typeof Shield;
+};
+
+export type Player = {
+  id: number;
+  name: string;
+  initials: string;
+  color: string;
+  host?: boolean;
+  ready?: boolean;
+  status?: string;
+};
+
+export const roles: Role[] = [
+  { id: 'mafia-member', name: 'Mafia', displayName: 'Мафийн гишүүн', faction: 'mafia', description: 'Мафийн бүлгийн нууц гишүүн.', ability: 'Шөнө нэг тоглогчийг онилж, багийн довтолгоог сонгоно.', cardImage: '/assets/cards/mafiin-tuluulugch.jpg', team: 'mafia', icon: Skull },
+  { id: 'police-officer', name: 'Detective', displayName: 'Цагдаа', faction: 'citizens', description: 'Иргэдийн багийн мөрдөгч.', ability: 'Шөнө бүр амьд байгаа нэг тоглогчийг шалгаж, тухайн тоглогч Мафийн бүлэгт хамаарах эсэхийг олж мэднэ.', cardImage: '/assets/cards/mordogch.jpg', team: 'town', icon: Eye },
+  { id: 'doctor', name: 'Doctor', displayName: 'Эмч', faction: 'citizens', description: 'Иргэдийн багийн эмч.', ability: 'Шөнө бүр нэг амьд тоглогчийг сонгон хамгаална. Мафийн халдлагад өртсөн бол хамгаалсан тоглогч амьд үлдэнэ. Өөрийгөө ч хамгаалж болно.', cardImage: '/assets/cards/emch.jpg', team: 'town', icon: HeartPulse },
+  { id: 'good-informant', name: 'Good Informant', displayName: 'Сайн мэдээлэгч', faction: 'citizens', description: 'Мафийн тухай нууц мэдээлэл цуглуулдаг иргэн.', ability: 'Мафийн гишүүдийн хэн болохыг нууцаар мэдэж авна. Олж авсан мэдээлэл зөвхөн танд харагдана.', cardImage: '/assets/cards/sain-medeelegch.jpg', team: 'town', icon: Fingerprint },
+  { id: 'mafia-informant', name: 'Bad Informant', displayName: 'Мафийн мэдээлэгч', faction: 'mafia', description: 'Мафийн талд нууцаар ажилладаг мэдээлэгч.', ability: 'Мафийн талд нууцаар тусална. Таны жинхэнэ үүргийг мафийн гишүүд автоматаар мэдэхгүй. Ярилцлагын үеэр мафийн талд ашигтайгаар ажилла.', cardImage: '/assets/cards/mafiin-medeelegch.jpg', team: 'mafia', icon: Radio },
+  { id: 'shotgun-grandmother', name: 'Old Lady with Shotgun', displayName: 'Буутай эмээ', faction: 'citizens', description: 'Иргэдийн багийн зэвсэгтэй хамгаалагч.', ability: 'Хэрэв мафи таныг онилон довтолж, та хамгаалалтад байгаагүй бол өөрийгөө онилсон мафийн нэг гишүүнийг хамт тоглоомоос хасна.', cardImage: '/assets/cards/buutai-emee.jpg', team: 'town', icon: Crosshair },
+  { id: 'citizen', name: 'Citizen', displayName: 'Энгийн иргэн', faction: 'citizens', description: 'Хотын нууцын дунд сэжүүрээр дүгнэлт хийдэг жирийн иргэн.', ability: 'Танд тусгай шөнийн чадвар байхгүй. Хэлэлцүүлэгт оролцож, сэжүүрүүдийг шинжилж, санал хураалтаар мафийн гишүүдийг илрүүлэхэд тусална.', cardImage: '/assets/cards/civilian.jpg', team: 'town', icon: Users },
+];
