@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode, type CSSProperties } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
@@ -334,7 +334,7 @@ function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoos
   const soon = (category: GameCategory) => COMING_SOON.filter((game) => game.category === category).map((game) => game.title).join(', ');
   return <div className="inner-screen hub-screen"><TopBar title="ТОГЛООМ СОНГОНО УУ" subtitle="ТОГЛОХ" onBack={onBack} trailing={<button className="text-button hub-code-button" onClick={onJoinCode}><Radio size={14} /> КОДООР НЭГДЭХ</button>} />
     <div className="hub-cards">
-      <article className="hub-card hub-card-board">
+      <article className="hub-card hub-card-board" style={{ '--hub-bg': "url('/assets/hub/board-bg.jpg')" } as CSSProperties}>
         <h2>BOARD GAME</h2>
         <div className="hub-art hub-art-board" aria-hidden="true">
           <div className="hub-board-plane">
@@ -359,7 +359,7 @@ function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoos
         {soon('board') && <p className="hub-card-soon">Удахгүй: {soon('board')}</p>}
       </article>
 
-      <article className="hub-card hub-card-voice">
+      <article className="hub-card hub-card-voice" style={{ '--hub-bg': "url('/assets/hub/voice-bg.jpg')" } as CSSProperties}>
         <h2>VOICE GAME</h2>
         <div className="hub-art hub-art-voice" aria-hidden="true">
           <div className="hub-table">
