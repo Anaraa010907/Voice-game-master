@@ -41,6 +41,7 @@ export function useRoom(roomCode: string | null) {
   const [seats, setSeats] = useState<RoomSeat[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [missing, setMissing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (!supabase || !roomCode) return;
@@ -48,9 +49,17 @@ export function useRoom(roomCode: string | null) {
       supabase.from('game_rooms').select('room_code,name,host_id,max_players,is_private,status,game_type').eq('room_code', roomCode).maybeSingle(),
       supabase.from('game_room_players').select('user_id,seat,display_name,color,ready,avatar_url').eq('room_code', roomCode).order('seat'),
     ]);
+    const failure = roomResult.error ?? seatResult.error;
+    if (failure) {
+      // Keep the last good state; surface the problem instead of spinning on "connecting" forever.
+      setError('Өрөөний мэдээллийг уншиж чадсангүй. Сервер шинэчлэгдээгүй байж магадгүй.');
+      setLoaded(true);
+      return;
+    }
+    setError(null);
     setRoom((roomResult.data as RoomInfo | null) ?? null);
     setSeats((seatResult.data as RoomSeat[] | null) ?? []);
-    setMissing(!roomResult.error && !roomResult.data);
+    setMissing(!roomResult.data);
     setLoaded(true);
   }, [roomCode]);
 
@@ -67,7 +76,7 @@ export function useRoom(roomCode: string | null) {
     return () => { window.clearInterval(interval); void client.removeChannel(channel); };
   }, [roomCode, reload]);
 
-  return { room, seats, loaded, missing, reload };
+  return { room, seats, loaded, missing, error, reload };
 }
 
 /** Live public table view, this player's private view, and the phase deadline. */

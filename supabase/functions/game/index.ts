@@ -165,6 +165,7 @@ class GameServer {
     const password = isPrivate ? text(body, 'password', 32, false) : '';
     if (password && password.length < 4) throw new GameError(400, 'Өрөөний нууц үг хамгийн багадаа 4 тэмдэгт байна.');
     const me = await this.profile();
+    await this.closeIdleRoomsOfHost();
 
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const roomCodeValue = roomCode();
@@ -183,6 +184,15 @@ class GameServer {
       return { roomCode: roomCodeValue };
     }
     throw new GameError(503, 'Өрөөний код үүсгэж чадсангүй. Дахин оролдоно уу.');
+  }
+
+  /** A host has at most one waiting room: earlier lobbies they abandoned (closed the app, lost signal) are removed. */
+  private async closeIdleRoomsOfHost() {
+    const { data } = await this.admin.from('game_rooms').select('room_code').eq('host_id', this.userId).neq('status', 'playing');
+    const codes = (data ?? []).map((row: { room_code: string }) => row.room_code);
+    if (!codes.length) return;
+    await this.admin.from('voice_rooms').delete().in('room_code', codes);
+    await this.admin.from('game_rooms').delete().in('room_code', codes);
   }
 
   async join(body: Body) {
@@ -246,7 +256,8 @@ class GameServer {
       this.admin.from('game_private').delete().eq('room_code', roomCodeValue).eq('user_id', this.userId),
       this.admin.from('voice_room_members').delete().eq('room_code', roomCodeValue).eq('user_id', this.userId),
     ]);
-    if (!remaining.length) {
+    // The host leaving a room that is not mid-game closes it for everyone; a live game keeps going under a new host.
+    if (!remaining.length || (room.host_id === this.userId && room.status !== 'playing')) {
       await this.admin.from('voice_rooms').delete().eq('room_code', roomCodeValue);
       await this.admin.from('game_rooms').delete().eq('room_code', roomCodeValue);
       return { left: true, closed: true };

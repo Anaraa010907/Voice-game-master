@@ -426,14 +426,14 @@ function RoomBrowser({ gameType, onBack, onCreate, onJoinCode, onEnter }: { game
 function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullscreen }: {
   roomCode: string; userId: string; copied: boolean; onCopy: () => void; onLeft: () => void; onNotice: (text: string) => void; fullscreen: FullscreenState;
 }) {
-  const { room, seats, loaded, missing, reload } = useRoom(roomCode);
+  const { room, seats, loaded, missing, error, reload } = useRoom(roomCode);
   const [busy, setBusy] = useState(false);
   const mine = seats.find((seat) => seat.user_id === userId);
 
   useEffect(() => {
     // The room was closed, or this player is no longer seated (left on another device).
     if (loaded && (missing || (room && !mine))) {
-      onNotice('Та энэ өрөөнд байхгүй байна.');
+      onNotice(missing ? 'Өрөө хаагдсан байна.' : 'Та энэ өрөөнд байхгүй байна.');
       onLeft();
     }
   }, [loaded, missing, room, mine, onLeft, onNotice]);
@@ -455,7 +455,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
     onLeft();
   };
 
-  if (!room || !mine) return <div className="inner-screen"><TopBar title="ӨРӨӨ" subtitle="АЧААЛЖ БАЙНА" onBack={onLeft} /><div className="room-loading">Өрөөнд холбогдож байна…</div></div>;
+  if (!room || !mine) return <div className="inner-screen"><TopBar title="ӨРӨӨ" subtitle={error ? 'АЛДАА' : 'АЧААЛЖ БАЙНА'} onBack={leave} /><div className="room-loading">{error ?? 'Өрөөнд холбогдож байна…'}</div></div>;
 
   if (room.status !== 'lobby' && room.game_type === 'monopoly') {
     return <MonopolyScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} />;
@@ -493,7 +493,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
             <div className="lobby-hint"><LockKeyhole size={14} /><span>{isHost ? 'ТА ӨРӨӨНИЙ ЭЗЭН' : 'ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА'} <b>•</b> {hint}</span></div>
             <div className="lobby-actions">
               {!isHost && <button className={`secondary-button ready-button ${mine.ready ? 'is-ready' : ''}`} disabled={busy} onClick={() => run('ready', { ready: !mine.ready })}>{mine.ready ? <Check size={15} /> : <Shield size={15} />}{mine.ready ? 'БЭЛЭН' : 'БИ БЭЛЭН'}</button>}
-              <button className="text-button" onClick={leave}><ArrowLeft size={15} /> {i18n.common.leave.toUpperCase()}</button>
+              <button className="text-button" onClick={leave}><ArrowLeft size={15} /> {isHost ? 'ӨРӨӨГ ХААХ' : i18n.common.leave.toUpperCase()}</button>
               {isHost && <button className="primary-button start-button" disabled={busy || !canStart} onClick={() => run('start')}><Moon size={15} /> {i18n.app.startGame.toUpperCase()} <ChevronRight size={16} /></button>}
             </div>
           </div>
