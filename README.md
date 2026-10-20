@@ -75,6 +75,7 @@ There are no simulated players. Every seat is a signed-in person.
 - Phases move on when everyone who must act has acted, or when the phase timer runs out (any phone nudges the server with `tick`; the server re-checks the deadline). The host can skip waiting phases.
 - At least 4 players are needed; everyone except the host must press Ready.
 - **Public rooms** appear in the room list (Play → open rooms) with live seat counts; **Quick join** picks the lobby closest to starting. Private rooms are joined by code only and may have a password.
+- **Eliminated players** become spectators: they see every role and can talk in a separate *ghost* voice room (`<ROOM>-GHOST`). `livekit-voice` only issues ghost tokens to members marked not alive during a game, so living players cannot hear it even with a modified client. Ghosts still hear the main table. Returning to the lobby clears the ghost room.
 - There is no competitive rank. Finished games still add wins and losses to profile statistics; leaving a live game counts as a loss.
 
 Deploy from a Codespace terminal:

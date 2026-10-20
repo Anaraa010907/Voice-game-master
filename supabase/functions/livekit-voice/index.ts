@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { AccessToken, RoomServiceClient, TrackSource, TrackType } from 'npm:livekit-server-sdk@2';
 import { voicePhaseAllowsSpeaking } from '../_shared/voicePolicy.ts';
-import { isAllowedOrigin, parseVoiceRequest } from '../_shared/voiceRequest.ts';
+import { ghostRoomName, isAllowedOrigin, parseVoiceRequest } from '../_shared/voiceRequest.ts';
 
 const baseCorsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-room-controller-key',
@@ -97,6 +97,15 @@ Deno.serve(async (request) => {
           }
         }
       }
+      // Back in the lobby everyone is alive again: close the eliminated players' room.
+      if (body.phase === 'lobby') {
+        try {
+          const ghosts = await roomService.listParticipants(ghostRoomName(roomCode));
+          for (const ghost of ghosts) await roomService.removeParticipant(ghostRoomName(roomCode), ghost.identity);
+        } catch {
+          // The ghost room may not exist yet.
+        }
+      }
       return respond(200, { synchronized: true });
     }
 
@@ -113,6 +122,38 @@ Deno.serve(async (request) => {
     ]);
     if (membershipError || roomError) return respond(500, { error: 'Өрөөний гишүүнчлэлийг шалгаж чадсангүй.' });
     if (!membership || !voiceRoom) return respond(403, { error: 'Та энэ дуу хоолойн өрөөний гишүүн биш байна.' });
+
+    const ghost = 'channel' in body && body.channel === 'ghost';
+    if (ghost) {
+      const ghostRoom = ghostRoomName(roomCode);
+      if (body.action === 'leave') {
+        try {
+          const connected = await roomService.listParticipants(ghostRoom);
+          if (connected.some((participant) => participant.identity === user.id)) await roomService.removeParticipant(ghostRoom, user.id);
+        } catch {
+          // Nothing to leave.
+        }
+        return respond(200, { left: true });
+      }
+      // Only eliminated players during a game may enter; the living never get a token for this room.
+      if (membership.is_alive || voiceRoom.game_phase === 'lobby') return respond(403, { error: 'Үхэгсдийн суваг зөвхөн хасагдсан тоглогчдод нээлттэй.' });
+      const canTalk = !membership.is_muted;
+      const ghostToken = new AccessToken(livekitApiKey, livekitApiSecret, {
+        identity: user.id,
+        name: membership.participant_name,
+        metadata: JSON.stringify({ mutedByHost: membership.is_muted, ghost: true }),
+        ttl: '10m',
+      });
+      ghostToken.addGrant({
+        roomJoin: true,
+        room: ghostRoom,
+        canPublish: canTalk,
+        canPublishSources: canTalk ? [TrackSource.MICROPHONE] : [],
+        canSubscribe: true,
+        canPublishData: false,
+      });
+      return respond(200, { token: await ghostToken.toJwt(), serverUrl: livekitServerUrl, canPublish: canTalk, muted: membership.is_muted });
+    }
 
     if (body.action === 'leave') {
       const connected = await roomService.listParticipants(roomCode);

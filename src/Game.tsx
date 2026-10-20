@@ -11,6 +11,7 @@ import { i18n, translateMessage, translatePhase, translateRole, translateTeam } 
 import { VoiceAvatarIndicator, VoiceChatProvider, type VoicePhase } from './VoiceChat';
 import { FullscreenToggle, type FullscreenState } from './fullscreen';
 import { callGame, useCountdown, useGame, type RoomSeat } from './multiplayer';
+import GhostVoice from './GhostVoice';
 
 function roleInfo(name: RoleName) {
   return roles.find((item) => item.name === name)!;
@@ -33,7 +34,7 @@ function GamePlayerCard({ player, isCurrent, selected, selectable, voteCount, vo
   const shownRole = player.revealedRole ?? finalRole;
   return <button type="button" className={`game-player-card ${isCurrent ? 'is-current' : ''} ${selected ? 'is-selected' : ''} ${!player.alive ? 'is-dead' : ''} ${runoff ? 'is-runoff' : ''}`} onClick={onSelect} disabled={!selectable} aria-pressed={selected}>
     <span className={`avatar avatar-${player.color}`}><span>{player.initials}</span>{player.host && <i><Crown size={10} /></i>}<VoiceAvatarIndicator name={player.name} /></span>
-    <span className="game-player-copy"><b>{player.name}{isCurrent && <small>ЧИ</small>}</b><span className={player.alive ? 'alive-label' : 'dead-label'}>{player.alive ? (runoff ? 'ДАВТАН САНАЛД' : 'АМЬД') : shownRole ? `ХАСАГДСАН · ${translateRole(shownRole).toUpperCase()}` : 'ХАСАГДСАН'}</span></span>
+    <span className="game-player-copy"><b>{player.name}{isCurrent && <small>ЧИ</small>}</b><span className={`${player.alive ? 'alive-label' : 'dead-label'} ${finalRole && roleInfo(finalRole).team === 'mafia' ? 'spectator-mafia' : ''}`}>{player.alive ? (runoff ? 'ДАВТАН САНАЛД' : finalRole ? `АМЬД · ${translateRole(finalRole).toUpperCase()}` : 'АМЬД') : shownRole ? `ХАСАГДСАН · ${translateRole(shownRole).toUpperCase()}` : 'ХАСАГДСАН'}</span></span>
     {voteCount !== undefined && <span className="player-vote-count">{voteCount} <small>САНАЛ</small></span>}
     {player.voteStatus === 'revealed' && <span className="player-vote-status">{player.voteTargetId === null ? 'АЛГАСАВ' : `САНАЛ ${voteTargetName ?? ''}`}</span>}
     {selectable && <Target className="game-player-target" size={14} />}
@@ -114,7 +115,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
     if (game.phase === 'Night' && canChooseNightTarget(player)) setNightSelection(player.id);
     if (game.phase === 'Voting' && canSelectForVote(player)) setVoteSelection(player.id);
   };
-  const renderPlayer = (player: PublicGamePlayer) => <GamePlayerCard key={player.id} player={player} isCurrent={player.id === me.seat} selected={game.phase === 'Night' ? nightSelection === player.id : voteSelection === player.id} selectable={game.phase === 'Night' ? canChooseNightTarget(player) : canSelectForVote(player)} voteCount={game.votesRevealed ? game.voteCounts[String(player.id)] : undefined} voteTargetName={player.voteTargetId === null ? undefined : nameOf(player.voteTargetId)} runoff={inRunoff(player)} finalRole={game.finalRoles?.[player.id]} onSelect={() => select(player)} />;
+  const renderPlayer = (player: PublicGamePlayer) => <GamePlayerCard key={player.id} player={player} isCurrent={player.id === me.seat} selected={game.phase === 'Night' ? nightSelection === player.id : voteSelection === player.id} selectable={game.phase === 'Night' ? canChooseNightTarget(player) : canSelectForVote(player)} voteCount={game.votesRevealed ? game.voteCounts[String(player.id)] : undefined} voteTargetName={player.voteTargetId === null ? undefined : nameOf(player.voteTargetId)} runoff={inRunoff(player)} finalRole={game.finalRoles?.[player.id] ?? me.spectatorRoles?.[player.id]} onSelect={() => select(player)} />;
 
   const confirmNight = async () => {
     if (nightSelection === null) return onNotice(translateMessage('Select a living target first.'));
@@ -138,10 +139,10 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
 
     {game.phase === 'Role Reveal' ? <RoleReveal player={currentPlayer} me={me} namesOf={namesOf} roomName={roomName} isHost={isHost} busy={busy} secondsLeft={secondsLeft} onContinue={hostSkip} /> : <>
       <div className="core-game-board">
-        <aside className="game-player-list game-player-list-left"><div className="game-list-heading">{i18n.game.table} <span>{String(game.players.length).padStart(2, '0')}</span></div>{leftPlayers.map(renderPlayer)}</aside>
+        <aside className="game-player-list game-player-list-left"><div className="game-list-heading">{i18n.game.table} <span>{String(game.players.length).padStart(2, '0')}</span></div>{leftPlayers.map(renderPlayer)}{!currentPlayer.alive && <GhostVoice roomCode={roomCode} userId={userId} />}</aside>
         <section className="crime-stage">
           <div className="crime-stage-art" aria-hidden="true"><div className="crime-window" /><div className="crime-light" /><div className="crime-table" /></div>
-          <div className="crime-stage-label"><span><i /> {roomName.toUpperCase()} · {roomCode}</span></div>
+          <div className="crime-stage-label"><span><i /> {roomName.toUpperCase()} · {roomCode}</span>{me.spectatorRoles && <span className="spectator-tag">АЖИГЛАГЧ · БҮХ ДҮР ХАРАГДАНА</span>}</div>
           {game.phase === 'Night' && <NightPanel round={game.round} player={currentPlayer} me={me} mafiaNames={mafiaNames} selectedName={nightSelection === null ? undefined : nameOf(nightSelection)} lockedName={me.nightAction.targetId === null ? undefined : nameOf(me.nightAction.targetId)} lastProtectedName={me.lastProtectedId === null ? undefined : nameOf(me.lastProtectedId)} busy={busy} onConfirm={confirmNight} onCancel={() => setNightSelection(null)} />}
           {game.phase === 'Morning' && <MorningPanel round={game.round} report={game.morningReport} winner={game.winner} isHost={isHost} busy={busy} onContinue={hostSkip} />}
           {game.phase === 'Discussion' && <DiscussionPanel round={game.round} alive={currentPlayer.alive} isHost={isHost} busy={busy} onVote={hostSkip} onPrivate={() => setPrivateOpen((open) => !open)} />}

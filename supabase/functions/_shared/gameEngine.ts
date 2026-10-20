@@ -558,11 +558,16 @@ export function publicView(state: GameEngineState) {
 }
 export type PublicGameView = ReturnType<typeof publicView>;
 
-/** What one player may see about themselves. Never includes anyone else's role. */
+/**
+ * What one player may see. Living players see only their own role. Eliminated players become
+ * spectators and see every role, since they can no longer affect the game.
+ */
 export function privateView(state: GameEngineState, playerId: number) {
   const secret = state.privatePlayers[playerId];
   if (!secret) return null;
+  const eliminated = state.publicPlayers.find((player) => player.id === playerId)?.alive === false;
   return {
+    spectatorRoles: eliminated ? Object.fromEntries(Object.entries(state.privatePlayers).map(([id, player]) => [id, player.role])) as Record<number, RoleName> : null,
     seat: playerId,
     role: secret.role,
     team: secret.team,
@@ -610,6 +615,9 @@ export function runGameEngineSelfTests() {
   require(!state.publicEventLog.join(' ').includes('aligned with the Mafia'), 'Detective results are absent from public logs.');
   require(Boolean(submitNightAction(state, 1, 3).error), 'Detective cannot submit multiple investigations in one Night.');
   require(privateView(state, 4)?.knownAlignment[2] === undefined, 'Other players never see the Detective notebook.');
+  require(privateView(state, 4)?.spectatorRoles === null, 'Living players never receive other roles.');
+  const spectating = { ...state, publicPlayers: state.publicPlayers.map((player) => player.id === 4 ? { ...player, alive: false } : player) };
+  require(privateView(spectating, 4)?.spectatorRoles?.[3] === 'Mafia', 'Eliminated players see every role as spectators.');
 
   state = startNight(fixed({ 1: 'Old Lady with Shotgun', 2: 'Mafia', 3: 'Citizen', 4: 'Citizen' }));
   state = submitNightAction(state, 2, 1).state;

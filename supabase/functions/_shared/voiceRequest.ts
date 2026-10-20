@@ -2,8 +2,11 @@ import type { VoicePhase } from './voicePolicy.ts';
 
 export type VoiceAction = 'token' | 'permissions' | 'mute' | 'leave' | 'sync';
 
+/** `ghost` is the separate voice room for eliminated players; living players can never join it. */
+export type VoiceChannel = 'main' | 'ghost';
+
 export type VoiceRequest =
-  | { action: 'token' | 'permissions' | 'leave'; roomCode: string }
+  | { action: 'token' | 'permissions' | 'leave'; roomCode: string; channel?: VoiceChannel }
   | { action: 'mute'; roomCode: string; participantIdentity: string; muted: boolean }
   | { action: 'sync'; roomCode: string; phase: VoicePhase; postGameVoice?: boolean };
 
@@ -12,9 +15,9 @@ const roomCodePattern = /^[A-Z0-9-]{4,32}$/;
 const userIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const voiceActions: VoiceAction[] = ['token', 'permissions', 'mute', 'leave', 'sync'];
 const fieldsByAction: Record<VoiceAction, ReadonlySet<string>> = {
-  token: new Set(['action', 'roomCode']),
+  token: new Set(['action', 'roomCode', 'channel']),
   permissions: new Set(['action', 'roomCode']),
-  leave: new Set(['action', 'roomCode']),
+  leave: new Set(['action', 'roomCode', 'channel']),
   mute: new Set(['action', 'roomCode', 'participantIdentity', 'muted']),
   sync: new Set(['action', 'roomCode', 'phase', 'postGameVoice']),
 };
@@ -52,8 +55,14 @@ export function parseVoiceRequest(value: unknown): VoiceRequest | null {
       : { action, roomCode, phase, postGameVoice };
   }
 
+  if (body.channel !== undefined) {
+    if (body.channel !== 'main' && body.channel !== 'ghost') return null;
+    if (body.channel === 'ghost') return { action: action as 'token' | 'leave', roomCode, channel: 'ghost' };
+  }
   return { action, roomCode };
 }
+
+export const ghostRoomName = (roomCode: string) => `${roomCode}-GHOST`;
 
 export function isAllowedOrigin(origin: string | null, configuredOrigins: string): boolean {
   if (origin === null) return true;

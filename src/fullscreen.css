@@ -784,3 +784,116 @@ body {
     grid-template-rows: minmax(0, 1fr) auto;
   }
 }
+
+/* ---------- Eliminated players: ghost voice + spectator ---------- */
+
+.ghost-voice {
+  display: grid;
+  gap: 7px;
+  margin-top: auto;
+  padding: 9px;
+  border: 1px solid #8a76b066;
+  background: linear-gradient(160deg, #1d1a2a, #13121b);
+  color: #cfc5e4;
+}
+
+.ghost-voice header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ghost-voice header b {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #d9cff0;
+}
+
+.ghost-voice header small {
+  flex-basis: 100%;
+  color: #8f86a6;
+  font-size: 10px;
+}
+
+.ghost-voice p {
+  margin: 0;
+  color: #a69dbd;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.ghost-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ghost-members span {
+  padding: 2px 6px;
+  border: 1px solid #ffffff1a;
+  background: #ffffff0a;
+  font-size: 11px;
+}
+
+.ghost-members span.is-speaking {
+  border-color: #b9a6e6;
+  color: #fff;
+  box-shadow: 0 0 8px #9b84d655;
+}
+
+.ghost-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.viewport .game-frame .ghost-actions .primary-button,
+.viewport .game-frame .ghost-actions .secondary-button {
+  flex: 1 1 auto;
+  height: 34px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.viewport .game-frame .ghost-actions .text-button {
+  height: 34px;
+  font-size: 11px;
+}
+
+/* Dead players' list keeps the ghost panel at the bottom. */
+.viewport .game-frame .game-player-list-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.spectator-tag {
+  color: #b9a6e6 !important;
+  letter-spacing: 1px;
+}
+
+.viewport .game-frame .crime-stage-label span.spectator-tag {
+  display: inline !important;
+}
+
+.viewport .game-frame .game-player-copy > span.spectator-mafia {
+  color: #e0787c;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .ghost-voice {
+    gap: 5px;
+    padding: 7px;
+  }
+
+  .ghost-voice > p,
+  .ghost-voice header small {
+    display: none;
+  }
+
+  .viewport .game-frame .ghost-actions .primary-button,
+  .viewport .game-frame .ghost-actions .secondary-button {
+    height: 32px;
+  }
+}
