@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "npm run test:engine && node --experimental-strip-types src/i18n.test.ts && node --experimental-strip-types src/voicePolicy.test.ts && npm run test:voice-request",
+    "test": "npm run test:engine && node --experimental-strip-types src/monopolyEngine.test.ts && node --experimental-strip-types src/i18n.test.ts && node --experimental-strip-types src/voicePolicy.test.ts && npm run test:voice-request",
     "test:voice-request": "node --experimental-strip-types src/voiceRequest.test.ts",
     "android:sync": "npm run build && cap sync android",
     "android:apk": "npm run build && cap sync android && bash scripts/android-debug-apk.sh",

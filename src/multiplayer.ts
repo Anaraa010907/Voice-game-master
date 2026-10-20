@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import { translateMessage } from './i18n';
 import type { PrivateGameView, PublicGameView } from './gameEngine';
 
-export type RoomInfo = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished' };
+export type RoomInfo = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type?: 'mafia' | 'monopoly' };
 export type ListedRoom = { roomCode: string; name: string; players: number; maxPlayers: number; hostName: string; joined: boolean };
 export type RoomSeat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null };
 
@@ -45,7 +45,7 @@ export function useRoom(roomCode: string | null) {
   const reload = useCallback(async () => {
     if (!supabase || !roomCode) return;
     const [roomResult, seatResult] = await Promise.all([
-      supabase.from('game_rooms').select('room_code,name,host_id,max_players,is_private,status').eq('room_code', roomCode).maybeSingle(),
+      supabase.from('game_rooms').select('room_code,name,host_id,max_players,is_private,status,game_type').eq('room_code', roomCode).maybeSingle(),
       supabase.from('game_room_players').select('user_id,seat,display_name,color,ready,avatar_url').eq('room_code', roomCode).order('seat'),
     ]);
     setRoom((roomResult.data as RoomInfo | null) ?? null);

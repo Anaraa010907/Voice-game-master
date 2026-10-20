@@ -4,6 +4,10 @@ import {
   privateView, publicView, recordVote, removePlayer, resolveNight, resolveVoting, startNight, startVoting,
   submitNightAction, type GameEngineState, type VoteChoice,
 } from '../_shared/gameEngine.ts';
+import {
+  MIN_MONOPOLY_PLAYERS, applyMonopolyAction, autoPlay, createMonopolyGame, removeMonopolyPlayer,
+  type MonopolyAction, type MonopolyState,
+} from '../_shared/monopolyEngine.ts';
 import { isAllowedOrigin } from '../_shared/voiceRequest.ts';
 import type { VoicePhase } from '../_shared/voicePolicy.ts';
 
@@ -13,9 +17,19 @@ import type { VoicePhase } from '../_shared/voicePolicy.ts';
  * per player. Realtime pushes those rows to the right people under RLS.
  */
 
-type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished' };
+type GameType = 'mafia' | 'monopoly';
+type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type: GameType };
 /** The stored engine also carries the match id used to record win/loss statistics exactly once. */
 type StoredGame = GameEngineState & { matchId?: string };
+type StoredBoard = MonopolyState & { matchId?: string };
+type AnyGame = StoredGame | StoredBoard;
+const isBoard = (state: AnyGame): state is StoredBoard => (state as StoredBoard).kind === 'monopoly';
+const GAME_TYPES: GameType[] = ['mafia', 'monopoly'];
+const ROOM_SIZES: Record<GameType, number[]> = { mafia: [6, 8, 10, 12], monopoly: [2, 3, 4, 5, 6] };
+const MIN_SEATS: Record<GameType, number> = { mafia: MIN_PLAYERS, monopoly: MIN_MONOPOLY_PLAYERS };
+/** Seconds each board-game player has for every step (roll, buy, finish turn). */
+const BOARD_STEP_SECONDS = 40;
+const BOARD_ACTIONS = ['roll', 'buy', 'decline', 'end', 'pay-jail', 'build', 'sell', 'mortgage', 'unmortgage'];
 const LISTED_LOBBY_HOURS = 6;
 type Seat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null };
 type Body = Record<string, unknown>;
@@ -76,7 +90,8 @@ function code(body: Body) {
   return value;
 }
 
-function deadlineFor(state: GameEngineState): string | null {
+function deadlineFor(state: AnyGame): string | null {
+  if (isBoard(state)) return state.phase === 'finished' ? null : new Date(Date.now() + BOARD_STEP_SECONDS * 1000).toISOString();
   if (state.phase === 'Results') return null;
   const key = state.phase === 'Voting'
     ? state.votesRevealed ? 'VoteReveal' : state.runoffCandidates ? 'Runoff' : 'Voting'
@@ -103,8 +118,12 @@ function settle(state: GameEngineState): GameEngineState {
   return state;
 }
 
-const voicePhase = (state: GameEngineState): VoicePhase =>
-  state.phase === 'Role Reveal' ? 'role-reveal' : state.phase.toLowerCase() as VoicePhase;
+// Board games keep voice open for everyone the whole match.
+const voicePhase = (state: AnyGame): VoicePhase => isBoard(state)
+  ? state.phase === 'finished' ? 'results' : 'discussion'
+  : state.phase === 'Role Reveal' ? 'role-reveal' : state.phase.toLowerCase() as VoicePhase;
+const isFinished = (state: AnyGame) => isBoard(state) ? state.phase === 'finished' : state.phase === 'Results';
+const gameType = (value: unknown): GameType => GAME_TYPES.includes(value as GameType) ? value as GameType : 'mafia';
 
 class GameServer {
   constructor(private admin: SupabaseClient, private userId: string) {}
@@ -138,8 +157,9 @@ class GameServer {
 
   async create(body: Body) {
     const name = text(body, 'name', 32);
+    const type = gameType(body.gameType);
     const maxPlayers = Number(body.maxPlayers);
-    if (![6, 8, 10, 12].includes(maxPlayers)) throw new GameError(400, 'Тоглогчийн тоо буруу байна.');
+    if (!ROOM_SIZES[type].includes(maxPlayers)) throw new GameError(400, 'Тоглогчийн тоо буруу байна.');
     // Public rooms appear in the room list; private rooms are joined by code only (optionally with a password).
     const isPrivate = body.isPublic === true ? false : body.isPrivate !== false;
     const password = isPrivate ? text(body, 'password', 32, false) : '';
@@ -148,7 +168,7 @@ class GameServer {
 
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const roomCodeValue = roomCode();
-      const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate });
+      const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate, game_type: type });
       if (error?.code === '23505') continue;
       if (error) throw error;
       const seat: Seat = { user_id: this.userId, seat: 1, display_name: me.name, color: me.color, ready: true, avatar_url: me.url };
@@ -217,9 +237,9 @@ class GameServer {
     if (room.status === 'playing') {
       // Leaving a live game counts as a loss, recorded first so the final tally cannot turn it into a win.
       const { data: stored } = await this.admin.from('game_states').select('engine').eq('room_code', roomCodeValue).maybeSingle();
-      const game = stored?.engine as StoredGame | null;
-      if (game && game.phase !== 'Results') await this.recordOutcome(this.userId, 'loss', game.matchId);
-      await this.mutate(roomCodeValue, (state) => removePlayer(state, mine.seat));
+      const game = stored?.engine as AnyGame | null;
+      if (game && !isFinished(game)) await this.recordOutcome(this.userId, 'loss', game.matchId);
+      await this.mutate(roomCodeValue, (state) => isBoard(state) ? removeMonopolyPlayer(state, mine.seat) : removePlayer(state, mine.seat));
     }
     await Promise.all([
       this.admin.from('game_room_players').delete().eq('room_code', roomCodeValue).eq('user_id', this.userId),
@@ -247,19 +267,22 @@ class GameServer {
     if (room.host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн тоглоом эхлүүлнэ.');
     if (room.status === 'playing') throw new GameError(409, 'Тоглоом аль хэдийн эхэлсэн.');
     const seats = await this.seats(roomCodeValue);
-    if (seats.length < MIN_PLAYERS) throw new GameError(409, `Тоглоом эхлүүлэхэд дор хаяж ${MIN_PLAYERS} тоглогч хэрэгтэй.`);
+    const minimum = MIN_SEATS[room.game_type ?? 'mafia'];
+    if (seats.length < minimum) throw new GameError(409, `Тоглоом эхлүүлэхэд дор хаяж ${minimum} тоглогч хэрэгтэй.`);
     const notReady = seats.filter((seat) => seat.user_id !== room.host_id && !seat.ready);
     if (notReady.length) throw new GameError(409, `Бэлэн болоогүй: ${notReady.map((seat) => seat.display_name).join(', ')}`);
 
-    const dealt = createInitialGame(seats.map((seat) => ({
+    const people = seats.map((seat) => ({
       id: seat.seat,
       name: seat.display_name,
       initials: seat.display_name.slice(0, 2).toUpperCase(),
       color: seat.color,
       avatarUrl: seat.avatar_url ?? null,
       host: seat.user_id === room.host_id,
-    })), undefined, secureRandom);
-    const engine: StoredGame = { ...dealt, matchId: crypto.randomUUID() };
+    }));
+    const engine: AnyGame = room.game_type === 'monopoly'
+      ? { ...createMonopolyGame(people, secureRandom), matchId: crypto.randomUUID() }
+      : { ...createInitialGame(people, undefined, secureRandom), matchId: crypto.randomUUID() };
     await this.admin.from('game_private').delete().eq('room_code', roomCodeValue);
     const { error } = await this.admin.from('game_states').update({ engine, version: 1, updated_at: new Date().toISOString() }).eq('room_code', roomCodeValue);
     if (error) throw error;
@@ -270,13 +293,13 @@ class GameServer {
   }
 
   /** Read-modify-write with optimistic locking so simultaneous actions never overwrite each other. */
-  async mutate(roomCode: string, change: (state: GameEngineState, seats: Seat[]) => GameEngineState) {
+  async mutate(roomCode: string, change: (state: AnyGame, seats: Seat[]) => AnyGame) {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const { data, error } = await this.admin.from('game_states').select('engine,version').eq('room_code', roomCode).maybeSingle();
       if (error) throw error;
       if (!data?.engine) throw new GameError(409, 'Тоглоом эхлээгүй байна.');
       const seats = await this.seats(roomCode);
-      const current = data.engine as GameEngineState;
+      const current = data.engine as AnyGame;
       const next = change(current, seats);
       if (next === current) return current;
       const { data: written, error: writeError } = await this.admin.from('game_states')
@@ -285,15 +308,17 @@ class GameServer {
       if (writeError) throw writeError;
       if (!written?.length) continue;
       await this.publish(roomCode, next, seats, data.version + 1, current);
-      if (next.phase === 'Results' && current.phase !== 'Results') await this.recordResults(next as StoredGame, seats);
+      if (isFinished(next) && !isFinished(current)) await this.recordResults(next, seats);
       return next;
     }
     throw new GameError(409, 'Олон хүсэлт зэрэг ирлээ. Дахин оролдоно уу.');
   }
 
-  async publish(roomCode: string, state: GameEngineState, seats: Seat[], version: number, previous?: GameEngineState) {
-    const phaseChanged = !previous || previous.phase !== state.phase || previous.votesRevealed !== state.votesRevealed
-      || previous.runoffCandidates?.join() !== state.runoffCandidates?.join() || previous.round !== state.round;
+  async publish(roomCode: string, state: AnyGame, seats: Seat[], version: number, previous?: AnyGame) {
+    if (isBoard(state)) return this.publishBoard(roomCode, state, seats, version, previous as StoredBoard | undefined);
+    const prior = previous as StoredGame | undefined;
+    const phaseChanged = !prior || prior.phase !== state.phase || prior.votesRevealed !== state.votesRevealed
+      || prior.runoffCandidates?.join() !== state.runoffCandidates?.join() || prior.round !== state.round;
     const { data: currentPublic } = await this.admin.from('game_public').select('deadline').eq('room_code', roomCode).maybeSingle();
     const deadline = phaseChanged ? deadlineFor(state) : currentPublic?.deadline ?? deadlineFor(state);
     const writes = [
@@ -305,19 +330,28 @@ class GameServer {
     const results = await Promise.all(writes);
     const failed = results.find((result) => result.error);
     if (failed?.error) throw failed.error;
-    if (state.phase === 'Results' && previous?.phase !== 'Results') await this.touchRoom(roomCode, { status: 'finished' });
-    if (phaseChanged || previous?.publicPlayers.some((player, index) => player.alive !== state.publicPlayers[index]?.alive)) {
+    if (state.phase === 'Results' && prior?.phase !== 'Results') await this.touchRoom(roomCode, { status: 'finished' });
+    if (phaseChanged || prior?.publicPlayers.some((player, index) => player.alive !== state.publicPlayers[index]?.alive)) {
       await this.syncVoice(roomCode, state, seats);
     }
   }
 
+  /** Board games have no secrets: the whole state is the public view. Every step resets the turn timer. */
+  async publishBoard(roomCode: string, state: StoredBoard, seats: Seat[], version: number, previous?: StoredBoard) {
+    const { matchId: _matchId, ...view } = state;
+    const { error } = await this.admin.from('game_public').upsert({ room_code: roomCode, view, deadline: deadlineFor(state), version, updated_at: new Date().toISOString() });
+    if (error) throw error;
+    if (state.phase === 'finished' && previous?.phase !== 'finished') await this.touchRoom(roomCode, { status: 'finished' });
+    if (!previous || (state.phase === 'finished') !== (previous.phase === 'finished')) await this.syncVoice(roomCode, state, seats);
+  }
+
   /** Mirrors phase and life/death into the voice tables, then asks LiveKit to apply permissions. */
-  async syncVoice(roomCode: string, state: GameEngineState, seats: Seat[]) {
+  async syncVoice(roomCode: string, state: AnyGame, seats: Seat[]) {
     try {
       const phase = voicePhase(state);
       await this.admin.from('voice_rooms').update({ game_phase: phase, post_game_voice: phase === 'results', updated_at: new Date().toISOString() }).eq('room_code', roomCode);
       for (const seat of seats) {
-        const alive = state.publicPlayers.find((player) => player.id === seat.seat)?.alive ?? false;
+        const alive = isBoard(state) ? true : state.publicPlayers.find((player) => player.id === seat.seat)?.alive ?? false;
         await this.admin.from('voice_room_members').update({ is_alive: alive }).eq('room_code', roomCode).eq('user_id', seat.user_id);
       }
       const controller = Deno.env.get('ROOM_CONTROLLER_SECRET');
@@ -342,7 +376,14 @@ class GameServer {
     if (error) console.error('stats update failed', error);
   }
 
-  async recordResults(state: StoredGame, seats: Seat[]) {
+  async recordResults(state: AnyGame, seats: Seat[]) {
+    if (isBoard(state)) {
+      for (const seat of seats) {
+        if (!state.players.some((entry) => entry.id === seat.seat)) continue;
+        await this.recordOutcome(seat.user_id, state.winner === seat.seat ? 'win' : 'loss', state.matchId);
+      }
+      return;
+    }
     if (!state.winner) return;
     for (const seat of seats) {
       const secret = state.privatePlayers[seat.seat];
@@ -353,11 +394,12 @@ class GameServer {
   }
 
   /** Open public lobbies that still have a free seat, fullest first. */
-  async list() {
+  async list(body: Body = {}) {
+    const type = gameType(body.gameType);
     const since = new Date(Date.now() - LISTED_LOBBY_HOURS * 3600 * 1000).toISOString();
     const { data: rooms, error } = await this.admin.from('game_rooms')
       .select('room_code,name,host_id,max_players,updated_at')
-      .eq('status', 'lobby').eq('is_private', false).gte('updated_at', since)
+      .eq('status', 'lobby').eq('is_private', false).eq('game_type', type).gte('updated_at', since)
       .order('updated_at', { ascending: false }).limit(50);
     if (error) throw error;
     type ListedRow = { room_code: string; name: string; host_id: string; max_players: number };
@@ -384,11 +426,31 @@ class GameServer {
   }
 
   /** Joins the public lobby closest to starting. */
-  async quick() {
-    const { rooms } = await this.list();
+  async quick(body: Body = {}) {
+    const { rooms } = await this.list(body);
     const pick = rooms.find((room) => room.players < room.maxPlayers && !room.joined);
     if (!pick) return { roomCode: null };
     return this.join({ roomCode: pick.roomCode });
+  }
+
+  /** One board-game move from the current player. */
+  async board(body: Body) {
+    const roomCodeValue = code(body);
+    const { mine } = await this.requireSeat(roomCodeValue);
+    const move = typeof body.move === 'string' && BOARD_ACTIONS.includes(body.move) ? body.move : null;
+    if (!move) throw new GameError(400, 'Үйлдэл буруу байна.');
+    const tile = Number(body.tile);
+    if (['build', 'sell', 'mortgage', 'unmortgage'].includes(move) && !(Number.isInteger(tile) && tile >= 0 && tile < 32)) throw new GameError(400, 'Нүд буруу байна.');
+    const action = (['build', 'sell', 'mortgage', 'unmortgage'].includes(move) ? { type: move, tile } : { type: move }) as MonopolyAction;
+    let failure = '';
+    await this.mutate(roomCodeValue, (state) => {
+      if (!isBoard(state)) { failure = 'Энэ өрөөнд board game явагдаагүй байна.'; return state; }
+      const result = applyMonopolyAction(state, mine.seat, action, secureRandom);
+      failure = result.error ?? '';
+      return result.error ? state : result.state;
+    });
+    if (failure) throw new GameError(409, failure);
+    return { ok: true };
   }
 
   async night(body: Body) {
@@ -398,6 +460,7 @@ class GameServer {
     if (!Number.isInteger(targetId)) throw new GameError(400, 'Зорилт буруу байна.');
     let failure = '';
     await this.mutate(roomCodeValue, (state) => {
+      if (isBoard(state)) return state;
       const result = submitNightAction(state, mine.seat, targetId);
       failure = result.error ?? '';
       return result.error ? state : settle(result.state);
@@ -412,6 +475,7 @@ class GameServer {
     const choice: VoteChoice = body.choice === 'skip' ? 'skip' : Number.isInteger(body.choice) ? body.choice as number : null;
     let failure = '';
     await this.mutate(roomCodeValue, (state) => {
+      if (isBoard(state)) return state;
       const result = recordVote(state, mine.seat, choice);
       failure = result.error ?? '';
       return result.error ? state : settle(result.state);
@@ -430,6 +494,7 @@ class GameServer {
     const expired = pub?.deadline ? Date.parse(pub.deadline) <= Date.now() + 500 : false;
     const hostSkip = body.skip === true && room.host_id === this.userId;
     await this.mutate(roomCodeValue, (state) => {
+      if (isBoard(state)) return expired ? autoPlay(state, secureRandom) : state;
       const skippable = state.phase === 'Role Reveal' || state.phase === 'Morning' || state.phase === 'Discussion' || (state.phase === 'Voting' && state.votesRevealed);
       if (!expired && !(hostSkip && skippable)) return state;
       return settle(advance(state));
@@ -495,8 +560,9 @@ Deno.serve(async (request) => {
       vote: (value) => server.vote(value),
       tick: (value) => server.tick(value),
       rematch: (value) => server.rematch(value),
-      list: () => server.list(),
-      quick: () => server.quick(),
+      list: (value) => server.list(value),
+      quick: (value) => server.quick(value),
+      board: (value) => server.board(value),
     };
     const handler = typeof body.action === 'string' ? actions[body.action] : undefined;
     if (!handler) return respond(400, { error: 'Үйлдэл буруу байна.' });

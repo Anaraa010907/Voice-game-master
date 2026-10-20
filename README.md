@@ -87,6 +87,16 @@ npx supabase db push
 npx supabase functions deploy game
 ```
 
+## Game hub and board games
+
+The app is a hub with two kinds of games. **Play** opens the game picker: *Card & voice games* (Mafia; a Spyfall-style game is marked "coming soon") and *Board games* (**Монгол Монополь**). Every game shares the same rooms, lobby, public room list, quick join, voice chat and profile statistics; `game_rooms.game_type` (`20261023_board_games.sql`) says which game a room plays.
+
+**Монгол Монополь** (`supabase/functions/_shared/monopolyEngine.ts`, UI in `src/Monopoly.tsx`):
+- 32-tile board of Mongolian places in eight colour groups (Говь, Хойд нутаг, Баруун нутаг, Хангай, Эртний нийслэл, Нуур тал, Аж үйлдвэр, Нийслэл), three transport tiles (Улаанбаатар өртөө, Чингис хаан нисэх буудал, Замын-Үүд боомт), two utilities, two taxes, "Хувь тавилан" and "Эрдэнэсийн авдар" cards, Шорон and Наадам corners.
+- 2–6 players, 1500₮ each, +200₮ for passing Эхлэл. Buy, collect rent (double for a full colour group), build up to four gers and a tourist camp evenly across a group, mortgage and redeem. Three doubles or "Шоронд яв" sends you to jail (roll doubles or pay 50₮). Cash shortfalls automatically sell gers and mortgage land; whoever still cannot pay goes bankrupt to their creditor.
+- The game ends when one player remains, or after 20 rounds the richest player (cash + property) wins. Each step has a 40-second timer; when it runs out the server rolls, skips the purchase or ends the turn for that player.
+- The server rolls the dice; the whole board is public, so it is published to everyone. Voice stays open for all players during the match.
+
 ## Facebook sign-in and profile photos
 
 - Sign-up/sign-in offers **Facebook** and **e-mail**. Phone sign-up is hidden until an SMS provider is configured.

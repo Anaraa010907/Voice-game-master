@@ -5,6 +5,7 @@ import './styles.css';
 import './account.css';
 import './responsive.css';
 import './fullscreen.css';
+import './board.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

@@ -3,7 +3,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
   ArrowLeft, Check, ChevronRight, X, Clipboard, Crown, LockKeyhole, MessageCircle, Moon,
-  Radio, RefreshCw, Settings as SettingsIcon, Shield, Skull, UserRound, Users, WandSparkles, Zap,
+  Dices, Mic, Radio, RefreshCw, Settings as SettingsIcon, Shield, Skull, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles } from './gameData';
 import RoleCardArtwork from './RoleCardArtwork';
@@ -15,13 +15,14 @@ import { i18n, translateMessage } from './i18n';
 import { removeProfilePhoto, uploadProfilePhoto } from './avatarUpload';
 import Avatar from './Avatar';
 import { callGame, useRoom, type ListedRoom, type RoomSeat } from './multiplayer';
-import { MIN_PLAYERS } from './gameEngine';
+import { COMING_SOON, GAMES, type GameCategory, type GameType } from './games';
+import MonopolyScreen from './Monopoly';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { FullscreenToggle, useFullscreen, type FullscreenState } from './fullscreen';
 
-type Screen = 'menu' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth';
+type Screen = 'menu' | 'hub' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth';
 
-type RoomSettings = { name: string; maxPlayers: number; isPublic: boolean; password: string };
+type RoomSettings = { name: string; maxPlayers: number; isPublic: boolean; password: string; gameType: GameType };
 const ROOM_STORAGE_KEY = 'mafia-shadows:room';
 
 const readStoredRoom = () => {
@@ -45,6 +46,7 @@ export default function App() {
   const [profileError, setProfileError] = useState('');
   const [copied, setCopied] = useState(false);
   const [roomCode, setRoomCode] = useState<string | null>(null);
+  const [gameType, setGameType] = useState<GameType>('mafia');
   const [notice, setNotice] = useState('');
   const fullscreen = useFullscreen();
 
@@ -207,9 +209,10 @@ export default function App() {
     <main className="viewport">
       <section className={`game-frame screen-${screen}`} aria-label="MAFIA: SHADOWS тоглоом">
         <div className="grain" aria-hidden="true" />
-        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'browse')} onCreate={() => requireAccount('create-room')} onJoin={() => requireAccount('join-room')} signedIn={Boolean(userId)} onAuth={openAuth} fullscreen={fullscreen} />}
-        {screen === 'browse' && <RoomBrowser onBack={goBack} onCreate={() => setScreen('create-room')} onJoinCode={() => setScreen('join-room')} onEnter={enterRoom} />}
-        {screen === 'create-room' && <CreateRoom onBack={() => setScreen('menu')} onCreate={createRoom} />}
+        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} signedIn={Boolean(userId)} onAuth={openAuth} fullscreen={fullscreen} />}
+        {screen === 'hub' && <GameHub onBack={goBack} onChoose={(type) => { setGameType(type); setScreen('browse'); }} onJoinCode={() => setScreen('join-room')} />}
+        {screen === 'browse' && <RoomBrowser key={gameType} gameType={gameType} onBack={() => setScreen('hub')} onCreate={() => setScreen('create-room')} onJoinCode={() => setScreen('join-room')} onEnter={enterRoom} />}
+        {screen === 'create-room' && <CreateRoom key={gameType} gameType={gameType} onBack={() => setScreen('browse')} onCreate={createRoom} />}
         {screen === 'join-room' && <JoinRoom onBack={() => setScreen('menu')} onJoin={joinRoom} />}
         {screen === 'lobby' && roomCode && userId && (
           <RoomScreen
@@ -267,9 +270,10 @@ function Menu({ onNavigate, onPlay, onCreate, onJoin, signedIn, onAuth, fullscre
   );
 }
 
-function CreateRoom({ onBack, onCreate }: { onBack: () => void; onCreate: (room: RoomSettings) => Promise<void> }) {
-  const [name, setName] = useState('Блэкуотерын шөнө');
-  const [maxPlayers, setMaxPlayers] = useState(8);
+function CreateRoom({ gameType, onBack, onCreate }: { gameType: GameType; onBack: () => void; onCreate: (room: RoomSettings) => Promise<void> }) {
+  const game = GAMES[gameType];
+  const [name, setName] = useState(game.defaultRoomName);
+  const [maxPlayers, setMaxPlayers] = useState(game.defaultSize);
   const [isPublic, setIsPublic] = useState(true);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -282,7 +286,7 @@ function CreateRoom({ onBack, onCreate }: { onBack: () => void; onCreate: (room:
     setError('');
     setBusy(true);
     try {
-      await onCreate({ name: name.trim(), maxPlayers, isPublic, password: isPublic ? '' : password });
+      await onCreate({ name: name.trim(), maxPlayers, isPublic, password: isPublic ? '' : password, gameType });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Өрөө үүсгэж чадсангүй.');
     } finally {
@@ -290,9 +294,9 @@ function CreateRoom({ onBack, onCreate }: { onBack: () => void; onCreate: (room:
     }
   };
 
-  return <div className="inner-screen setup-screen"><TopBar title="ӨРӨӨ ҮҮСГЭХ" subtitle="ӨРӨӨНИЙ ТӨХИРГӨӨ" onBack={onBack} /><div className="setup-content"><div className="setup-heading"><div className="eyebrow left-eye">ТӨХИРГӨӨ СОНГОХ</div><h1>Өөрийнхөө <i>өрөөг</i> бүтээ.</h1><p>Өрөөний кодыг найзууддаа илгээгээрэй. Дор хаяж {MIN_PLAYERS} хүн нэгдвэл тоглоом эхэлнэ.</p></div><form className="room-form" onSubmit={submit}>
+  return <div className="inner-screen setup-screen"><TopBar title="ӨРӨӨ ҮҮСГЭХ" subtitle="ӨРӨӨНИЙ ТӨХИРГӨӨ" onBack={onBack} /><div className="setup-content"><div className="setup-heading"><div className="eyebrow left-eye">ТӨХИРГӨӨ СОНГОХ</div><h1>Өөрийнхөө <i>өрөөг</i> бүтээ.</h1><p><b className="setup-game-name">{game.title}</b> · Өрөөний кодыг найзууддаа илгээгээрэй. Дор хаяж {game.minPlayers} хүн нэгдвэл тоглоом эхэлнэ.</p></div><form className="room-form" onSubmit={submit}>
     <label className="form-field room-name-field"><span>{i18n.app.roomName.toUpperCase()}</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder="Өрөөний нэрээ оруулна уу" /></label>
-    <label className="form-field"><span>{i18n.app.maxPlayers.toUpperCase()}</span><select value={maxPlayers} onChange={(event) => setMaxPlayers(Number(event.target.value))}>{[6, 8, 10, 12].map((count) => <option key={count} value={count}>{count} тоглогч</option>)}</select></label>
+    <label className="form-field"><span>{i18n.app.maxPlayers.toUpperCase()}</span><select value={maxPlayers} onChange={(event) => setMaxPlayers(Number(event.target.value))}>{game.sizes.map((count) => <option key={count} value={count}>{count} тоглогч</option>)}</select></label>
     <div className="private-setting"><span><b>Нийтэд нээлттэй</b><small>{isPublic ? 'Өрөөний жагсаалтад харагдана, хэн ч нэгдэнэ' : 'Зөвхөн кодоор нэгдэнэ, нууц үг тавьж болно'}</small></span><button type="button" role="switch" aria-checked={isPublic} className={`toggle ${isPublic ? 'toggle-on' : ''}`} onClick={() => setIsPublic((value) => !value)}><i /></button></div>
     {!isPublic && <label className="form-field password-field"><span>ӨРӨӨНИЙ НУУЦ ҮГ <small>СОНГОЛТТОЙ</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} maxLength={32} placeholder="Нууц үггүй орж болно" autoComplete="new-password" /></label>}
     {error && <p className="form-error" role="alert">{error}</p>}
@@ -325,21 +329,48 @@ function JoinRoom({ onBack, onJoin }: { onBack: () => void; onJoin: (code: strin
   </form></div></div>;
 }
 
+/** Choose a game: card & voice games or board games. */
+function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoose: (type: GameType) => void; onJoinCode: () => void }) {
+  const sections: Array<{ category: GameCategory; title: string; subtitle: string; icon: ReactNode }> = [
+    { category: 'card', title: 'Карт ба дуут тоглоом', subtitle: 'Нууц дүр, яриа, сэжиг', icon: <Mic size={18} /> },
+    { category: 'board', title: 'Board game', subtitle: 'Шоо, самбар, стратеги', icon: <Dices size={18} /> },
+  ];
+  return <div className="inner-screen hub-screen"><TopBar title="ТОГЛООМ СОНГОХ" subtitle="ТОГЛОХ" onBack={onBack} trailing={<button className="text-button hub-code-button" onClick={onJoinCode}><Radio size={14} /> КОДООР НЭГДЭХ</button>} />
+    <div className="hub-content">
+      {sections.map((section) => <section key={section.category} className={`hub-section hub-${section.category}`}>
+        <header><span className="hub-section-icon">{section.icon}</span><div><b>{section.title}</b><small>{section.subtitle}</small></div></header>
+        <div className="hub-games">
+          {Object.values(GAMES).filter((game) => game.category === section.category).map((game) => <button type="button" key={game.type} className={`hub-game hub-game-${game.type}`} onClick={() => onChoose(game.type)}>
+            <span className="hub-game-art" aria-hidden="true">{game.type === 'mafia' ? <Skull size={30} /> : <Dices size={30} />}</span>
+            <span className="hub-game-copy"><b>{game.title}</b><small>{game.tagline}</small><i>{game.players} · {game.duration}</i></span>
+            <ChevronRight size={18} />
+          </button>)}
+          {COMING_SOON.filter((game) => game.category === section.category).map((game) => <div key={game.title} className="hub-game is-soon" aria-disabled="true">
+            <span className="hub-game-art" aria-hidden="true"><LockKeyhole size={22} /></span>
+            <span className="hub-game-copy"><b>{game.title}</b><small>{game.tagline}</small><i>Удахгүй</i></span>
+          </div>)}
+        </div>
+      </section>)}
+    </div>
+  </div>;
+}
+
 /** Open public lobbies, refreshed automatically, plus quick join. */
-function RoomBrowser({ onBack, onCreate, onJoinCode, onEnter }: { onBack: () => void; onCreate: () => void; onJoinCode: () => void; onEnter: (code: string) => void }) {
+function RoomBrowser({ gameType, onBack, onCreate, onJoinCode, onEnter }: { gameType: GameType; onBack: () => void; onCreate: () => void; onJoinCode: () => void; onEnter: (code: string) => void }) {
+  const game = GAMES[gameType];
   const [rooms, setRooms] = useState<ListedRoom[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
 
   const load = useCallback(async () => {
     try {
-      const result = await callGame<{ rooms: ListedRoom[] }>('list');
+      const result = await callGame<{ rooms: ListedRoom[] }>('list', { gameType });
       setRooms(result.rooms);
       setError('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Өрөөнүүдийг ачаалж чадсангүй.');
     }
-  }, []);
+  }, [gameType]);
 
   useEffect(() => {
     void load();
@@ -363,7 +394,7 @@ function RoomBrowser({ onBack, onCreate, onJoinCode, onEnter }: { onBack: () => 
   const quick = async () => {
     setBusy('quick');
     try {
-      const result = await callGame<{ roomCode: string | null }>('quick');
+      const result = await callGame<{ roomCode: string | null }>('quick', { gameType });
       if (result.roomCode) onEnter(result.roomCode);
       else setError('Одоогоор нээлттэй өрөө алга. Өөрөө өрөө үүсгээд бусдыг хүлээгээрэй.');
     } catch (cause) {
@@ -373,7 +404,7 @@ function RoomBrowser({ onBack, onCreate, onJoinCode, onEnter }: { onBack: () => 
     }
   };
 
-  return <div className="inner-screen browse-screen"><TopBar title="НЭЭЛТТЭЙ ӨРӨӨНҮҮД" subtitle="ТОГЛОХ" onBack={onBack} trailing={<button className="icon-button" onClick={() => { void load(); }} aria-label="Шинэчлэх" title="Шинэчлэх"><RefreshCw size={15} /></button>} />
+  return <div className="inner-screen browse-screen"><TopBar title={game.title.toUpperCase()} subtitle="НЭЭЛТТЭЙ ӨРӨӨНҮҮД" onBack={onBack} trailing={<button className="icon-button" onClick={() => { void load(); }} aria-label="Шинэчлэх" title="Шинэчлэх"><RefreshCw size={15} /></button>} />
     <div className="browse-content">
       <section className="browse-list" aria-live="polite">
         {rooms === null && !error && <div className="browse-empty">Өрөөнүүдийг хайж байна…</div>}
@@ -389,7 +420,7 @@ function RoomBrowser({ onBack, onCreate, onJoinCode, onEnter }: { onBack: () => 
         <button className="secondary-button" onClick={onCreate}><Users size={15} /> {i18n.app.createRoom.toUpperCase()}</button>
         <button className="secondary-button" onClick={onJoinCode}><Radio size={15} /> КОДООР НЭГДЭХ</button>
         {error && <p className="form-error" role="alert">{error}</p>}
-        <p className="browse-note">Тоглоом эхлэхэд дор хаяж {MIN_PLAYERS} хүн хэрэгтэй. Хурдан нэгдэх нь хамгийн дүүрэх дөхсөн өрөөнд оруулна.</p>
+        <p className="browse-note">{game.title}: дор хаяж {game.minPlayers} хүн хэрэгтэй. Хурдан нэгдэх нь хамгийн дүүрэх дөхсөн өрөөнд оруулна.</p>
       </aside>
     </div>
   </div>;
@@ -430,6 +461,10 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
 
   if (!room || !mine) return <div className="inner-screen"><TopBar title="ӨРӨӨ" subtitle="АЧААЛЖ БАЙНА" onBack={onLeft} /><div className="room-loading">Өрөөнд холбогдож байна…</div></div>;
 
+  if (room.status !== 'lobby' && room.game_type === 'monopoly') {
+    return <MonopolyScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} />;
+  }
+
   if (room.status !== 'lobby') {
     return <GameScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} fullscreen={fullscreen} />;
   }
@@ -438,15 +473,16 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
   const emptySlots = Math.max(room.max_players - seats.length, 0);
   const others = seats.filter((seat) => seat.user_id !== room.host_id);
   const waitingFor = others.filter((seat) => !seat.ready);
-  const canStart = seats.length >= MIN_PLAYERS && waitingFor.length === 0;
-  const hint = seats.length < MIN_PLAYERS
-    ? `Дор хаяж ${MIN_PLAYERS} тоглогч хэрэгтэй · одоо ${seats.length}`
+  const minimum = GAMES[room.game_type ?? 'mafia'].minPlayers;
+  const canStart = seats.length >= minimum && waitingFor.length === 0;
+  const hint = seats.length < minimum
+    ? `Дор хаяж ${minimum} тоглогч хэрэгтэй · одоо ${seats.length}`
     : waitingFor.length ? `Хүлээж байна: ${waitingFor.map((seat) => seat.display_name).join(', ')}` : 'Бүгд бэлэн!';
 
   return (
     <VoiceChatProvider roomCode={roomCode} userId={userId} phase="lobby" alive isHost={isHost}>
       <div className="inner-screen lobby-screen">
-        <TopBar title={room.name.toUpperCase()} subtitle="ТОГЛООМЫН ЛОББИ" onBack={leave} />
+        <TopBar title={room.name.toUpperCase()} subtitle={`${GAMES[room.game_type ?? 'mafia'].title.toUpperCase()} · ЛОББИ`} onBack={leave} />
         <div className={`lobby-content capacity-${room.max_players}`}>
           <div className="lobby-heading">
             <div><div className="eyebrow left-eye">ХОТ СЭРЭХЭЭСЭЭ ӨМНӨ</div><h1>Бүлгээ <i>цуглуулаарай.</i></h1></div>
