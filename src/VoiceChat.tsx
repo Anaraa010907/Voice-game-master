@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { ChevronDown, Headphones, LoaderCircle, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import type { Room as LiveKitRoom } from 'livekit-client';
 import { i18n } from './i18n';
-import { supabase } from './supabaseClient';
+import { supabase, supabaseConfigured } from './supabaseClient';
+import { invokeFunction } from './multiplayer';
 import { voicePhaseAllowsSpeaking, type VoicePhase } from '../supabase/functions/_shared/voicePolicy';
 export type { VoicePhase } from '../supabase/functions/_shared/voicePolicy';
 
@@ -23,7 +24,8 @@ type VoiceContextValue = {
 };
 
 const VoiceContext = createContext<VoiceContextValue | null>(null);
-const tokenUrl = import.meta.env.VITE_LIVEKIT_TOKEN_URL?.trim();
+// Voice tokens come from the `livekit-voice` function on the same Supabase project as sign-in.
+const tokenUrl = supabaseConfigured;
 
 const phaseAllowsVoice = (phase: VoicePhase, alive: boolean) =>
   voicePhaseAllowsSpeaking(phase, alive, false, phase === 'results');
@@ -89,14 +91,11 @@ export function VoiceChatProvider({ roomCode, userId, phase, alive, isHost, chil
     const accessToken = data.session?.access_token;
     if (!accessToken || data.session?.user.id !== userId) throw new Error(i18n.voice.signInRequired);
 
-    const response = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, roomCode, ...extra }),
-    });
-    const result = await response.json().catch(() => ({})) as { error?: string; token?: string; serverUrl?: string; canPublish?: boolean; muted?: boolean };
-    if (!response.ok) throw new Error(result.error || i18n.voice.connectionError);
-    return result;
+    try {
+      return await invokeFunction<{ error?: string; token?: string; serverUrl?: string; canPublish?: boolean; muted?: boolean }>('livekit-voice', { action, roomCode, ...extra });
+    } catch (cause) {
+      throw new Error(cause instanceof Error && cause.message ? cause.message : i18n.voice.connectionError);
+    }
   }, [roomCode, userId]);
 
   const connect = useCallback(async () => {

@@ -7,10 +7,13 @@ export type RoomInfo = { room_code: string; name: string; host_id: string; max_p
 export type ListedRoom = { roomCode: string; name: string; players: number; maxPlayers: number; hostName: string; joined: boolean };
 export type RoomSeat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean };
 
-/** Calls the authoritative `game` Edge Function. Returns the data or throws a translated error. */
-export async function callGame<T = Record<string, unknown>>(action: string, body: Record<string, unknown> = {}): Promise<T> {
+/**
+ * Calls an Edge Function on the same Supabase project the app signs in to, with the player's
+ * session attached. Returns the data or throws the server's (translated) error message.
+ */
+export async function invokeFunction<T>(name: 'game' | 'livekit-voice', body: Record<string, unknown>): Promise<T> {
   if (!supabase) throw new Error('Сервер тохируулагдаагүй байна. .env.local файлыг шалгана уу.');
-  const { data, error } = await supabase.functions.invoke('game', { body: { action, ...body } });
+  const { data, error } = await supabase.functions.invoke(name, { body });
   if (error) {
     let message = 'Сервертэй холбогдож чадсангүй. Дахин оролдоно уу.';
     const response = (error as { context?: Response }).context;
@@ -25,6 +28,11 @@ export async function callGame<T = Record<string, unknown>>(action: string, body
     throw new Error(message);
   }
   return data as T;
+}
+
+/** Calls the authoritative `game` Edge Function. */
+export function callGame<T = Record<string, unknown>>(action: string, body: Record<string, unknown> = {}): Promise<T> {
+  return invokeFunction<T>('game', { action, ...body });
 }
 
 /** Live room info and roster. Reloads on every realtime change to these rows. */

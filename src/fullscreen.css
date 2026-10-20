@@ -897,3 +897,111 @@ body {
     height: 32px;
   }
 }
+
+/* ---------- Role card gallery: cards only, tap to enlarge ---------- */
+
+.card-gallery {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-gallery-strip {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+
+.card-gallery-item {
+  height: min(100%, 520px);
+  aspect-ratio: 3 / 2;
+  padding: 0;
+  border: 1px solid #b59a6655;
+  background: #090b11;
+  scroll-snap-align: center;
+  transition: transform .18s ease, border-color .18s ease;
+}
+
+.card-gallery-item.team-mafia {
+  border-color: #ae4b5288;
+}
+
+.card-gallery-item:hover,
+.card-gallery-item:focus-visible {
+  transform: translateY(-2px);
+  border-color: #d2b073;
+}
+
+.card-gallery-item .role-card-artwork,
+.card-viewer-card .role-card-artwork {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.card-gallery-item .role-card-artwork img,
+.card-viewer-card .role-card-artwork img {
+  object-fit: contain;
+}
+
+.card-gallery-hint {
+  flex: none;
+  margin: 0;
+  padding: 0 16px 10px;
+  color: #8f8a8d;
+  font-size: 11px;
+  text-align: center;
+}
+
+.card-viewer {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #05060bf2;
+  animation: fade-in .18s ease-out;
+}
+
+.card-viewer-card {
+  justify-self: center;
+  width: min(100%, calc((100vh - 24px) * 1.5));
+  width: min(100%, calc((100dvh - 24px) * 1.5));
+  aspect-ratio: 3 / 2;
+  max-height: 100%;
+  box-shadow: 0 20px 70px #000;
+}
+
+.card-viewer-nav,
+.card-viewer-close {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #b59a6655;
+  border-radius: 50%;
+  background: #14161dcc;
+  color: #e2d2b0;
+}
+
+.card-viewer-nav.is-prev svg {
+  transform: rotate(180deg);
+}
+
+.card-viewer-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}

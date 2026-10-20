@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
-  ArrowLeft, Check, ChevronRight, Clipboard, Crown, LockKeyhole, MessageCircle, Moon,
+  ArrowLeft, Check, ChevronRight, X, Clipboard, Crown, LockKeyhole, MessageCircle, Moon,
   Radio, RefreshCw, Settings as SettingsIcon, Shield, Skull, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles } from './gameData';
@@ -460,8 +460,37 @@ function TopBar({ title, subtitle, onBack, trailing }: { title: string; subtitle
   return <header className="top-bar"><button className="icon-button back-button" onClick={onBack} aria-label="Цэс рүү буцах"><ArrowLeft size={17} /></button><div className="top-title"><span>{subtitle}</span><strong>{title}</strong></div><Brand compact /><div className="top-trailing">{trailing}</div></header>;
 }
 
+/** Role cards only; the artwork already carries each role's text. Tap a card to view it full screen. */
 function RoleGallery({ onBack }: { onBack: () => void }) {
-  return <div className="inner-screen gallery-screen"><TopBar title="ДҮРИЙН ЛАВЛАХ" subtitle="ТОГЛООМЫН ДҮРЭМ" onBack={onBack} /><div className="gallery-heading"><div><div className="eyebrow left-eye">ДАЙСНАА БОЛОН ХАМТРАГЧАА МЭД.</div><h1>Дүрийн <i>архив.</i></h1></div><span>7 НУУЦ ДҮР</span></div><div className="role-grid">{roles.map((item, index) => <article className={`role-card team-${item.team}`} key={item.id}><div className="role-card-art"><RoleCardArtwork role={item} /><span className="role-index">0{index + 1}</span></div><div className="role-card-info"><span className={`team-tag ${item.team}`}>{item.faction === 'citizens' ? 'ИРГЭДИЙН БАГ' : 'МАФИЙН БАГ'}</span><h2>{item.displayName}</h2><p>{item.description}</p><p className="role-card-ability"><b>ТУСГАЙ ЧАДВАР</b>{item.ability}</p></div></article>)}</div></div>;
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const open = openIndex === null ? null : roles[openIndex];
+  const step = (delta: number) => setOpenIndex((index) => index === null ? null : (index + delta + roles.length) % roles.length);
+
+  useEffect(() => {
+    if (openIndex === null) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenIndex(null);
+      if (event.key === 'ArrowRight') step(1);
+      if (event.key === 'ArrowLeft') step(-1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [openIndex]);
+
+  return <div className="inner-screen gallery-screen card-gallery"><TopBar title="ДҮРИЙН ЛАВЛАХ" subtitle={`${roles.length} НУУЦ ДҮР`} onBack={onBack} />
+    <div className="card-gallery-strip">
+      {roles.map((item, index) => <button type="button" key={item.id} className={`card-gallery-item team-${item.team}`} onClick={() => setOpenIndex(index)} aria-label={`${item.displayName} картыг томоор харах`}>
+        <RoleCardArtwork role={item} />
+      </button>)}
+    </div>
+    <p className="card-gallery-hint">Картан дээр дарж томоор харна уу</p>
+    {open && <div className="card-viewer" role="dialog" aria-modal="true" aria-label={open.displayName} onClick={() => setOpenIndex(null)}>
+      <button type="button" className="card-viewer-nav is-prev" aria-label="Өмнөх карт" onClick={(event) => { event.stopPropagation(); step(-1); }}><ChevronRight size={22} /></button>
+      <div className="card-viewer-card" onClick={(event) => event.stopPropagation()}><RoleCardArtwork role={open} /></div>
+      <button type="button" className="card-viewer-nav is-next" aria-label="Дараагийн карт" onClick={(event) => { event.stopPropagation(); step(1); }}><ChevronRight size={22} /></button>
+      <button type="button" className="card-viewer-close" aria-label="Хаах" onClick={() => setOpenIndex(null)}><X size={20} /></button>
+    </div>}
+  </div>;
 }
 
 function Settings({ onBack, onNotice, onProfile, onAuth, signedIn }: { onBack: () => void; onNotice: (text: string) => void; onProfile: () => void; onAuth: () => void; signedIn: boolean }) {

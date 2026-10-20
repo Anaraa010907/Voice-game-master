@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Room as LiveKitRoom } from 'livekit-client';
 import { Ghost, Headphones, LoaderCircle, Mic, MicOff } from 'lucide-react';
-import { supabase } from './supabaseClient';
+import { supabase, supabaseConfigured } from './supabaseClient';
+import { invokeFunction } from './multiplayer';
 import { i18n } from './i18n';
 
-const tokenUrl = import.meta.env.VITE_LIVEKIT_TOKEN_URL?.trim();
+const tokenUrl = supabaseConfigured;
 
 type GhostState = 'idle' | 'connecting' | 'connected';
 type GhostMember = { identity: string; name: string; speaking: boolean };
@@ -27,14 +28,7 @@ export default function GhostVoice({ roomCode, userId }: { roomCode: string; use
     const { data } = await supabase.auth.getSession();
     const accessToken = data.session?.access_token;
     if (!accessToken || data.session?.user.id !== userId) throw new Error(i18n.voice.signInRequired);
-    const response = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, roomCode, channel: 'ghost' }),
-    });
-    const result = await response.json().catch(() => ({})) as { error?: string; token?: string; serverUrl?: string; canPublish?: boolean };
-    if (!response.ok) throw new Error(result.error || i18n.voice.connectionError);
-    return result;
+    return invokeFunction<{ token?: string; serverUrl?: string; canPublish?: boolean }>('livekit-voice', { action, roomCode, channel: 'ghost' });
   }, [roomCode, userId]);
 
   const refresh = useCallback((room: LiveKitRoom) => {
