@@ -1,6 +1,6 @@
 # MAFIA: SHADOWS
 
-A landscape-first Mafia card game. The current lobby and game are local simulations; accounts, ranking reads, and LiveKit voice are wired to Supabase/LiveKit services when configured.
+A landscape-first online Mafia card game for real players. Rooms, lobbies and the full game run on a Supabase Edge Function (`game`) with Supabase Realtime; voice runs on LiveKit.
 
 ## Local development
 
@@ -66,6 +66,24 @@ The lobby/room creation/game state in this repository are local simulations. **T
 
 After that controller exists, test audio on two separate devices with two signed-in users provisioned into the same room: join from both, press the microphone control after granting permission, and verify each hears the other during an allowed phase. Also test leave, denied microphone permission, reconnect, and host mute. A local build, two-tab test, or token response alone does not prove real audio.
 
+## Online multiplayer
+
+There are no simulated players. Every seat is a signed-in person.
+
+- `supabase/migrations/20261021_multiplayer_rooms.sql` adds `game_rooms`, `game_room_players`, `game_states` (server-only: every role and the room password hash), `game_public` (what the whole table sees) and `game_private` (one row per player with only their own role and results). RLS lets players read only rooms they sit in and only their own private row; all writes go through the function.
+- `supabase/functions/game` is the authoritative server: `create`, `join`, `leave`, `ready`, `start`, `night`, `vote`, `tick` and `rematch`. It runs the shared rules engine in `supabase/functions/_shared/gameEngine.ts` (the browser imports the same file), uses optimistic locking so simultaneous actions never overwrite each other, and keeps `voice_rooms`/`voice_room_members` in step so LiveKit mutes the right people each phase.
+- Phases move on when everyone who must act has acted, or when the phase timer runs out (any phone nudges the server with `tick`; the server re-checks the deadline). The host can skip waiting phases.
+- At least 4 players are needed; everyone except the host must press Ready.
+
+Deploy from a Codespace terminal:
+
+```sh
+npx supabase login
+npx supabase link --project-ref <project-ref>
+npx supabase db push
+npx supabase functions deploy game
+```
+
 ## Game rules
 
 - **Night:** the Mafia picks one victim (simulated Mafia members agree on the same target). The Doctor protects one player and may protect themselves, but never the same player two nights in a row. The Detective learns whether a player is Mafia-aligned, and every result stays in their private notebook for the rest of the game.
@@ -74,7 +92,7 @@ After that controller exists, test audio on two separate devices with two signed
 - **Morning:** night victims are announced without their role. Up to two living town players leave traces, which are clues, not proof.
 - **Voting:** the single player with the most votes is eliminated and their true role is revealed to everyone. If Skip leads or ties, nobody is eliminated. If two or more players tie, one runoff vote is held between only those players; a second tie eliminates nobody.
 - **Winning:** citizens win when no Mafia-aligned player is alive. The Mafia wins when Mafia-aligned players equal or outnumber everyone else.
-- **Simulated players** vote with intent: Mafia bots never vote out their own side, the Detective and Good Informant bots act on what they know, and the other bots lean toward players with traces (and sometimes skip).
+- **Timeouts:** a Mafia that never chooses attacks nobody; a missing vote counts as Skip. A player who leaves mid-game is eliminated without their role being revealed.
 
 ## Full-screen play
 

@@ -2,14 +2,8 @@ import {
   Crosshair, Eye, Fingerprint, HeartPulse, Radio, Shield, Skull, Users,
 } from 'lucide-react';
 
-export type RoleName =
-  | 'Mafia'
-  | 'Doctor'
-  | 'Detective'
-  | 'Good Informant'
-  | 'Bad Informant'
-  | 'Old Lady with Shotgun'
-  | 'Citizen';
+import type { RoleName } from './gameEngine';
+export type { RoleName };
 
 export type Role = {
   id: string;

@@ -606,3 +606,31 @@ body {
     padding-right: calc(min(360px, 42%) + 4%);
   }
 }
+
+/* ---------- Online play ---------- */
+
+.room-loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: #c8b48c;
+  font-size: 14px;
+  letter-spacing: .5px;
+}
+
+.reveal-wait,
+.discussion-wait {
+  display: inline-flex;
+  align-items: center;
+  color: #c8b48c;
+  font-size: clamp(11px, 2.8vh, 13px);
+}
+
+.reveal-wait {
+  z-index: 1;
+  min-height: 38px;
+}
+
+.viewport .game-frame .lobby-screen .player-grid .invite-slot {
+  cursor: default;
+}

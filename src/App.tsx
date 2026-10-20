@@ -3,27 +3,36 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
   ArrowLeft, Check, ChevronRight, Clipboard, Crown, LockKeyhole, MessageCircle, Moon,
-  Radio, Settings as SettingsIcon, Shield, Skull, Target, UserRound, Users, WandSparkles,
+  Radio, Settings as SettingsIcon, Shield, Skull, UserRound, Users, WandSparkles,
 } from 'lucide-react';
-import { roles, type Player } from './gameData';
+import { roles } from './gameData';
 import RoleCardArtwork from './RoleCardArtwork';
 import GameScreen from './Game';
 import Auth, { type AuthView } from './Auth';
 import { LeaderboardScreen, ProfileScreen, RankScreen } from './AccountScreens';
 import { supabase, supabaseConfigured, type PublicProfile, type RatingChange } from './supabaseClient';
 import { i18n, translateMessage } from './i18n';
+import { callGame, useRoom, type RoomSeat } from './multiplayer';
+import { MIN_PLAYERS } from './gameEngine';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { FullscreenToggle, useFullscreen, type FullscreenState } from './fullscreen';
 
 type Screen = 'menu' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'rank' | 'leaderboard' | 'settings' | 'auth';
 
-type GameRoom = { name: string; maxPlayers: number; isPrivate: boolean; password: string; players: Player[] };
-const startingPlayers: Player[] = [
-  { id: 1, name: 'Та', initials: 'ТА', color: 'rose', host: true, ready: false },
-  { id: 2, name: 'Violet', initials: 'VI', color: 'violet', ready: true },
-  { id: 3, name: 'Marlow', initials: 'MA', color: 'gold', ready: true },
-  { id: 4, name: 'Rook', initials: 'RO', color: 'teal', ready: true },
-];
+type RoomSettings = { name: string; maxPlayers: number; isPrivate: boolean; password: string };
+const ROOM_STORAGE_KEY = 'mafia-shadows:room';
+
+const readStoredRoom = () => {
+  try { return window.localStorage.getItem(ROOM_STORAGE_KEY); } catch { return null; }
+};
+const storeRoom = (code: string | null) => {
+  try {
+    if (code) window.localStorage.setItem(ROOM_STORAGE_KEY, code);
+    else window.localStorage.removeItem(ROOM_STORAGE_KEY);
+  } catch {
+    // Private mode: the player simply re-enters the code after a reload.
+  }
+};
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('menu');
@@ -35,10 +44,7 @@ export default function App() {
   const [profileError, setProfileError] = useState('');
   const [historyError, setHistoryError] = useState('');
   const [copied, setCopied] = useState(false);
-  const [roomCode, setRoomCode] = useState('NIGHT-7X');
-  const [rooms, setRooms] = useState<Record<string, GameRoom>>({
-    'NIGHT-7X': { name: 'Блэкуотерын туршилтын өрөө', maxPlayers: 8, isPrivate: true, password: '', players: startingPlayers },
-  });
+  const [roomCode, setRoomCode] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const fullscreen = useFullscreen();
 
@@ -121,68 +127,49 @@ export default function App() {
     };
   }, []);
 
-  const activeRoom = rooms[roomCode];
+  // Return to the room after a reload or app restart.
+  useEffect(() => {
+    if (!userId) return;
+    const stored = readStoredRoom();
+    if (stored) {
+      setRoomCode(stored);
+      setScreen((current) => current === 'menu' ? 'lobby' : current);
+    }
+  }, [userId]);
 
-  const updateActiveRoom = (updates: Partial<GameRoom>) => {
-    setRooms((current) => ({ ...current, [roomCode]: { ...current[roomCode], ...updates } }));
-  };
-
-  const openDemoLobby = () => {
-    setRoomCode('NIGHT-7X');
-    setScreen('lobby');
-  };
-
-  const createRoom = (room: Omit<GameRoom, 'players'>) => {
-    let code = '';
-    do {
-      code = `MAF-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-    } while (rooms[code]);
-    setRooms((current) => ({ ...current, [code]: { ...room, players: startingPlayers } }));
+  const enterRoom = (code: string) => {
+    storeRoom(code);
     setRoomCode(code);
     setScreen('lobby');
-    notify(`${i18n.app.roomReady} ${code}`);
   };
 
-  const joinRoom = (codeInput: string, passwordInput: string) => {
+  const leaveRoom = () => {
+    storeRoom(null);
+    setRoomCode(null);
+    setScreen('menu');
+  };
+
+  const requireAccount = (next: Screen) => {
+    if (userId) return setScreen(next);
+    notify('Онлайн тоглохын тулд эхлээд нэвтэрнэ үү.');
+    openAuth('sign-in');
+  };
+
+  const createRoom = async (room: RoomSettings) => {
+    const result = await callGame<{ roomCode: string }>('create', room);
+    enterRoom(result.roomCode);
+    notify(`${i18n.app.roomReady} ${result.roomCode}`);
+  };
+
+  const joinRoom = async (codeInput: string, passwordInput: string) => {
     const code = codeInput.trim().toUpperCase();
-    if (!/^[A-Z0-9]{4,6}-[A-Z0-9]{2,4}$/.test(code)) return translateMessage('Enter a room code in the format NIGHT-7X.');
-    const room = rooms[code];
-    if (!room) return translateMessage('No demo room has that code. Try NIGHT-7X or create a room in this tab.');
-    if (room.password && room.password !== passwordInput) return translateMessage('That room password does not match.');
-    setRoomCode(code);
-    setScreen('lobby');
-    return '';
-  };
-
-  const toggleReady = () => {
-    const host = activeRoom.players.find((player) => player.id === 1);
-    if (!host) return;
-    updateActiveRoom({ players: activeRoom.players.map((player) => player.id === 1 ? { ...player, ready: !player.ready } : player) });
-  };
-
-  const addSimulatedPlayer = () => {
-    if (activeRoom.players.length >= activeRoom.maxPlayers) return notify(translateMessage('This room is full.'));
-    const names = ['June', 'Silas', 'Mina', 'Ezra', 'Kit', 'Nico', 'Iris', 'Pike', 'Ada'];
-    const colors = ['blue', 'plum', 'rose', 'gold', 'teal', 'violet'];
-    const name = names.find((candidate) => !activeRoom.players.some((player) => player.name === candidate)) ?? `Guest ${activeRoom.players.length}`;
-    const id = Math.max(...activeRoom.players.map((player) => player.id)) + 1;
-    updateActiveRoom({ players: [...activeRoom.players, { id, name, initials: name.slice(0, 2).toUpperCase(), color: colors[id % colors.length], ready: true }] });
-    notify(`${name} тоглогч өрөөнд нэмэгдлээ.`);
-  };
-
-  const updateHostIdentity = (name: string, color: string) => {
-    const cleanName = name.trim().slice(0, 16) || 'Та';
-    updateActiveRoom({ players: activeRoom.players.map((player) => player.id === 1 ? { ...player, name: cleanName, initials: cleanName.slice(0, 2).toUpperCase(), color } : player) });
-  };
-
-  const startGame = () => {
-    const host = activeRoom.players.find((player) => player.id === 1);
-    if (activeRoom.players.length < 4) return notify(translateMessage('At least 4 players are needed to start. Add simulated players first.'));
-    if (!host?.ready) return notify(translateMessage('Mark yourself Ready before starting the game.'));
-    setScreen('game');
+    if (!/^[A-Z0-9]{4,6}-[A-Z0-9]{2,4}$/.test(code)) throw new Error(translateMessage('Enter a room code in the format NIGHT-7X.'));
+    const result = await callGame<{ roomCode: string }>('join', { roomCode: code, password: passwordInput });
+    enterRoom(result.roomCode);
   };
 
   const copyRoom = async () => {
+    if (!roomCode) return;
     try {
       await navigator.clipboard.writeText(roomCode);
       setCopied(true);
@@ -211,37 +198,21 @@ export default function App() {
     <main className="viewport">
       <section className={`game-frame screen-${screen}`} aria-label="MAFIA: SHADOWS тоглоом">
         <div className="grain" aria-hidden="true" />
-        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={openDemoLobby} onCreate={() => setScreen('create-room')} onJoin={() => setScreen('join-room')} signedIn={Boolean(userId)} onAuth={openAuth} fullscreen={fullscreen} />}
+        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'join-room')} onCreate={() => requireAccount('create-room')} onJoin={() => requireAccount('join-room')} signedIn={Boolean(userId)} onAuth={openAuth} fullscreen={fullscreen} />}
         {screen === 'create-room' && <CreateRoom onBack={() => setScreen('menu')} onCreate={createRoom} />}
         {screen === 'join-room' && <JoinRoom onBack={() => setScreen('menu')} onJoin={joinRoom} />}
-        {screen === 'lobby' && (
-          <VoiceChatProvider roomCode={roomCode} userId={userId} phase="lobby" alive isHost={Boolean(activeRoom.players.find((player) => player.id === 1)?.host)}>
-          <Lobby
-            room={activeRoom}
-            roomCode={roomCode}
-            copied={copied}
-            onCopy={copyRoom}
-            onReady={toggleReady}
-            onLeave={goBack}
-            onStart={startGame}
-            onAddPlayer={addSimulatedPlayer}
-            onIdentityChange={updateHostIdentity}
-          />
-          </VoiceChatProvider>
-        )}
-        {screen === 'game' && (
-          <GameScreen
-            players={activeRoom.players}
-            roomName={activeRoom.name}
+        {screen === 'lobby' && roomCode && userId && (
+          <RoomScreen
             roomCode={roomCode}
             userId={userId}
-            isHost={Boolean(activeRoom.players.find((player) => player.id === 1)?.host)}
-            onLeave={() => setScreen('lobby')}
-            onReturnMenu={goBack}
+            copied={copied}
+            onCopy={copyRoom}
+            onLeft={leaveRoom}
             onNotice={notify}
             fullscreen={fullscreen}
           />
         )}
+        {screen === 'lobby' && (!roomCode || !userId) && <JoinRoom onBack={goBack} onJoin={joinRoom} />}
         {screen === 'roles' && <RoleGallery onBack={goBack} />}
         {screen === 'profile' && <ProfileScreen profile={profile} loading={accountLoading} loadError={profileError} onBack={goBack} onSignIn={() => openAuth('sign-in')} onSignOut={() => openAuth('sign-out')} onSave={saveProfile} />}
         {screen === 'rank' && <RankScreen profile={profile} history={ratingHistory} loading={accountLoading} error={historyError || profileError} onBack={goBack} onSignIn={() => openAuth('sign-in')} />}
@@ -266,7 +237,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
 function Menu({ onNavigate, onPlay, onCreate, onJoin, signedIn, onAuth, fullscreen }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; signedIn: boolean; onAuth: (view?: AuthView) => void; fullscreen: FullscreenState }) {
   return (
     <div className="menu-screen">
-      <header className="menu-top"><Brand /><div className="menu-top-actions"><div className="online-note"><span className="status-dot" /> {i18n.app.localPrototype}</div><FullscreenToggle fullscreen={fullscreen} /></div></header>
+      <header className="menu-top"><Brand /><div className="menu-top-actions"><div className="online-note"><span className="status-dot" /> {signedIn ? 'ОНЛАЙН' : 'НЭВТРЭЭГҮЙ'}</div><FullscreenToggle fullscreen={fullscreen} /></div></header>
       <div className="city-art" aria-hidden="true"><div className="moon-glow" /><div className="cityline" /><div className="rain-lines" /></div>
       <div className="menu-copy">
         <div className="eyebrow"><span /> {i18n.app.cityOfSecrets} <span /></div>
@@ -285,95 +256,152 @@ function Menu({ onNavigate, onPlay, onCreate, onJoin, signedIn, onAuth, fullscre
         <button onClick={() => onNavigate('settings')}><span className="nav-icon"><SettingsIcon size={16} /></span><span>{i18n.app.settings}</span><ChevronRight size={14} /></button>
         <button onClick={() => onAuth(signedIn ? 'sign-out' : 'sign-in')}><span className="nav-icon"><LockKeyhole size={16} /></span><span>{signedIn ? i18n.app.signOut : i18n.auth.signInAccount}</span><ChevronRight size={14} /></button>
       </nav>
-      <footer className="menu-footer"><span>{i18n.app.afterDark.toUpperCase()}</span><span>{i18n.app.version} <i>•</i> {i18n.app.allConnectionsSimulated}</span></footer>
+      <footer className="menu-footer"><span>{i18n.app.afterDark.toUpperCase()}</span><span>{i18n.app.version} <i>•</i> ОНЛАЙН ДУУТ ТОГЛООМ</span></footer>
     </div>
   );
 }
 
-function CreateRoom({ onBack, onCreate }: { onBack: () => void; onCreate: (room: Omit<GameRoom, 'players'>) => void }) {
+function CreateRoom({ onBack, onCreate }: { onBack: () => void; onCreate: (room: RoomSettings) => Promise<void> }) {
   const [name, setName] = useState('Блэкуотерын шөнө');
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [isPrivate, setIsPrivate] = useState(true);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!name.trim()) return setError('Өрөөний нэрийг оруулаад үүсгэнэ үү.');
     if (isPrivate && password && password.length < 4) return setError('Өрөөний нууц үг хамгийн багадаа 4 тэмдэгт байна.');
     setError('');
-    onCreate({ name: name.trim(), maxPlayers, isPrivate, password: isPrivate ? password : '' });
+    setBusy(true);
+    try {
+      await onCreate({ name: name.trim(), maxPlayers, isPrivate, password: isPrivate ? password : '' });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Өрөө үүсгэж чадсангүй.');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  return <div className="inner-screen setup-screen"><TopBar title="ӨРӨӨ ҮҮСГЭХ" subtitle="ӨРӨӨНИЙ ТӨХИРГӨӨ" onBack={onBack} /><div className="setup-content"><div className="setup-heading"><div className="eyebrow left-eye">ТӨХИРГӨӨ СОНГОХ</div><h1>Өөрийнхөө <i>өрөөг</i> бүтээ.</h1><p>Таны өрөөнд гурван симуляцийн зочин автоматаар нэмэгдэнэ.</p></div><form className="room-form" onSubmit={submit}>
+  return <div className="inner-screen setup-screen"><TopBar title="ӨРӨӨ ҮҮСГЭХ" subtitle="ӨРӨӨНИЙ ТӨХИРГӨӨ" onBack={onBack} /><div className="setup-content"><div className="setup-heading"><div className="eyebrow left-eye">ТӨХИРГӨӨ СОНГОХ</div><h1>Өөрийнхөө <i>өрөөг</i> бүтээ.</h1><p>Өрөөний кодыг найзууддаа илгээгээрэй. Дор хаяж {MIN_PLAYERS} хүн нэгдвэл тоглоом эхэлнэ.</p></div><form className="room-form" onSubmit={submit}>
     <label className="form-field room-name-field"><span>{i18n.app.roomName.toUpperCase()}</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder="Өрөөний нэрээ оруулна уу" /></label>
     <label className="form-field"><span>{i18n.app.maxPlayers.toUpperCase()}</span><select value={maxPlayers} onChange={(event) => setMaxPlayers(Number(event.target.value))}>{[6, 8, 10, 12].map((count) => <option key={count} value={count}>{count} тоглогч</option>)}</select></label>
-    <div className="private-setting"><span><b>Хувийн өрөө</b><small>Зөвхөн өрөөний кодтой тоглогч нэгдэх боломжтой</small></span><button type="button" role="switch" aria-checked={isPrivate} className={`toggle ${isPrivate ? 'toggle-on' : ''}`} onClick={() => setIsPrivate((value) => !value)}><i /></button></div>
+    <div className="private-setting"><span><b>Нууц үгтэй өрөө</b><small>Нууц үг мэдэх хүн л нэгдэнэ</small></span><button type="button" role="switch" aria-checked={isPrivate} className={`toggle ${isPrivate ? 'toggle-on' : ''}`} onClick={() => setIsPrivate((value) => !value)}><i /></button></div>
     {isPrivate && <label className="form-field password-field"><span>ӨРӨӨНИЙ НУУЦ ҮГ <small>СОНГОЛТТОЙ</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} maxLength={32} placeholder="Нууц үггүй орж болно" autoComplete="new-password" /></label>}
     {error && <p className="form-error" role="alert">{error}</p>}
-    <div className="form-actions"><button type="button" className="secondary-button" onClick={onBack}><ArrowLeft size={15} /> {i18n.common.back.toUpperCase()}</button><button type="submit" className="primary-button"><Users size={15} /> {i18n.app.createRoom.toUpperCase()} <ChevronRight size={16} /></button></div>
+    <div className="form-actions"><button type="button" className="secondary-button" onClick={onBack}><ArrowLeft size={15} /> {i18n.common.back.toUpperCase()}</button><button type="submit" className="primary-button" disabled={busy}><Users size={15} /> {busy ? 'ҮҮСГЭЖ БАЙНА…' : i18n.app.createRoom.toUpperCase()} <ChevronRight size={16} /></button></div>
   </form></div></div>;
 }
 
-function JoinRoom({ onBack, onJoin }: { onBack: () => void; onJoin: (code: string, password: string) => string }) {
+function JoinRoom({ onBack, onJoin }: { onBack: () => void; onJoin: (code: string, password: string) => Promise<void> }) {
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const [busy, setBusy] = useState(false);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const result = onJoin(code, password);
-    setError(result);
+    setError('');
+    setBusy(true);
+    try {
+      await onJoin(code, password);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Өрөөнд нэгдэж чадсангүй.');
+    } finally {
+      setBusy(false);
+    }
   };
-  return <div className="inner-screen setup-screen"><TopBar title="ӨРӨӨНД НЭГДЭХ" subtitle="ШИРЭЭНД НЭГДЭХ" onBack={onBack} /><div className="join-content"><div className="setup-heading"><div className="eyebrow left-eye">ХОТ ХҮЛЭЭЖ БАЙНА</div><h1>Код <i>мэдэх үү?</i></h1><p>Энэ хөтчийн таб дээр ажиллаж буй туршилтын өрөөнд холбогдоно уу.</p></div><form className="join-form" onSubmit={submit}>
-    <label className="form-field"><span>{i18n.app.roomCode.toUpperCase()}</span><input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} maxLength={11} placeholder="NIGHT-7X" autoComplete="off" /></label>
+  return <div className="inner-screen setup-screen"><TopBar title="ӨРӨӨНД НЭГДЭХ" subtitle="ШИРЭЭНД НЭГДЭХ" onBack={onBack} /><div className="join-content"><div className="setup-heading"><div className="eyebrow left-eye">ХОТ ХҮЛЭЭЖ БАЙНА</div><h1>Код <i>мэдэх үү?</i></h1><p>Найзынхаа илгээсэн өрөөний кодыг оруулна уу.</p></div><form className="join-form" onSubmit={submit}>
+    <label className="form-field"><span>{i18n.app.roomCode.toUpperCase()}</span><input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} maxLength={11} placeholder="NIGHT-7XQ2" autoComplete="off" autoCapitalize="characters" /></label>
     <label className="form-field"><span>ӨРӨӨНИЙ НУУЦ ҮГ <small>ШААРДЛАГАТАЙ БОЛ</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Нууц үг оруулна уу" autoComplete="off" /></label>
-    <div className="demo-note"><Radio size={15} /><span><b>Зөвхөн туршилтын өрөө</b><small>Онлайн олон тоглогчийн холболт идэвхгүй. NIGHT-7X эсвэл энэ таб дээр үүсгэсэн өрөөг ашиглаарай.</small></span></div>
     {error && <p className="form-error" role="alert">{error}</p>}
-    <div className="form-actions"><button type="button" className="secondary-button" onClick={onBack}><ArrowLeft size={15} /> {i18n.common.back.toUpperCase()}</button><button type="submit" className="primary-button"><Radio size={15} /> {i18n.app.joinRoom.toUpperCase()} <ChevronRight size={16} /></button></div>
+    <div className="form-actions"><button type="button" className="secondary-button" onClick={onBack}><ArrowLeft size={15} /> {i18n.common.back.toUpperCase()}</button><button type="submit" className="primary-button" disabled={busy}><Radio size={15} /> {busy ? 'НЭГДЭЖ БАЙНА…' : i18n.app.joinRoom.toUpperCase()} <ChevronRight size={16} /></button></div>
   </form></div></div>;
 }
 
-function Lobby({ room, roomCode, copied, onCopy, onReady, onLeave, onStart, onAddPlayer, onIdentityChange }: {
-  room: GameRoom; roomCode: string; copied: boolean; onCopy: () => void; onReady: () => void;
-  onLeave: () => void; onStart: () => void; onAddPlayer: () => void; onIdentityChange: (name: string, color: string) => void;
+/** Lobby while the room waits; switches to the live game once the host starts. */
+function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullscreen }: {
+  roomCode: string; userId: string; copied: boolean; onCopy: () => void; onLeft: () => void; onNotice: (text: string) => void; fullscreen: FullscreenState;
 }) {
-  const host = room.players.find((player) => player.id === 1);
-  const emptySlots = Math.max(room.maxPlayers - room.players.length, 0);
+  const { room, seats, loaded, missing, reload } = useRoom(roomCode);
+  const [busy, setBusy] = useState(false);
+  const mine = seats.find((seat) => seat.user_id === userId);
+
+  useEffect(() => {
+    // The room was closed, or this player is no longer seated (left on another device).
+    if (loaded && (missing || (room && !mine))) {
+      onNotice('Та энэ өрөөнд байхгүй байна.');
+      onLeft();
+    }
+  }, [loaded, missing, room, mine, onLeft, onNotice]);
+
+  const run = async (action: string, body: Record<string, unknown> = {}) => {
+    setBusy(true);
+    try {
+      await callGame(action, { roomCode, ...body });
+      await reload();
+    } catch (cause) {
+      onNotice(cause instanceof Error ? cause.message : 'Алдаа гарлаа.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const leave = async () => {
+    try { await callGame('leave', { roomCode }); } catch { /* leaving locally is still fine */ }
+    onLeft();
+  };
+
+  if (!room || !mine) return <div className="inner-screen"><TopBar title="ӨРӨӨ" subtitle="АЧААЛЖ БАЙНА" onBack={onLeft} /><div className="room-loading">Өрөөнд холбогдож байна…</div></div>;
+
+  if (room.status !== 'lobby') {
+    return <GameScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} fullscreen={fullscreen} />;
+  }
+
+  const isHost = room.host_id === userId;
+  const emptySlots = Math.max(room.max_players - seats.length, 0);
+  const others = seats.filter((seat) => seat.user_id !== room.host_id);
+  const waitingFor = others.filter((seat) => !seat.ready);
+  const canStart = seats.length >= MIN_PLAYERS && waitingFor.length === 0;
+  const hint = seats.length < MIN_PLAYERS
+    ? `Дор хаяж ${MIN_PLAYERS} тоглогч хэрэгтэй · одоо ${seats.length}`
+    : waitingFor.length ? `Хүлээж байна: ${waitingFor.map((seat) => seat.display_name).join(', ')}` : 'Бүгд бэлэн!';
+
   return (
-    <div className="inner-screen lobby-screen">
-      <TopBar title={room.name.toUpperCase()} subtitle="ТОГЛООМЫН ЛОББИ" onBack={onLeave} />
-      <div className={`lobby-content capacity-${room.maxPlayers}`}>
-        <div className="lobby-heading">
-          <div><div className="eyebrow left-eye">ХОТ СЭРЭХЭЭСЭЭ ӨМНӨ</div><h1>Бүлгээ <i>цуглуулаарай.</i></h1></div>
-          <div className="room-code"><span>{i18n.app.roomCode.toUpperCase()}</span><strong>{roomCode}</strong><button aria-label="Өрөөний код хуулах" title="Өрөөний код хуулах" onClick={onCopy}>{copied ? <Check size={16} /> : <Clipboard size={16} />}</button></div>
-        </div>
-          <div className="identity-controls"><label>ТАНЫ НЭР<input value={host?.name ?? ''} onChange={(event) => onIdentityChange(event.target.value, host?.color ?? 'rose')} maxLength={16} /></label><label>АВАТАР<select value={host?.color ?? 'rose'} onChange={(event) => onIdentityChange(host?.name ?? 'Та', event.target.value)}><option value="rose">Сарнай ягаан</option><option value="violet">Нил ягаан</option><option value="gold">Алтан шар</option><option value="teal">Цэнхэр ногоон</option><option value="blue">Цэнхэр</option><option value="plum">Чавганы ягаан</option></select></label></div>
-        <div className="lobby-toolbar"><span><Users size={14} /> ТОГЛОГЧИД <b>{String(room.players.length).padStart(2, '0')}</b> <span className="muted">/ {room.maxPlayers}</span></span><span className="sim-badge"><span className="status-dot" /> ТУРШИЛТЫН ТОГЛОГЧИД <span className="muted">·</span> {room.isPrivate ? 'ХУВИЙН ӨРӨӨ' : 'НИЙТЭД НЭЭЛТТЭЙ'}</span></div>
-        <div className="player-grid">
-          {room.players.map((player) => <PlayerCard key={player.id} player={player} selected={false} compact />)}
-          {Array.from({ length: emptySlots }, (_, index) => <button className="invite-slot" key={`slot-${index}`} onClick={onAddPlayer} aria-label="Туршилтын тоглогч нэмэх"><span>+</span><small>ТУРШИЛТЫН ТОГЛОГЧ НЭМЭХ</small></button>)}
-        </div>
-        <div className="lobby-bottom">
-          <div className="lobby-hint"><LockKeyhole size={14} /><span>{host?.host ? 'ТА ӨРӨӨНИЙ ЭЗЭН' : 'ТУРШИЛТЫН ӨРӨӨ'} <b>•</b> {host?.ready ? 'Эхлэхэд бэлэн' : 'Эхлүүлэхийн өмнө бэлэн гэдгээ тэмдэглэнэ үү'}</span></div>
-          <div className="lobby-actions">
-            <button className={`secondary-button ready-button ${host?.ready ? 'is-ready' : ''}`} onClick={onReady}>{host?.ready ? <Check size={15} /> : <Shield size={15} />}{host?.ready ? 'БЭЛЭН БИШ' : 'БИ БЭЛЭН'}</button>
-            <button className="text-button" onClick={onLeave}><ArrowLeft size={15} /> {i18n.common.leave.toUpperCase()}</button>
-            {host?.host && <button className="primary-button start-button" onClick={onStart}><Moon size={15} /> {i18n.app.startGame.toUpperCase()} <ChevronRight size={16} /></button>}
+    <VoiceChatProvider roomCode={roomCode} userId={userId} phase="lobby" alive isHost={isHost}>
+      <div className="inner-screen lobby-screen">
+        <TopBar title={room.name.toUpperCase()} subtitle="ТОГЛООМЫН ЛОББИ" onBack={leave} />
+        <div className={`lobby-content capacity-${room.max_players}`}>
+          <div className="lobby-heading">
+            <div><div className="eyebrow left-eye">ХОТ СЭРЭХЭЭСЭЭ ӨМНӨ</div><h1>Бүлгээ <i>цуглуулаарай.</i></h1></div>
+            <div className="room-code"><span>{i18n.app.roomCode.toUpperCase()}</span><strong>{roomCode}</strong><button aria-label="Өрөөний код хуулах" title="Өрөөний код хуулах" onClick={onCopy}>{copied ? <Check size={16} /> : <Clipboard size={16} />}</button></div>
+          </div>
+          <div className="lobby-toolbar"><span><Users size={14} /> ТОГЛОГЧИД <b>{String(seats.length).padStart(2, '0')}</b> <span className="muted">/ {room.max_players}</span></span></div>
+          <div className="player-grid">
+            {seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={seat.user_id === userId} />)}
+            {Array.from({ length: emptySlots }, (_, index) => <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>СУЛ СУУДАЛ</small></div>)}
+          </div>
+          <div className="lobby-bottom">
+            <div className="lobby-hint"><LockKeyhole size={14} /><span>{isHost ? 'ТА ӨРӨӨНИЙ ЭЗЭН' : 'ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА'} <b>•</b> {hint}</span></div>
+            <div className="lobby-actions">
+              {!isHost && <button className={`secondary-button ready-button ${mine.ready ? 'is-ready' : ''}`} disabled={busy} onClick={() => run('ready', { ready: !mine.ready })}>{mine.ready ? <Check size={15} /> : <Shield size={15} />}{mine.ready ? 'БЭЛЭН' : 'БИ БЭЛЭН'}</button>}
+              <button className="text-button" onClick={leave}><ArrowLeft size={15} /> {i18n.common.leave.toUpperCase()}</button>
+              {isHost && <button className="primary-button start-button" disabled={busy || !canStart} onClick={() => run('start')}><Moon size={15} /> {i18n.app.startGame.toUpperCase()} <ChevronRight size={16} /></button>}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </VoiceChatProvider>
   );
+}
+
+function SeatCard({ seat, isHost, isMe }: { seat: RoomSeat; isHost: boolean; isMe: boolean }) {
+  const initials = seat.display_name.slice(0, 2).toUpperCase();
+  return <div className={`player-card compact-card ${seat.ready || isHost ? 'player-ready' : ''}`}><div className={`avatar avatar-${seat.color}`}><span>{initials}</span>{isHost && <i title="Өрөөний эзэн"><Crown size={11} /></i>}<VoiceAvatarIndicator name={seat.display_name} /></div><div className="player-name">{seat.display_name}{isMe && <small>ЧИ</small>}</div><div className={`player-status ${seat.ready || isHost ? 'online' : ''}`}>{isHost ? 'ЭЗЭН' : seat.ready ? 'БЭЛЭН' : 'ХҮЛЭЭЖ БАЙНА'}</div></div>;
 }
 
 function TopBar({ title, subtitle, onBack, trailing }: { title: string; subtitle: string; onBack: () => void; trailing?: ReactNode }) {
   return <header className="top-bar"><button className="icon-button back-button" onClick={onBack} aria-label="Цэс рүү буцах"><ArrowLeft size={17} /></button><div className="top-title"><span>{subtitle}</span><strong>{title}</strong></div><Brand compact /><div className="top-trailing">{trailing}</div></header>;
-}
-
-function PlayerCard({ player, selected, compact = false, onClick }: { player: Player; selected: boolean; compact?: boolean; onClick?: () => void }) {
-  const content = <><div className={`avatar avatar-${player.color}`}><span>{player.initials}</span>{player.host && <i title="Өрөөний эзэн"><Crown size={11} /></i>}<VoiceAvatarIndicator name={player.name} /></div><div className="player-name">{player.name}{player.id === 1 && <small>ЧИ</small>}</div><div className={`player-status ${player.ready || player.status === 'alive' ? 'online' : ''}`}>{player.status ?? (player.ready ? 'БЭЛЭН' : player.host ? 'ЭЗЭН' : 'ЛОББИД')}</div></>;
-  if (compact) return <div className={`player-card compact-card ${player.ready ? 'player-ready' : ''}`}>{content}</div>;
-  return <button className={`player-card target-card ${selected ? 'target-selected' : ''}`} onClick={onClick} aria-pressed={selected}>{content}<span className="target-marker"><Target size={14} /></span></button>;
 }
 
 function RoleGallery({ onBack }: { onBack: () => void }) {

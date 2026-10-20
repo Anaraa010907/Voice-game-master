@@ -472,6 +472,7 @@ export const translateMessage = (message: string): string => {
     'An attempted attack was stopped at the old house. No one was eliminated.': 'Хуучин байшинд халдлагын оролдлогыг зогсоов. Хэн ч хасагдсангүй.',
     'No eligible trace clues were found.': 'Боломжтой сэжүүрийн мөр олдсонгүй.',
     'The vote was tied or Skip Vote led the count. No one was eliminated.': 'Санал тэнцсэн эсвэл алгасах санал хамгийн олон байв. Хэн ч хасагдсангүй.',
+    'The table is set. Roles have been dealt in secret.': 'Ширээ бэлэн. Дүрүүдийг нууцаар хуваарилсан.',
     'The runoff was tied again. No one was eliminated.': 'Давтан санал хураалт дахин тэнцлээ. Хэн ч хасагдсангүй.',
     'You cannot protect the same player two nights in a row.': 'Нэг тоглогчийг хоёр шөнө дараалан хамгаалах боломжгүй.',
     'Runoff votes can only target the tied players.': 'Давтан санал хураалтад зөвхөн тэнцсэн тоглогчдод санал өгнө.',
@@ -508,6 +509,8 @@ export const translateMessage = (message: string): string => {
   }
   const traces = message.match(/^Traces associated with (.+) were found\. Traces are clues, not proof\.$/);
   if (traces) return `${traces[1].replace(' and ', ' болон ')}-тэй холбоотой мөр олдлоо. Мөр бол сэжүүр болохоос нотолгоо биш.`;
+  const left = message.match(/^(.+) left the table\.$/);
+  if (left) return `${left[1]} ширээг орхиж, тоглоомоос хасагдлаа.`;
   const runoff = message.match(/^The vote was tied between (.+)\. A runoff vote begins\.$/);
   if (runoff) return `${runoff[1].split(' and ').join(', ')} тэнцлээ. Зөвхөн тэдний дунд давтан санал хураалт эхэллээ.`;
   const revealed = message.match(/^(.+) was revealed as (.+)\.$/);
