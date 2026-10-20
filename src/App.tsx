@@ -3,7 +3,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
   ArrowLeft, Check, ChevronRight, X, Clipboard, Crown, LockKeyhole, MessageCircle, Moon,
-  Mic, Radio, RefreshCw, Settings as SettingsIcon, Shield, Skull, UserRound, Users, WandSparkles, Zap,
+  Radio, RefreshCw, Settings as SettingsIcon, Shield, Skull, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles } from './gameData';
 import RoleCardArtwork from './RoleCardArtwork';
@@ -336,24 +336,6 @@ function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoos
     <div className="hub-cards">
       <article className="hub-card hub-card-board" style={{ '--hub-bg': "url('/assets/hub/board-bg.jpg')" } as CSSProperties}>
         <h2>BOARD GAME</h2>
-        <div className="hub-art hub-art-board" aria-hidden="true">
-          <div className="hub-board-plane">
-            {Array.from({ length: 25 }, (_, index) => {
-              const row = Math.floor(index / 5);
-              const col = index % 5;
-              const edge = row === 0 || row === 4 || col === 0 || col === 4;
-              const corner = (row === 0 || row === 4) && (col === 0 || col === 4);
-              const colors = ['brown', 'sky', 'pink', 'orange', 'red', 'yellow', 'green', 'navy'];
-              return <i key={index} className={!edge ? 'is-center' : corner ? 'is-corner' : `band-${colors[(row * 3 + col) % colors.length]}`} />;
-            })}
-            <span className="hub-board-title">МОНГОЛ</span>
-            <span className="hub-board-ger" />
-            <span className="hub-board-ger is-second" />
-            <span className="hub-board-token" />
-          </div>
-          <span className="hub-die is-left"><i /><i /><i /></span>
-          <span className="hub-die is-right"><i /><i /></span>
-        </div>
         <button type="button" className="hub-play" onClick={() => onChoose('monopoly')}>ТОГЛОХ <ChevronRight size={18} /></button>
         <p className="hub-card-meta"><b>{GAMES.monopoly.title}</b>{GAMES.monopoly.players} · Монгол газрууд, гэр бааз</p>
         {soon('board') && <p className="hub-card-soon">Удахгүй: {soon('board')}</p>}
@@ -361,14 +343,6 @@ function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoos
 
       <article className="hub-card hub-card-voice" style={{ '--hub-bg': "url('/assets/hub/voice-bg.jpg')" } as CSSProperties}>
         <h2>VOICE GAME</h2>
-        <div className="hub-art hub-art-voice" aria-hidden="true">
-          <div className="hub-table">
-            <div className="hub-table-center"><Skull size={22} /><small>МАФИ</small></div>
-            {Array.from({ length: 6 }, (_, index) => <i key={`card-${index}`} className="hub-table-card" style={{ transform: `rotate(${index * 60 + 30}deg) translateY(-185%)` }} />)}
-            {['rose', 'violet', 'gold', 'teal', 'blue', 'plum'].map((color, index) => <span key={color} className={`hub-seat avatar avatar-${color} seat-${index} ${index === 1 ? 'is-speaking' : ''}`}>{['Б', 'С', 'Т', 'Н', 'А', 'Ц'][index]}</span>)}
-            <span className="hub-speaking"><Mic size={11} /> Сараа ярьж байна</span>
-          </div>
-        </div>
         <button type="button" className="hub-play" onClick={() => onChoose('mafia')}>ТОГЛОХ <ChevronRight size={18} /></button>
         <p className="hub-card-meta"><b>{GAMES.mafia.title}</b>{GAMES.mafia.players} · Дуут чат, нууц дүр</p>
         {soon('card') && <p className="hub-card-soon">Удахгүй: {soon('card')}</p>}
