@@ -66,6 +66,20 @@ The lobby/room creation/game state in this repository are local simulations. **T
 
 After that controller exists, test audio on two separate devices with two signed-in users provisioned into the same room: join from both, press the microphone control after granting permission, and verify each hears the other during an allowed phase. Also test leave, denied microphone permission, reconnect, and host mute. A local build, two-tab test, or token response alone does not prove real audio.
 
+## Game rules
+
+- **Night:** the Mafia picks one victim (simulated Mafia members agree on the same target). The Doctor protects one player and may protect themselves, but never the same player two nights in a row. The Detective learns whether a player is Mafia-aligned, and every result stays in their private notebook for the rest of the game.
+- **Old Lady with Shotgun:** the first unprotected Mafia attack on her is answered by her shotgun, which eliminates the attacker. The shotgun fires only once; a later attack kills her.
+- **Bad Informant:** works for the Mafia without the Mafia knowing who they are. If every Mafia member is eliminated, the Bad Informant takes over the night attack.
+- **Morning:** night victims are announced without their role. Up to two living town players leave traces, which are clues, not proof.
+- **Voting:** the single player with the most votes is eliminated and their true role is revealed to everyone. If Skip leads or ties, nobody is eliminated. If two or more players tie, one runoff vote is held between only those players; a second tie eliminates nobody.
+- **Winning:** citizens win when no Mafia-aligned player is alive. The Mafia wins when Mafia-aligned players equal or outnumber everyone else.
+- **Simulated players** vote with intent: Mafia bots never vote out their own side, the Detective and Good Informant bots act on what they know, and the other bots lean toward players with traces (and sometimes skip).
+
+## Full-screen play
+
+The game fills the whole screen at any aspect ratio (no 16:9 letterbox) and keeps content clear of notches with CSS safe-area insets. On phone browsers the first tap enters fullscreen and locks landscape where the browser allows it; a **БҮТЭН ДЭЛГЭЦ** button on the main menu and in the in-game settings toggles it. Adding the site to the home screen opens it fullscreen through `public/manifest.webmanifest`. The Android app hides the status and navigation bars (immersive mode) and draws into the camera cutout.
+
 ## Android debug APK
 
 The app uses Capacitor 8 around the existing Vite build; debug builds use Android's automatically generated debug signature. Install JDK 21 and Android SDK Platform 36/Build Tools 36, configure `JAVA_HOME` and `ANDROID_HOME` (or `ANDROID_SDK_ROOT`), and accept the Android SDK licenses. Android Studio can install/manage these components. The `android:apk` script selects the JDK 21 bundled in this Codespaces image when the default Java is incompatible; elsewhere, set `ANDROID_JDK_HOME` to a JDK 21 installation.

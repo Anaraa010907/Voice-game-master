@@ -3,10 +3,13 @@ import { roles, type Player, type RoleName } from './gameData.ts';
 export type GamePhase = 'Role Reveal' | 'Night' | 'Morning' | 'Discussion' | 'Voting' | 'Results';
 export type VoteChoice = number | 'skip' | null;
 export type WinningTeam = 'Citizens' | 'Mafia' | null;
+export type NightRole = 'Mafia' | 'Doctor' | 'Detective';
 export type PublicGamePlayer = Pick<Player, 'id' | 'name' | 'initials' | 'color' | 'host'> & {
   alive: boolean;
   voteStatus: 'hidden' | 'revealed' | 'not-eligible';
   voteTargetId: number | null;
+  /** Set only when a player is voted out: the town learns their role. Night victims stay hidden. */
+  revealedRole: RoleName | null;
 };
 
 export type PrivatePlayerInfo = {
@@ -24,6 +27,12 @@ export type PrivateGamePlayer = {
   info: PrivatePlayerInfo;
   nightAction: { submitted: boolean; targetId: number | null };
   vote: { submitted: boolean; choice: VoteChoice };
+  /** Doctor only: who was protected last night (cannot be protected two nights in a row). */
+  lastProtectedId: number | null;
+  /** Detective only: everything learned so far, kept across nights. */
+  knownAlignment: Record<number, 'mafia' | 'town'>;
+  /** Old Lady only: the single retaliation shot has been fired. */
+  shotgunSpent: boolean;
 };
 
 export type GameEngineState = {
@@ -39,6 +48,9 @@ export type GameEngineState = {
   voteCounts: Record<string, number>;
   voteSummary: string;
   votesRevealed: boolean;
+  /** A tied ballot triggers exactly one runoff between the tied players. */
+  runoffCandidates: number[] | null;
+  runoffUsed: boolean;
   winner: WinningTeam;
 };
 
@@ -73,6 +85,37 @@ function pick<T>(items: T[], random: RandomSource): T | undefined {
 
 export function isMafiaAligned(role: RoleName): boolean {
   return roles.find((definition) => definition.name === role)?.team === 'mafia';
+}
+
+/**
+ * The night action a living player can actually perform. A Bad Informant inherits the
+ * Mafia's attack once every Mafia member is gone, so the Mafia side is never left without a killer.
+ */
+export function nightRoleOf(state: Pick<GameEngineState, 'publicPlayers' | 'privatePlayers'>, playerId: number): NightRole | null {
+  const player = state.publicPlayers.find((candidate) => candidate.id === playerId);
+  const secret = state.privatePlayers[playerId];
+  if (!player?.alive || !secret) return null;
+  if (secret.role === 'Mafia' || secret.role === 'Doctor' || secret.role === 'Detective') return secret.role;
+  if (secret.role === 'Bad Informant') {
+    const mafiaLeft = state.publicPlayers.some((candidate) => candidate.alive && state.privatePlayers[candidate.id].role === 'Mafia');
+    if (!mafiaLeft) return 'Mafia';
+  }
+  return null;
+}
+
+function weightedPick<T>(items: T[], weights: number[], random: RandomSource): T | undefined {
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  if (!items.length || total <= 0) return undefined;
+  let roll = Math.min(0.999999, Math.max(0, random())) * total;
+  for (let index = 0; index < items.length; index += 1) {
+    roll -= weights[index];
+    if (roll < 0) return items[index];
+  }
+  return items[items.length - 1];
+}
+
+function alignmentSentence(name: string, mafiaAligned: boolean) {
+  return `${name} is ${mafiaAligned ? 'aligned with the Mafia' : 'not aligned with the Mafia'}.`;
 }
 
 function distributeRoles(players: Player[], assignments?: Partial<Record<number, RoleName>>, random = defaultRandom): RoleName[] {
@@ -119,13 +162,16 @@ export function createInitialGame(
       },
       nightAction: { submitted: false, targetId: null },
       vote: { submitted: false, choice: null },
+      lastProtectedId: null,
+      knownAlignment: {},
+      shotgunSpent: false,
     } satisfies PrivateGamePlayer];
   })) as Record<number, PrivateGamePlayer>;
 
   return {
     phase: 'Role Reveal',
     round: 1,
-    publicPlayers: players.map((player) => ({ id: player.id, name: player.name, initials: player.initials, color: player.color, host: player.host, alive: true, voteStatus: 'hidden', voteTargetId: null })),
+    publicPlayers: players.map((player) => ({ id: player.id, name: player.name, initials: player.initials, color: player.color, host: player.host, alive: true, voteStatus: 'hidden', voteTargetId: null, revealedRole: null })),
     privatePlayers,
     nightResolved: false,
     retaliationResolved: false,
@@ -135,6 +181,8 @@ export function createInitialGame(
     voteCounts: {},
     voteSummary: '',
     votesRevealed: false,
+    runoffCandidates: null,
+    runoffUsed: false,
     winner: null,
   };
 }
@@ -148,7 +196,7 @@ export function getWinner(state: Pick<GameEngineState, 'publicPlayers' | 'privat
   return null;
 }
 
-export function startNight(state: GameEngineState, simulateNpcActions = true): GameEngineState {
+export function startNight(state: GameEngineState, simulateNpcActions = true, random: RandomSource = defaultRandom): GameEngineState {
   const validStart = state.phase === 'Role Reveal' || (state.phase === 'Voting' && state.votesRevealed && !state.winner);
   if (!validStart || state.winner) return state;
   const nextRound = state.phase === 'Role Reveal' ? state.round : state.round + 1;
@@ -159,20 +207,30 @@ export function startNight(state: GameEngineState, simulateNpcActions = true): G
     nightAction: { submitted: false, targetId: null },
     vote: { submitted: false, choice: null },
   }])) as Record<number, PrivateGamePlayer>;
+  const stateForRoles = { publicPlayers: state.publicPlayers, privatePlayers };
 
   if (simulateNpcActions) {
     const livingNonMafia = living.filter((player) => !isMafiaAligned(privatePlayers[player.id].role));
+    // Simulated Mafia members agree on one victim, like a real table would.
+    const mafiaVictim = pick(livingNonMafia, random);
     for (const player of living) {
       if (player.id === 1) continue;
       const secret = privatePlayers[player.id];
-      let target: PublicGamePlayer | undefined;
-      if (secret.role === 'Mafia') target = livingNonMafia[0];
-      if (secret.role === 'Doctor') target = living[0];
-      if (secret.role === 'Detective') target = living.find((candidate) => candidate.id !== player.id);
-      if (target && (secret.role === 'Mafia' || secret.role === 'Doctor' || secret.role === 'Detective')) {
-        secret.nightAction = { submitted: true, targetId: target.id };
-        if (secret.role === 'Detective') {
-          secret.info.investigationResult = `${target.name} is ${isMafiaAligned(privatePlayers[target.id].role) ? 'aligned with the Mafia' : 'not aligned with the Mafia'}.`;
+      const nightRole = nightRoleOf(stateForRoles, player.id);
+      if (nightRole === 'Mafia' && mafiaVictim) {
+        secret.nightAction = { submitted: true, targetId: mafiaVictim.id };
+      } else if (nightRole === 'Doctor') {
+        const options = living.filter((candidate) => candidate.id !== secret.lastProtectedId);
+        const target = pick(options, random);
+        if (target) secret.nightAction = { submitted: true, targetId: target.id };
+      } else if (nightRole === 'Detective') {
+        const unknown = living.filter((candidate) => candidate.id !== player.id && secret.knownAlignment[candidate.id] === undefined);
+        const target = pick(unknown.length ? unknown : living.filter((candidate) => candidate.id !== player.id), random);
+        if (target) {
+          const mafiaAligned = isMafiaAligned(privatePlayers[target.id].role);
+          secret.nightAction = { submitted: true, targetId: target.id };
+          secret.knownAlignment = { ...secret.knownAlignment, [target.id]: mafiaAligned ? 'mafia' : 'town' };
+          secret.info.investigationResult = alignmentSentence(target.name, mafiaAligned);
         }
       }
     }
@@ -188,8 +246,27 @@ export function startNight(state: GameEngineState, simulateNpcActions = true): G
     tracePlayerIds: [],
     morningReport: '',
     votesRevealed: false,
+    runoffCandidates: null,
+    runoffUsed: false,
     voteCounts: {},
     voteSummary: '',
+    publicPlayers: state.publicPlayers.map((player) => ({ ...player, voteStatus: player.alive ? 'hidden' : 'not-eligible', voteTargetId: null })),
+  };
+}
+
+/** Opens a fresh ballot. Clears any runoff left over from an earlier day. */
+export function startVoting(state: GameEngineState): GameEngineState {
+  if (state.winner) return state;
+  const privatePlayers = Object.fromEntries(Object.entries(state.privatePlayers).map(([id, player]) => [id, { ...player, vote: { submitted: false, choice: null } }])) as Record<number, PrivateGamePlayer>;
+  return {
+    ...state,
+    phase: 'Voting',
+    privatePlayers,
+    voteCounts: {},
+    voteSummary: '',
+    votesRevealed: false,
+    runoffCandidates: null,
+    runoffUsed: false,
     publicPlayers: state.publicPlayers.map((player) => ({ ...player, voteStatus: player.alive ? 'hidden' : 'not-eligible', voteTargetId: null })),
   };
 }
@@ -202,9 +279,12 @@ export function submitNightAction(state: GameEngineState, actorId: number, targe
   if (!actor?.alive || !secret) return { state, error: 'Eliminated players cannot act.' };
   if (secret.nightAction.submitted) return { state, error: 'Your night action is already locked.' };
   if (!target?.alive) return { state, error: 'Choose a living target.' };
-  if (secret.role !== 'Mafia' && secret.role !== 'Doctor' && secret.role !== 'Detective') return { state, error: 'This role has no targeted night action.' };
-  if (secret.role === 'Mafia' && isMafiaAligned(state.privatePlayers[targetId].role)) return { state, error: 'Mafia cannot target a Mafia-aligned player.' };
-  if (secret.role === 'Detective' && actorId === targetId) return { state, error: 'Choose another living player to investigate.' };
+  const nightRole = nightRoleOf(state, actorId);
+  if (!nightRole) return { state, error: 'This role has no targeted night action.' };
+  if (nightRole === 'Mafia' && isMafiaAligned(state.privatePlayers[targetId].role)) return { state, error: 'Mafia cannot target a Mafia-aligned player.' };
+  if (nightRole === 'Detective' && actorId === targetId) return { state, error: 'Choose another living player to investigate.' };
+  if (nightRole === 'Doctor' && secret.lastProtectedId === targetId) return { state, error: 'You cannot protect the same player two nights in a row.' };
+  const mafiaAligned = isMafiaAligned(state.privatePlayers[targetId].role);
   const next = {
     ...state,
     privatePlayers: {
@@ -212,8 +292,9 @@ export function submitNightAction(state: GameEngineState, actorId: number, targe
       [actorId]: {
         ...secret,
         nightAction: { submitted: true, targetId },
-        info: secret.role === 'Detective'
-          ? { ...secret.info, investigationResult: `${target.name} is ${isMafiaAligned(state.privatePlayers[targetId].role) ? 'aligned with the Mafia' : 'not aligned with the Mafia'}.` }
+        knownAlignment: nightRole === 'Detective' ? { ...secret.knownAlignment, [targetId]: mafiaAligned ? 'mafia' as const : 'town' as const } : secret.knownAlignment,
+        info: nightRole === 'Detective'
+          ? { ...secret.info, investigationResult: alignmentSentence(target.name, mafiaAligned) }
           : secret.info,
       },
     },
@@ -227,7 +308,7 @@ export function markNightReady(state: GameEngineState, actorId: number): EngineR
   const secret = state.privatePlayers[actorId];
   if (!actor?.alive || !secret) return { state, error: 'Eliminated players cannot act.' };
   if (secret.nightAction.submitted) return { state, error: 'Your night action is already locked.' };
-  if (secret.role === 'Mafia' || secret.role === 'Doctor' || secret.role === 'Detective') return { state, error: 'This role must submit a target.' };
+  if (nightRoleOf(state, actorId)) return { state, error: 'This role must submit a target.' };
   return {
     state: {
       ...state,
@@ -241,7 +322,7 @@ export function markNightReady(state: GameEngineState, actorId: number): EngineR
 
 function selectedMafiaTarget(state: GameEngineState) {
   const livingMafia = state.publicPlayers
-    .filter((player) => player.alive && state.privatePlayers[player.id].role === 'Mafia')
+    .filter((player) => nightRoleOf(state, player.id) === 'Mafia')
     .sort((left, right) => left.id - right.id);
   const candidates = state.publicPlayers.filter((player) => player.alive && !isMafiaAligned(state.privatePlayers[player.id].role)).sort((left, right) => left.id - right.id);
   const tally = new Map<number, number>();
@@ -279,14 +360,18 @@ export function resolveNight(state: GameEngineState, random: RandomSource = defa
   let publicPlayers = state.publicPlayers;
   let report = 'No Mafia attack reached the neighborhood tonight.';
   let retaliationResolved = false;
+  const privatePlayers: Record<number, PrivateGamePlayer> = { ...state.privatePlayers };
 
   if (target && attackerId !== null) {
+    const targetSecret = state.privatePlayers[target.id];
     if (protectedTarget) {
       report = 'A failed attack was reported before dawn. No one was eliminated.';
-    } else if (state.privatePlayers[target.id].role === 'Old Lady with Shotgun') {
+    } else if (targetSecret.role === 'Old Lady with Shotgun' && !targetSecret.shotgunSpent) {
+      // The shotgun fires once. She survives the first attack, but the Mafia now knows where she lives.
       const retaliator = state.publicPlayers
         .filter((player) => player.alive && isMafiaAligned(state.privatePlayers[player.id].role))
         .sort((left, right) => left.id === attackerId ? -1 : right.id === attackerId ? 1 : left.id - right.id)[0];
+      privatePlayers[target.id] = { ...targetSecret, shotgunSpent: true };
       if (retaliator) {
         publicPlayers = publicPlayers.map((player) => player.id === retaliator.id ? { ...player, alive: false } : player);
         retaliationResolved = true;
@@ -300,17 +385,19 @@ export function resolveNight(state: GameEngineState, random: RandomSource = defa
     }
   }
 
-  const privatePlayers: Record<number, PrivateGamePlayer> = { ...state.privatePlayers };
   for (const doctor of doctors) {
-    const action = privatePlayers[doctor.id].nightAction;
-    if (!action.submitted) continue;
     const doctorSecret = privatePlayers[doctor.id];
+    const action = doctorSecret.nightAction;
+    if (!action.submitted) {
+      privatePlayers[doctor.id] = { ...doctorSecret, lastProtectedId: null };
+      continue;
+    }
     const result = doctor.id === protectingDoctor?.id
       ? 'Your protection stopped the Mafia attack.'
       : target && attackerId !== null
         ? 'Your protection did not stop the attack this night.'
         : 'No attack required your protection tonight.';
-    privatePlayers[doctor.id] = { ...doctorSecret, info: { ...doctorSecret.info, protectionResult: result } };
+    privatePlayers[doctor.id] = { ...doctorSecret, lastProtectedId: action.targetId, info: { ...doctorSecret.info, protectionResult: result } };
   }
 
   const eligible = publicPlayers.filter((player) => player.alive && !isMafiaAligned(privatePlayers[player.id].role) && privatePlayers[player.id].role !== 'Doctor' && privatePlayers[player.id].role !== 'Detective');
@@ -342,6 +429,13 @@ export function resolveNight(state: GameEngineState, random: RandomSource = defa
   return { state: next };
 }
 
+function isValidBallotChoice(state: GameEngineState, voterId: number, choice: VoteChoice): boolean {
+  if (choice === 'skip') return true;
+  if (typeof choice !== 'number' || choice === voterId) return false;
+  if (!state.publicPlayers.some((player) => player.id === choice && player.alive)) return false;
+  return !state.runoffCandidates || state.runoffCandidates.includes(choice);
+}
+
 export function recordVote(state: GameEngineState, voterId: number, choice: VoteChoice): EngineResult {
   if (state.phase !== 'Voting' || state.winner || state.votesRevealed) return { state, error: 'Voting is closed.' };
   const voter = state.publicPlayers.find((player) => player.id === voterId);
@@ -353,6 +447,7 @@ export function recordVote(state: GameEngineState, voterId: number, choice: Vote
     const target = state.publicPlayers.find((player) => player.id === choice && player.alive);
     if (!target) return { state, error: 'Votes can only target living players.' };
     if (choice === voterId) return { state, error: 'You cannot vote for yourself.' };
+    if (state.runoffCandidates && !state.runoffCandidates.includes(choice)) return { state, error: 'Runoff votes can only target the tied players.' };
   }
   return {
     state: {
@@ -360,6 +455,39 @@ export function recordVote(state: GameEngineState, voterId: number, choice: Vote
       privatePlayers: { ...state.privatePlayers, [voterId]: { ...secret, vote: { submitted: true, choice } } },
     },
   };
+}
+
+/**
+ * Chooses ballots for every simulated living player who has not voted yet.
+ * Mafia-aligned bots protect each other and push town players, the Detective and Good Informant
+ * use what they privately know, and everyone leans toward players who left traces this morning.
+ */
+export function simulateNpcVotes(state: GameEngineState, random: RandomSource = defaultRandom): Record<number, VoteChoice> {
+  const votes: Record<number, VoteChoice> = {};
+  const living = state.publicPlayers.filter((player) => player.alive);
+  for (const voter of living) {
+    if (voter.id === 1 || state.privatePlayers[voter.id].vote.submitted) continue;
+    const secret = state.privatePlayers[voter.id];
+    const options = living.filter((candidate) => isValidBallotChoice(state, voter.id, candidate.id));
+    if (!options.length) { votes[voter.id] = 'skip'; continue; }
+    if (isMafiaAligned(secret.role)) {
+      const townTargets = options.filter((candidate) => !isMafiaAligned(state.privatePlayers[candidate.id].role));
+      votes[voter.id] = pick(townTargets, random)?.id ?? 'skip';
+      continue;
+    }
+    const knownMafia = secret.role === 'Detective'
+      ? options.filter((candidate) => secret.knownAlignment[candidate.id] === 'mafia')
+      : secret.role === 'Good Informant'
+        ? options.filter((candidate) => secret.info.informantMafiaIds.includes(candidate.id))
+        : [];
+    if (knownMafia.length) { votes[voter.id] = knownMafia[0].id; continue; }
+    const cleared = options.filter((candidate) => secret.knownAlignment[candidate.id] !== 'town');
+    const pool = cleared.length ? cleared : options;
+    const weights = pool.map((candidate) => state.tracePlayerIds.includes(candidate.id) ? 2.5 : 1);
+    // Roughly one bot in five prefers to skip rather than guess.
+    votes[voter.id] = random() < 0.2 ? 'skip' : weightedPick(pool, weights, random)?.id ?? 'skip';
+  }
+  return votes;
 }
 
 export function resolveVoting(state: GameEngineState, simulatedVotes: Record<number, VoteChoice> = {}): EngineResult {
@@ -376,8 +504,7 @@ export function resolveVoting(state: GameEngineState, simulatedVotes: Record<num
     }
     if (voter.id === 1) return { state, error: 'Submit your vote before resolving the ballot.' };
     const choice = simulatedVotes[voter.id] ?? 'skip';
-    const validChoice = choice === 'skip' || (typeof choice === 'number' && choice !== voter.id && state.publicPlayers.some((player) => player.id === choice && player.alive));
-    ballots.push({ voterId: voter.id, choice: validChoice ? choice : 'skip' });
+    ballots.push({ voterId: voter.id, choice: isValidBallotChoice(state, voter.id, choice) ? choice : 'skip' });
   }
 
   const voteCounts: Record<string, number> = {};
@@ -388,12 +515,36 @@ export function resolveVoting(state: GameEngineState, simulatedVotes: Record<num
   }
   const highest = Math.max(0, ...Object.values(voteCounts));
   const leaders = Object.entries(voteCounts).filter(([, count]) => count === highest);
+  const leaderIds = leaders.map(([key]) => key);
+  const tiedPlayers = leaderIds.length > 1 && leaderIds.every((key) => key !== 'skip') ? leaderIds.map(Number).sort((left, right) => left - right) : [];
+
+  // A tie between players earns one runoff, limited to the tied players. A second tie eliminates nobody.
+  if (tiedPlayers.length > 1 && !state.runoffUsed) {
+    const names = tiedPlayers.map((id) => state.publicPlayers.find((player) => player.id === id)?.name ?? '?');
+    const voteSummary = `The vote was tied between ${names.join(' and ')}. A runoff vote begins.`;
+    const privatePlayers = Object.fromEntries(Object.entries(state.privatePlayers).map(([id, player]) => [id, { ...player, vote: { submitted: false, choice: null } }])) as Record<number, PrivateGamePlayer>;
+    return {
+      state: {
+        ...state,
+        privatePlayers,
+        publicPlayers: state.publicPlayers.map((player) => ({ ...player, voteStatus: player.alive ? 'hidden' as const : 'not-eligible' as const, voteTargetId: null })),
+        voteCounts,
+        voteSummary,
+        votesRevealed: false,
+        runoffCandidates: tiedPlayers,
+        runoffUsed: true,
+        publicEventLog: [...state.publicEventLog.slice(-3), voteSummary],
+      },
+    };
+  }
+
   const eliminatedId = leaders.length === 1 && leaders[0][0] !== 'skip' ? Number(leaders[0][0]) : null;
   const publicPlayers = state.publicPlayers.map((player) => {
     const ballot = ballots.find((item) => item.voterId === player.id);
     return {
       ...player,
       alive: player.alive && player.id !== eliminatedId,
+      revealedRole: player.id === eliminatedId ? state.privatePlayers[player.id].role : player.revealedRole,
       voteStatus: player.alive ? 'revealed' as const : 'not-eligible' as const,
       voteTargetId: typeof ballot?.choice === 'number' ? ballot.choice : null,
     };
@@ -401,7 +552,10 @@ export function resolveVoting(state: GameEngineState, simulatedVotes: Record<num
   const eliminated = state.publicPlayers.find((player) => player.id === eliminatedId);
   const voteSummary = eliminated
     ? `${eliminated.name} was voted out with ${voteCounts[String(eliminated.id)]} votes.`
-    : 'The vote was tied or Skip Vote led the count. No one was eliminated.';
+    : state.runoffUsed && tiedPlayers.length > 1
+      ? 'The runoff was tied again. No one was eliminated.'
+      : 'The vote was tied or Skip Vote led the count. No one was eliminated.';
+  const roleReveal = eliminated ? `${eliminated.name} was revealed as ${state.privatePlayers[eliminated.id].role}.` : '';
   const privatePlayers = { ...state.privatePlayers };
   for (const ballot of ballots) {
     privatePlayers[ballot.voterId] = {
@@ -420,7 +574,7 @@ export function resolveVoting(state: GameEngineState, simulatedVotes: Record<num
       voteSummary,
       votesRevealed: true,
       winner,
-      publicEventLog: [...state.publicEventLog.slice(-3), voteSummary],
+      publicEventLog: [...state.publicEventLog.slice(-3), voteSummary, ...(roleReveal ? [roleReveal] : [])],
     },
   };
 }
@@ -442,18 +596,18 @@ export function runGameEngineSelfTests() {
   require(!resolved.error && resolved.state.publicPlayers.every((player) => player.alive), 'Doctor protection prevents the Mafia attack.');
   require(resolved.state.privatePlayers[1].info.protectionResult.includes('stopped'), 'Doctor receives the protection result privately.');
 
-  state = startNight(fixed({ 1: 'Detective', 2: 'Bad Informant', 3: 'Mafia', 4: 'Citizen' }), true);
+  state = startNight(fixed({ 1: 'Detective', 2: 'Bad Informant', 3: 'Mafia', 4: 'Citizen' }), true, () => 0);
   action = submitNightAction(state, 1, 2); state = action.state;
   require(state.privatePlayers[1].info.investigationResult.includes('aligned with the Mafia'), 'Detective receives the correct private team result.');
   require(!state.publicEventLog.join(' ').includes('aligned with the Mafia'), 'Detective results are absent from public logs.');
   require(Boolean(submitNightAction(state, 1, 3).error), 'Detective cannot submit multiple investigations in one Night.');
 
-  state = startNight(fixed({ 1: 'Old Lady with Shotgun', 2: 'Mafia', 3: 'Citizen', 4: 'Citizen' }), true);
+  state = startNight(fixed({ 1: 'Old Lady with Shotgun', 2: 'Mafia', 3: 'Citizen', 4: 'Citizen' }), true, () => 0);
   action = markNightReady(state, 1); state = action.state;
   resolved = resolveNight(state, () => 0);
   require(!resolved.error && resolved.state.publicPlayers.find((player) => player.id === 2)?.alive === false, 'Old Lady retaliates against a living attacker.');
 
-  state = startNight(fixed({ 1: 'Old Lady with Shotgun', 2: 'Mafia', 3: 'Doctor', 4: 'Citizen' }), true);
+  state = startNight(fixed({ 1: 'Old Lady with Shotgun', 2: 'Mafia', 3: 'Doctor', 4: 'Citizen' }), true, () => 0);
   action = markNightReady(state, 1); state = action.state;
   resolved = resolveNight(state, () => 0);
   require(!resolved.error && resolved.state.publicPlayers.find((player) => player.id === 2)?.alive === true, 'Doctor protection suppresses Old Lady retaliation.');
@@ -482,6 +636,12 @@ export function runGameEngineSelfTests() {
   require(Boolean(recordVote(state, 1, 3).error), 'A player cannot vote twice in one round.');
   resolved = resolveVoting(state, { 2: 3, 3: 2, 4: 3 });
   require(!resolved.error && resolved.state.publicPlayers.every((player) => player.alive), 'A tied ballot eliminates nobody.');
+  require(!resolved.state.votesRevealed && resolved.state.runoffCandidates?.join(',') === '2,3', 'A tie between players opens a runoff limited to the tied players.');
+  require(Boolean(recordVote(resolved.state, 1, 4).error), 'Runoff ballots cannot target players outside the tie.');
+  action = recordVote(resolved.state, 1, 2); state = action.state;
+  const runoff = resolveVoting(state, { 2: 3, 3: 2, 4: 3 });
+  require(!runoff.error && runoff.state.votesRevealed && runoff.state.publicPlayers.every((player) => player.alive), 'A second tie in the runoff eliminates nobody.');
+  require(startVoting(runoff.state).runoffCandidates === null && !startVoting(runoff.state).runoffUsed, 'A new ballot clears the previous runoff.');
 
   state = { ...fixed({ 1: 'Citizen', 2: 'Mafia', 3: 'Doctor', 4: 'Detective' }), phase: 'Voting' };
   action = recordVote(state, 1, 2); state = action.state;
@@ -493,7 +653,7 @@ export function runGameEngineSelfTests() {
   const mafiaWin = fixed({ 1: 'Citizen', 2: 'Mafia', 3: 'Doctor', 4: 'Detective' });
   require(getWinner({ ...mafiaWin, publicPlayers: mafiaWin.publicPlayers.map((player) => player.id > 2 ? { ...player, alive: false } : player) }) === 'Mafia', 'Mafia wins when aligned players equal or outnumber the living town.');
 
-  state = startNight(fixed({ 1: 'Doctor', 2: 'Mafia', 3: 'Citizen', 4: 'Old Lady with Shotgun' }), true);
+  state = startNight(fixed({ 1: 'Doctor', 2: 'Mafia', 3: 'Citizen', 4: 'Old Lady with Shotgun' }), true, () => 0);
   action = submitNightAction(state, 1, 1); state = action.state;
   resolved = resolveNight(state, () => 0);
   require(!resolved.error && resolved.state.tracePlayerIds.length <= 2, 'Morning generates up to two eligible living traces.');
@@ -504,10 +664,68 @@ export function runGameEngineSelfTests() {
   const afterResolvedNight = resolveNight(resolved.state, () => 0);
   require(afterResolvedNight.state === resolved.state, 'A completed Night cannot be resolved twice.');
 
-  state = startNight(fixed({ 1: 'Citizen', 2: 'Mafia', 3: 'Doctor', 4: 'Detective' }), true);
+  state = startNight(fixed({ 1: 'Citizen', 2: 'Mafia', 3: 'Doctor', 4: 'Detective' }), true, () => 0);
   action = markNightReady(state, 1); state = action.state;
   resolved = resolveNight(state, () => 0);
   require(!resolved.error && resolved.state.tracePlayerIds.length <= 1, 'Morning shows fewer traces when fewer than two eligible players live.');
+
+  // Voted-out players reveal their role; night victims stay hidden.
+  state = { ...fixed({ 1: 'Citizen', 2: 'Mafia', 3: 'Doctor', 4: 'Detective' }), phase: 'Voting' };
+  action = recordVote(state, 1, 3); state = action.state;
+  resolved = resolveVoting(state, { 2: 3, 3: 2, 4: 3 });
+  require(resolved.state.publicPlayers.find((player) => player.id === 3)?.revealedRole === 'Doctor', 'A voted-out player has their role revealed publicly.');
+  require(resolved.state.publicEventLog.some((entry) => entry.includes('was revealed as Doctor')), 'The role reveal enters the public log.');
+
+  // The Doctor cannot protect the same player two nights in a row.
+  state = startNight(fixed({ 1: 'Doctor', 2: 'Mafia', 3: 'Citizen', 4: 'Citizen' }), false);
+  state = submitNightAction(state, 1, 1).state;
+  state = submitNightAction(state, 2, 3).state;
+  resolved = resolveNight(state, () => 0);
+  require(resolved.state.privatePlayers[1].lastProtectedId === 1, 'The Doctor remembers last night\'s protection.');
+  const doctorNight = { ...resolved.state, phase: 'Night' as const, nightResolved: false, privatePlayers: { ...resolved.state.privatePlayers, 1: { ...resolved.state.privatePlayers[1], nightAction: { submitted: false, targetId: null } } } };
+  require(Boolean(submitNightAction(doctorNight, 1, 1).error), 'The Doctor cannot protect the same player on consecutive nights.');
+  require(!submitNightAction(doctorNight, 1, 4).error, 'The Doctor may protect someone else the next night.');
+
+  // The Detective keeps every result across nights.
+  state = startNight(fixed({ 1: 'Detective', 2: 'Mafia', 3: 'Citizen', 4: 'Citizen' }), false);
+  state = submitNightAction(state, 1, 2).state;
+  require(state.privatePlayers[1].knownAlignment[2] === 'mafia', 'Detective findings are stored.');
+  const detectiveNextNight = startNight({ ...state, phase: 'Voting', votesRevealed: true }, false);
+  require(detectiveNextNight.privatePlayers[1].knownAlignment[2] === 'mafia' && !detectiveNextNight.privatePlayers[1].info.investigationResult, 'Detective findings survive into the next night.');
+
+  // The Old Lady's shotgun fires only once.
+  const sevenPlayers: Player[] = [...players, { id: 5, name: 'June', initials: 'JU', color: 'blue' }, { id: 6, name: 'Silas', initials: 'SI', color: 'plum' }, { id: 7, name: 'Mina', initials: 'MI', color: 'gold' }];
+  state = startNight(createInitialGame(sevenPlayers, { 1: 'Old Lady with Shotgun', 2: 'Mafia', 3: 'Mafia', 4: 'Citizen', 5: 'Citizen', 6: 'Citizen', 7: 'Citizen' }, () => 0), false);
+  state = markNightReady(state, 1).state;
+  state = submitNightAction(state, 2, 1).state;
+  state = submitNightAction(state, 3, 1).state;
+  resolved = resolveNight(state, () => 0);
+  require(resolved.state.publicPlayers.find((player) => player.id === 2)?.alive === false && resolved.state.publicPlayers.find((player) => player.id === 1)?.alive === true, 'The first attack on the Old Lady is answered by her shotgun.');
+  require(resolved.state.privatePlayers[1].shotgunSpent, 'The shotgun is marked as spent.');
+  state = startNight({ ...resolved.state, phase: 'Voting', votesRevealed: true }, false);
+  state = markNightReady(state, 1).state;
+  state = submitNightAction(state, 3, 1).state;
+  resolved = resolveNight(state, () => 0);
+  require(resolved.state.publicPlayers.find((player) => player.id === 1)?.alive === false && resolved.state.publicPlayers.find((player) => player.id === 3)?.alive === true, 'A second attack on the Old Lady succeeds without retaliation.');
+
+  // The Bad Informant inherits the attack once every Mafia member is gone.
+  state = createInitialGame(sevenPlayers, { 1: 'Citizen', 2: 'Mafia', 3: 'Bad Informant', 4: 'Citizen', 5: 'Doctor', 6: 'Detective', 7: 'Citizen' }, () => 0);
+  require(nightRoleOf(state, 3) === null, 'The Bad Informant has no attack while a Mafia member lives.');
+  state = { ...state, publicPlayers: state.publicPlayers.map((player) => player.id === 2 ? { ...player, alive: false } : player) };
+  require(nightRoleOf(state, 3) === 'Mafia', 'The Bad Informant takes over the attack after the Mafia falls.');
+  state = startNight(state, true, () => 0);
+  require(state.privatePlayers[3].nightAction.submitted && state.privatePlayers[3].nightAction.targetId !== null, 'A simulated Bad Informant attacks when the Mafia is gone.');
+
+  // Simulated ballots are always legal and the Mafia never votes for its own.
+  state = startVoting(createInitialGame(sevenPlayers, { 1: 'Citizen', 2: 'Mafia', 3: 'Bad Informant', 4: 'Good Informant', 5: 'Doctor', 6: 'Detective', 7: 'Citizen' }, () => 0));
+  for (const seed of [0, 0.3, 0.6, 0.95]) {
+    const ballots = simulateNpcVotes(state, () => seed);
+    for (const [voterId, choice] of Object.entries(ballots)) {
+      require(choice === 'skip' || (typeof choice === 'number' && choice !== Number(voterId)), 'Simulated ballots never target the voter.');
+      if (Number(voterId) === 2 && typeof choice === 'number') require(!isMafiaAligned(state.privatePlayers[choice].role), 'Mafia bots never vote out a Mafia-aligned player.');
+    }
+    require(ballots[4] === 2 || ballots[4] === 3, 'The Good Informant bot votes for a known Mafia player.');
+  }
 
   return 'Game engine self-tests passed.';
 }

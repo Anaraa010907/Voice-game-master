@@ -13,6 +13,7 @@ import { LeaderboardScreen, ProfileScreen, RankScreen } from './AccountScreens';
 import { supabase, supabaseConfigured, type PublicProfile, type RatingChange } from './supabaseClient';
 import { i18n, translateMessage } from './i18n';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
+import { FullscreenToggle, useFullscreen, type FullscreenState } from './fullscreen';
 
 type Screen = 'menu' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'rank' | 'leaderboard' | 'settings' | 'auth';
 
@@ -39,6 +40,7 @@ export default function App() {
     'NIGHT-7X': { name: 'Блэкуотерын туршилтын өрөө', maxPlayers: 8, isPrivate: true, password: '', players: startingPlayers },
   });
   const [notice, setNotice] = useState('');
+  const fullscreen = useFullscreen();
 
   useEffect(() => {
     if (!supabaseConfigured || !supabase) return;
@@ -209,7 +211,7 @@ export default function App() {
     <main className="viewport">
       <section className={`game-frame screen-${screen}`} aria-label="MAFIA: SHADOWS тоглоом">
         <div className="grain" aria-hidden="true" />
-        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={openDemoLobby} onCreate={() => setScreen('create-room')} onJoin={() => setScreen('join-room')} signedIn={Boolean(userId)} onAuth={openAuth} />}
+        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={openDemoLobby} onCreate={() => setScreen('create-room')} onJoin={() => setScreen('join-room')} signedIn={Boolean(userId)} onAuth={openAuth} fullscreen={fullscreen} />}
         {screen === 'create-room' && <CreateRoom onBack={() => setScreen('menu')} onCreate={createRoom} />}
         {screen === 'join-room' && <JoinRoom onBack={() => setScreen('menu')} onJoin={joinRoom} />}
         {screen === 'lobby' && (
@@ -237,6 +239,7 @@ export default function App() {
             onLeave={() => setScreen('lobby')}
             onReturnMenu={goBack}
             onNotice={notify}
+            fullscreen={fullscreen}
           />
         )}
         {screen === 'roles' && <RoleGallery onBack={goBack} />}
@@ -260,10 +263,10 @@ function Brand({ compact = false }: { compact?: boolean }) {
   return <div className={`brand-mark ${compact ? 'compact' : ''}`}><span className="brand-emblem"><Skull size={compact ? 17 : 23} /></span><span>MAFIA<span className="brand-colon">:</span> <b>SHADOWS</b></span></div>;
 }
 
-function Menu({ onNavigate, onPlay, onCreate, onJoin, signedIn, onAuth }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; signedIn: boolean; onAuth: (view?: AuthView) => void }) {
+function Menu({ onNavigate, onPlay, onCreate, onJoin, signedIn, onAuth, fullscreen }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; signedIn: boolean; onAuth: (view?: AuthView) => void; fullscreen: FullscreenState }) {
   return (
     <div className="menu-screen">
-      <header className="menu-top"><Brand /><div className="online-note"><span className="status-dot" /> {i18n.app.localPrototype}</div></header>
+      <header className="menu-top"><Brand /><div className="menu-top-actions"><div className="online-note"><span className="status-dot" /> {i18n.app.localPrototype}</div><FullscreenToggle fullscreen={fullscreen} /></div></header>
       <div className="city-art" aria-hidden="true"><div className="moon-glow" /><div className="cityline" /><div className="rain-lines" /></div>
       <div className="menu-copy">
         <div className="eyebrow"><span /> {i18n.app.cityOfSecrets} <span /></div>

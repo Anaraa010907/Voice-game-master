@@ -1,0 +1,11 @@
+{
+  "name": "MAFIA: SHADOWS",
+  "short_name": "Mafia Shadows",
+  "lang": "mn",
+  "start_url": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#0a0c12",
+  "theme_color": "#090b11"
+}

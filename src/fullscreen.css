@@ -1,0 +1,608 @@
+/*
+ * Full-screen phone layout.
+ * Loaded after every other stylesheet. The game used to sit in a fixed 16:9 box, which left
+ * black bars on modern 19.5:9–21:9 phones. The frame now fills the whole screen, keeps content
+ * out of the notch/gesture areas with safe-area padding, and raises the smallest text and touch
+ * targets to readable sizes.
+ */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
+.viewport,
+.viewport .game-frame {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+.viewport {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #0a0c12;
+}
+
+.viewport .game-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+  box-shadow: none;
+}
+
+/* Every screen fills the frame's content box (inside the safe area). */
+.viewport .game-frame > .menu-screen,
+.viewport .game-frame > .inner-screen,
+.viewport .game-frame > .voice-scope {
+  height: 100%;
+}
+
+/* ---------- Fullscreen toggle ---------- */
+
+.fullscreen-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #b59a6655;
+  background: #14161dcc;
+  color: #dcc9a2;
+  font-size: 10px;
+  letter-spacing: .8px;
+  font-weight: 700;
+}
+
+.fullscreen-toggle:hover {
+  border-color: #c5a66d;
+  background: #1e1c20;
+}
+
+.menu-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ---------- Readability floor (applies at every size) ---------- */
+
+.viewport .game-frame .game-player-copy > span,
+.viewport .game-frame .player-vote-status,
+.viewport .game-frame .player-vote-count small,
+.viewport .game-frame .game-player-copy > b small,
+.viewport .game-frame .results-name small,
+.viewport .game-frame .results-status,
+.viewport .game-frame .bottom-local-note,
+.viewport .game-frame .phase-caption > span,
+.viewport .game-frame .phase-caption small,
+.viewport .game-frame .round-label span,
+.viewport .game-frame .demo-timer small,
+.viewport .game-frame .game-list-heading,
+.viewport .game-frame .crime-stage-label,
+.viewport .game-frame .public-event-log > span,
+.viewport .game-frame .phase-panel-heading small,
+.viewport .game-frame .discussion-head small,
+.viewport .game-frame .morning-kicker,
+.viewport .game-frame .your-vote-status,
+.viewport .game-frame .vote-confirm-card small,
+.viewport .game-frame .private-secret-line b,
+.viewport .game-frame .game-private-panel > header span,
+.viewport .game-frame .player-status,
+.viewport .game-frame .player-name small,
+.viewport .game-frame .invite-slot small,
+.viewport .game-frame .identity-controls label,
+.viewport .game-frame .form-field > span,
+.viewport .game-frame .reveal-card-art > span,
+.viewport .game-frame .reveal-heading > span,
+.viewport .game-frame .results-heading > span,
+.viewport .game-frame .reveal-private-note,
+.viewport .game-frame .reveal-simulated,
+.viewport .game-frame .results-simulated,
+.viewport .game-frame .role-card-ability b,
+.viewport .game-frame .team-tag {
+  font-size: clamp(9px, 2.3vh, 11px);
+  letter-spacing: .7px;
+}
+
+.viewport .game-frame .phase-panel > p,
+.viewport .game-frame .game-modal p,
+.viewport .game-frame .morning-report-text,
+.viewport .game-frame .discussion-messages p,
+.viewport .game-frame .night-secret,
+.viewport .game-frame .action-locked,
+.viewport .game-frame .night-target-hint,
+.viewport .game-frame .clue-disclaimer,
+.viewport .game-frame .vote-choices,
+.viewport .game-frame .vote-count-list div,
+.viewport .game-frame .vote-confirm-card p,
+.viewport .game-frame .private-secret-line span,
+.viewport .game-frame .game-private-panel > p,
+.viewport .game-frame .public-event-log p,
+.viewport .game-frame .reveal-card-copy p,
+.viewport .game-frame .discussion-form input {
+  font-size: clamp(11px, 2.9vh, 13px) !important;
+  line-height: 1.45 !important;
+}
+
+.viewport .game-frame .phase-panel .primary-button,
+.viewport .game-frame .phase-panel .secondary-button,
+.viewport .game-frame .discussion-actions .primary-button,
+.viewport .game-frame .discussion-actions .secondary-button,
+.viewport .game-frame .vote-confirm-card .primary-button,
+.viewport .game-frame .vote-confirm-card .secondary-button,
+.viewport .game-frame .modal-actions .primary-button,
+.viewport .game-frame .modal-actions .secondary-button,
+.viewport .game-frame .timer-toggle,
+.viewport .game-frame .results-actions .primary-button,
+.viewport .game-frame .results-actions .secondary-button,
+.viewport .game-frame .reveal-continue,
+.viewport .game-frame .morning-panel > .primary-button,
+.viewport .game-frame .voting-panel > .primary-button {
+  height: auto;
+  min-height: 38px;
+  padding: 6px 14px;
+  font-size: clamp(11px, 2.8vh, 13px);
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.viewport .game-frame .skip-vote {
+  height: auto;
+  min-height: 34px;
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.viewport .game-frame .game-icon-button,
+.viewport .game-frame .game-leave-button {
+  height: 34px;
+}
+
+.viewport .game-frame .game-icon-button {
+  width: 36px;
+}
+
+.viewport .game-frame .game-leave-button {
+  padding: 0 10px;
+  font-size: 10px;
+}
+
+.viewport .game-frame .private-info-button {
+  height: 36px;
+  font-size: 10px;
+}
+
+.viewport .game-frame .discussion-form {
+  height: 36px;
+}
+
+.viewport .game-frame .discussion-form button {
+  width: 40px;
+}
+
+/* ---------- In-game layout ---------- */
+
+.viewport .game-frame .core-game-board {
+  grid-template-columns: minmax(150px, 21%) minmax(0, 1fr) minmax(150px, 21%);
+  gap: 10px;
+  padding: 8px 16px;
+}
+
+.viewport .game-frame .game-player-card {
+  min-height: 46px;
+  padding: 5px 8px;
+  gap: 9px;
+}
+
+.viewport .game-frame .game-player-card .avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+}
+
+.viewport .game-frame .game-player-copy > b {
+  font-size: 15px;
+}
+
+.viewport .game-frame .game-player-card.is-runoff {
+  border-color: #c99a52;
+  box-shadow: inset 3px 0 0 #c99a52;
+}
+
+.viewport .game-frame .game-player-card.is-runoff .alive-label {
+  color: #e2bd7b;
+}
+
+.viewport .game-frame .game-list-heading {
+  height: 20px;
+}
+
+.viewport .game-frame .phase-panel {
+  width: min(560px, 94%);
+  padding: 16px 18px;
+}
+
+.viewport .game-frame .phase-panel h2 {
+  font-size: clamp(20px, 6vh, 28px);
+}
+
+.viewport .game-frame .discussion-messages {
+  max-height: 96px;
+}
+
+.viewport .game-frame .public-event-log {
+  max-height: 58px;
+}
+
+.viewport .game-frame .vote-count-list b {
+  font-size: 13px;
+}
+
+.runoff-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 8px 0 4px;
+  padding: 8px 10px;
+  border-left: 2px solid #c99a52;
+  background: #2a2219;
+  color: #e7cf9f;
+  font-size: clamp(11px, 2.8vh, 13px);
+  line-height: 1.4;
+}
+
+.runoff-banner svg {
+  flex: none;
+  margin-top: 2px;
+  color: #e2bd7b;
+}
+
+.runoff-banner b {
+  color: #f3dcae;
+}
+
+.detective-notebook .notebook-entry {
+  display: block;
+  padding-left: 8px;
+  border-left: 2px solid #6f9d79;
+}
+
+.detective-notebook .notebook-entry.is-mafia {
+  border-left-color: #c2545c;
+  color: #f0b4b4;
+}
+
+.viewport .game-frame .game-private-panel {
+  width: min(340px, 46vw);
+}
+
+/* ---------- Lobby ---------- */
+
+.viewport .game-frame .lobby-screen .player-grid .compact-card {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.viewport .game-frame .lobby-screen .player-grid .compact-card .player-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 15px;
+}
+
+.viewport .game-frame .lobby-screen .player-grid .compact-card > .player-status {
+  margin-left: auto;
+}
+
+.viewport .game-frame .lobby-screen .player-grid .avatar {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  font-size: 13px;
+}
+
+.viewport .game-frame .lobby-screen .player-grid .invite-slot {
+  flex-direction: row;
+  gap: 8px;
+}
+
+.viewport .game-frame .lobby-screen .player-grid .invite-slot > span {
+  font-size: 20px;
+}
+
+/* ---------- Short landscape phones (the common case) ---------- */
+
+@media (orientation: landscape) and (max-height: 500px) {
+  /* The phase and "local test" notes already appear in the top bar and stage label. */
+  .viewport .game-frame .core-game-bottom {
+    display: none;
+  }
+
+  .viewport .game-frame .crime-stage-label span:last-child {
+    display: none;
+  }
+
+  .viewport .game-frame .core-game-topbar {
+    height: 44px;
+    padding: 0 16px;
+  }
+
+  .viewport .game-frame .core-game-board {
+    padding: 6px 12px 8px;
+    gap: 8px;
+  }
+
+  .viewport .game-frame .phase-panel {
+    top: 50%;
+    max-height: calc(100% - 64px);
+    padding: 12px 14px;
+  }
+
+  .viewport .game-frame .public-event-log {
+    max-height: 46px;
+  }
+
+  .viewport .game-frame .public-event-log p:first-of-type:not(:last-child) {
+    display: none;
+  }
+
+  .viewport .game-frame .voice-scope > .voice-dock {
+    padding: 2px 16px;
+  }
+
+  /* Lobby: roster on the left, room code and actions on the right. */
+  .viewport .game-frame .lobby-screen .lobby-content {
+    grid-template-columns: minmax(0, 1.55fr) minmax(220px, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    gap: 6px 18px;
+    padding: 8px 16px 10px;
+  }
+
+  .viewport .game-frame .lobby-screen .lobby-heading {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .viewport .game-frame .lobby-screen .lobby-heading .room-code {
+    position: absolute;
+    top: 8px;
+    right: 16px;
+    width: calc(39% - 16px);
+    min-width: 220px;
+  }
+
+  .viewport .game-frame .lobby-screen .lobby-content {
+    position: relative;
+  }
+
+  .viewport .game-frame .lobby-screen .identity-controls {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .viewport .game-frame .lobby-screen .lobby-toolbar {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: end;
+    align-self: center;
+  }
+
+  .viewport .game-frame .lobby-screen .player-grid {
+    grid-column: 1;
+    grid-row: 3 / 5;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 48px;
+    gap: 6px;
+  }
+
+  .viewport .game-frame .lobby-screen .player-grid .compact-card,
+  .viewport .game-frame .lobby-screen .player-grid .invite-slot {
+    min-height: 48px;
+    height: 48px;
+  }
+
+  .viewport .game-frame .lobby-screen .lobby-bottom {
+    grid-column: 2;
+    grid-row: 4;
+    border-top: 0;
+    background: transparent;
+  }
+
+  .viewport .game-frame .lobby-screen .lobby-hint {
+    display: flex;
+    max-width: none;
+    margin-bottom: 8px;
+    font-size: 11px;
+  }
+
+  .viewport .game-frame .lobby-screen .lobby-actions .ready-button,
+  .viewport .game-frame .lobby-screen .lobby-actions .text-button {
+    min-height: 40px;
+    font-size: 12px;
+  }
+
+  .viewport .game-frame .lobby-screen .lobby-actions .start-button {
+    min-height: 46px;
+    font-size: 14px;
+  }
+
+  .viewport .game-frame .lobby-screen .sim-badge {
+    display: none;
+  }
+}
+
+/* Very narrow landscape (older/smaller phones). */
+@media (orientation: landscape) and (max-width: 640px) {
+  .viewport .game-frame .core-game-board {
+    grid-template-columns: minmax(118px, 22%) minmax(0, 1fr) minmax(118px, 22%);
+    padding-left: 8px;
+    padding-right: 8px;
+    gap: 6px;
+  }
+
+  .viewport .game-frame .game-player-copy > b {
+    font-size: 13px;
+  }
+
+  .viewport .game-frame .game-player-card .avatar {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.modal-fullscreen {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+/* ---------- Stage: panel and public log stack instead of overlapping ---------- */
+
+.viewport .game-frame .crime-stage {
+  display: flex;
+  flex-direction: column;
+  padding: 30px 10px 8px;
+}
+
+.viewport .game-frame .crime-stage > .phase-panel {
+  position: relative;
+  z-index: 2;
+  left: auto;
+  top: auto;
+  transform: none;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: none;
+  margin: auto;
+}
+
+.viewport .game-frame .crime-stage > .public-event-log {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  flex: none;
+  margin-top: 8px;
+}
+
+/* ---------- Role reveal ---------- */
+
+.viewport .game-frame .role-reveal-screen {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.85fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  padding: 16px 24px;
+  column-gap: 24px;
+}
+
+.viewport .game-frame .reveal-role-card {
+  grid-row: 1 / 3;
+  width: min(380px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.viewport .game-frame .reveal-card-art {
+  flex: none;
+}
+
+.viewport .game-frame .reveal-card-copy {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.viewport .game-frame .reveal-card-copy p {
+  font-size: clamp(11px, 2.7vh, 12px) !important;
+}
+
+.viewport .game-frame .reveal-continue {
+  grid-row: 2;
+  align-self: end;
+}
+
+.viewport .game-frame .reveal-simulated {
+  display: none;
+}
+
+.viewport .game-frame .menu-nav button {
+  font-size: 12px;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .viewport .game-frame .crime-stage {
+    padding-top: 26px;
+  }
+
+  .viewport .game-frame .reveal-heading h1 {
+    font-size: clamp(34px, 11vh, 48px);
+  }
+
+  .viewport .game-frame .reveal-card-art {
+    height: auto;
+    max-height: 42vh;
+  }
+
+  .viewport .game-frame .menu-nav button {
+    min-height: 36px;
+  }
+}
+
+/* ---------- Player cards: vote info sits in flow so it never overlaps the status ---------- */
+
+.viewport .game-frame .game-player-card {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+.viewport .game-frame .game-player-copy {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.viewport .game-frame .game-player-copy > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.viewport .game-frame .player-vote-status {
+  position: static;
+  order: 3;
+  flex: 1 0 100%;
+  text-align: right;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Taller screens: keep the floating voice dock clear of the game's top-right buttons ---------- */
+
+@media (min-height: 501px) and (min-width: 561px) {
+  .viewport .game-frame .core-game-topbar {
+    padding-right: calc(min(360px, 42%) + 4%);
+  }
+}

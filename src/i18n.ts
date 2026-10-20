@@ -472,10 +472,24 @@ export const translateMessage = (message: string): string => {
     'An attempted attack was stopped at the old house. No one was eliminated.': 'Хуучин байшинд халдлагын оролдлогыг зогсоов. Хэн ч хасагдсангүй.',
     'No eligible trace clues were found.': 'Боломжтой сэжүүрийн мөр олдсонгүй.',
     'The vote was tied or Skip Vote led the count. No one was eliminated.': 'Санал тэнцсэн эсвэл алгасах санал хамгийн олон байв. Хэн ч хасагдсангүй.',
+    'The runoff was tied again. No one was eliminated.': 'Давтан санал хураалт дахин тэнцлээ. Хэн ч хасагдсангүй.',
+    'You cannot protect the same player two nights in a row.': 'Нэг тоглогчийг хоёр шөнө дараалан хамгаалах боломжгүй.',
+    'Runoff votes can only target the tied players.': 'Давтан санал хураалтад зөвхөн тэнцсэн тоглогчдод санал өгнө.',
   };
   if (map[message]) return map[message];
   const investigation = message.match(/^(.+) is (aligned with|not aligned with) the Mafia\.$/);
   if (investigation) return `${investigation[1]} ${investigation[2] === 'aligned with' ? 'мафийн талд байна' : 'мафийн талд байхгүй байна'}.`;
+  const morning = message.match(/^(.*) (\d+) players remain alive\.$/);
+  if (morning) {
+    const body = morning[1];
+    const traceStart = body.lastIndexOf(' Traces associated with ');
+    const noTraceEnd = ' No eligible trace clues were found.';
+    const noTraceStart = body.endsWith(noTraceEnd) ? body.length - noTraceEnd.length : -1;
+    const splitAt = traceStart >= 0 ? traceStart : noTraceStart;
+    const event = splitAt >= 0 ? body.slice(0, splitAt) : body;
+    const clue = splitAt >= 0 ? body.slice(splitAt + 1) : '';
+    return `${translateMessage(event)}${clue ? ` ${translateMessage(clue)}` : ''} ${morning[2]} тоглогч амьд үлдлээ.`;
+  }
   const death = message.match(/^(.+) was found at (.+), killed by (.+)\.$/);
   if (death) {
     const location: Record<string, string> = {
@@ -494,17 +508,10 @@ export const translateMessage = (message: string): string => {
   }
   const traces = message.match(/^Traces associated with (.+) were found\. Traces are clues, not proof\.$/);
   if (traces) return `${traces[1].replace(' and ', ' болон ')}-тэй холбоотой мөр олдлоо. Мөр бол сэжүүр болохоос нотолгоо биш.`;
-  const morning = message.match(/^(.*) (\d+) players remain alive\.$/);
-  if (morning) {
-    const body = morning[1];
-    const traceStart = body.lastIndexOf(' Traces associated with ');
-    const noTraceEnd = ' No eligible trace clues were found.';
-    const noTraceStart = body.endsWith(noTraceEnd) ? body.length - noTraceEnd.length : -1;
-    const splitAt = traceStart >= 0 ? traceStart : noTraceStart;
-    const event = splitAt >= 0 ? body.slice(0, splitAt) : body;
-    const clue = splitAt >= 0 ? body.slice(splitAt + 1) : '';
-    return `${translateMessage(event)}${clue ? ` ${translateMessage(clue)}` : ''} ${morning[2]} тоглогч амьд үлдлээ.`;
-  }
+  const runoff = message.match(/^The vote was tied between (.+)\. A runoff vote begins\.$/);
+  if (runoff) return `${runoff[1].split(' and ').join(', ')} тэнцлээ. Зөвхөн тэдний дунд давтан санал хураалт эхэллээ.`;
+  const revealed = message.match(/^(.+) was revealed as (.+)\.$/);
+  if (revealed) return `${revealed[1]}-ийн жинхэнэ дүр: ${translateRole(revealed[2])}.`;
   const votedOut = message.match(/^(.+) was voted out with (\d+) votes\.$/);
   if (votedOut) return `${votedOut[1]} ${votedOut[2]} саналаар хасагдлаа.`;
   const detectiveOrDoctor = message;
