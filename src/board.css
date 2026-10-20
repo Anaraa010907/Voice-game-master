@@ -900,3 +900,395 @@
     padding-top: 46px;
   }
 }
+
+/* ---------- Game type picker: two large illustrated cards ---------- */
+
+.hub-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  height: calc(100% - 55px);
+  padding: 14px 18px 16px;
+}
+
+.hub-card {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  justify-items: center;
+  gap: 6px;
+  min-height: 0;
+  padding: 12px 14px 10px;
+  border: 1px solid #b59a6680;
+  background:
+    radial-gradient(ellipse at 50% 40%, #2a2026 0, transparent 62%),
+    linear-gradient(160deg, #17181f, #0e1016);
+  box-shadow: inset 0 0 0 1px #ffffff08, 0 18px 40px #0008;
+  overflow: hidden;
+}
+
+.hub-card-board {
+  background:
+    radial-gradient(ellipse at 50% 40%, #1d2735 0, transparent 62%),
+    linear-gradient(160deg, #17181f, #0e1016);
+}
+
+.hub-card::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border: 1px solid #b59a6622;
+  pointer-events: none;
+}
+
+.hub-card h2 {
+  margin: 0;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(22px, 7vh, 40px);
+  font-weight: 700;
+  letter-spacing: 2px;
+  line-height: 1;
+  color: transparent;
+  background: linear-gradient(180deg, #f6e2b0, #c79a52);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.hub-art {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* Board illustration: a small tilted Mongol board with gers, a token and dice. */
+.hub-board-plane {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  gap: 2px;
+  height: min(78%, 190px);
+  aspect-ratio: 1;
+  padding: 3px;
+  border: 1px solid #b59a6688;
+  background: #0b0e14;
+  transform: rotateX(56deg) rotateZ(45deg);
+  box-shadow: 0 30px 40px #000a;
+}
+
+.hub-board-plane i {
+  background: #1a1f29;
+  border-top: 5px solid var(--band, transparent);
+}
+
+.hub-board-plane i.is-center {
+  background: #16202c;
+  border-top: 0;
+}
+
+.hub-board-plane i.is-corner {
+  background: #273246;
+  border-top: 0;
+}
+
+.hub-board-plane i.band-brown { --band: var(--g-brown); }
+.hub-board-plane i.band-sky { --band: var(--g-sky); }
+.hub-board-plane i.band-pink { --band: var(--g-pink); }
+.hub-board-plane i.band-orange { --band: var(--g-orange); }
+.hub-board-plane i.band-red { --band: var(--g-red); }
+.hub-board-plane i.band-yellow { --band: var(--g-yellow); }
+.hub-board-plane i.band-green { --band: var(--g-green); }
+.hub-board-plane i.band-navy { --band: var(--g-navy); }
+
+.hub-board-title {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--mono-gold);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(10px, 3vh, 16px);
+  letter-spacing: 3px;
+  transform: rotateZ(-45deg);
+}
+
+.hub-board-ger {
+  position: absolute;
+  left: 23%;
+  top: 4%;
+  width: 11%;
+  height: 11%;
+  border-radius: 50% 50% 10% 10%;
+  background: radial-gradient(circle at 40% 30%, #fff8e8, #d8cdb5 70%);
+  box-shadow: 0 6px 6px #0009;
+  transform: rotateZ(-45deg) translateZ(4px);
+}
+
+.hub-board-ger.is-second {
+  left: 64%;
+  top: 82%;
+}
+
+.hub-board-token {
+  position: absolute;
+  left: 80%;
+  top: 40%;
+  width: 12%;
+  height: 12%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe6a8, #b07d2c 75%);
+  box-shadow: 0 0 12px #f1d79a99, 0 8px 8px #000a;
+}
+
+.hub-die {
+  position: absolute;
+  bottom: 6%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  place-items: center;
+  width: clamp(24px, 8vh, 38px);
+  aspect-ratio: 1;
+  padding: 4px;
+  border-radius: 6px;
+  background: linear-gradient(145deg, #fbf8f2, #d9d3c8);
+  box-shadow: 0 8px 14px #000b;
+}
+
+.hub-die i {
+  width: 70%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #1b1d24;
+}
+
+.hub-die.is-left {
+  left: 10%;
+  transform: rotate(-14deg);
+}
+
+.hub-die.is-left i:nth-child(1) { grid-area: 1 / 1; }
+.hub-die.is-left i:nth-child(2) { grid-area: 2 / 2; }
+.hub-die.is-left i:nth-child(3) { grid-area: 3 / 3; }
+
+.hub-die.is-right {
+  right: 10%;
+  transform: rotate(18deg);
+}
+
+.hub-die.is-right i:nth-child(1) { grid-area: 1 / 3; }
+.hub-die.is-right i:nth-child(2) { grid-area: 3 / 1; }
+
+/* Voice illustration: a round table with role cards and players seated around it. */
+.hub-art-voice {
+  --seat: clamp(30px, 10vh, 46px);
+}
+
+.hub-table {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: min(70%, 170px);
+  aspect-ratio: 1;
+  border: 2px solid #b59a66aa;
+  border-radius: 50%;
+  background: radial-gradient(circle, #3a1d24 0, #1a1218 60%, #120d12 100%);
+  box-shadow: 0 0 0 6px #b59a6618, 0 20px 40px #000a, inset 0 0 30px #000;
+}
+
+.hub-table-center {
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  width: 38%;
+  aspect-ratio: 1;
+  border: 1px solid #b59a6688;
+  border-radius: 50%;
+  background: #120d12;
+  color: #d84a54;
+}
+
+.hub-table-center small {
+  color: var(--mono-gold);
+  font-size: 9px;
+  letter-spacing: 2px;
+}
+
+.hub-table-card {
+  position: absolute;
+  width: 11%;
+  height: 16%;
+  border: 1px solid #f1d79a88;
+  border-radius: 2px;
+  background: linear-gradient(160deg, #c79a52, #8a6528);
+  transform-origin: 50% 50%;
+}
+
+.hub-seat {
+  position: absolute;
+  width: var(--seat);
+  height: var(--seat);
+  border: 2px solid #0b0e14;
+  font-size: clamp(11px, 3vh, 16px);
+  box-shadow: 0 6px 12px #000a;
+}
+
+.hub-seat.seat-0 { left: calc(50% - var(--seat) / 2); top: 2%; }
+.hub-seat.seat-1 { right: 16%; top: 16%; }
+.hub-seat.seat-2 { right: 16%; bottom: 20%; }
+.hub-seat.seat-3 { left: calc(50% - var(--seat) / 2); bottom: 2%; }
+.hub-seat.seat-4 { left: 16%; bottom: 20%; }
+.hub-seat.seat-5 { left: 16%; top: 16%; }
+
+.hub-seat.is-speaking {
+  border-color: #73a985;
+  box-shadow: 0 0 0 3px #73a98566, 0 0 18px #73a985aa;
+}
+
+.hub-speaking {
+  position: absolute;
+  right: 4%;
+  top: 36%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid #73a98588;
+  border-radius: 999px;
+  background: #18251dee;
+  color: #c6e2ca;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* Gold pill call-to-action. */
+.hub-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: min(260px, 80%);
+  min-height: 46px;
+  margin-top: -18px;
+  padding: 0 28px;
+  border: 1px solid #f6e2b0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f3d48e, #c99a4b 60%, #a87a32);
+  color: #2a1d0e;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(16px, 5vh, 22px);
+  font-weight: 800;
+  letter-spacing: 2px;
+  box-shadow: 0 10px 22px #0009, inset 0 1px 0 #fff8;
+  position: relative;
+  z-index: 2;
+  transition: transform .15s ease, filter .15s ease;
+}
+
+.hub-play:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.hub-play:active {
+  transform: translateY(1px);
+}
+
+.hub-card-meta {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  margin: 0;
+  color: #c8bfb2;
+  font-size: clamp(11px, 2.9vh, 13px);
+  text-align: center;
+}
+
+.hub-card-meta b {
+  color: #e9e5df;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(14px, 3.8vh, 18px);
+  letter-spacing: .5px;
+}
+
+.hub-card-soon {
+  margin: 0;
+  color: #8f8a8d;
+  font-size: 10px;
+  letter-spacing: .4px;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .hub-cards {
+    height: calc(100% - 43px);
+    gap: 12px;
+    padding: 8px 16px 10px;
+  }
+
+  .hub-card {
+    padding: 8px 10px 6px;
+    gap: 4px;
+  }
+
+  .hub-play {
+    min-height: 40px;
+    margin-top: -14px;
+  }
+}
+
+@media (max-width: 560px), (orientation: portrait) {
+  .hub-cards {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .hub-card {
+    min-height: 320px;
+  }
+}
+
+/* Seats sit around the table itself, so the picture scales as one piece. */
+.hub-table {
+  height: min(68%, 260px);
+  overflow: visible;
+}
+
+.hub-art-voice {
+  --seat: clamp(28px, 22%, 54px);
+}
+
+.hub-table-card {
+  width: 9%;
+  height: 13%;
+}
+
+.hub-seat {
+  width: var(--seat);
+  height: var(--seat);
+  transform: translate(-50%, -50%);
+}
+
+/* Six seats on a circle just outside the rim (centre 50%/50%, radius ≈ 58%). */
+.hub-seat.seat-0 { left: 50%; top: -8%; right: auto; bottom: auto; }
+.hub-seat.seat-1 { left: 100%; top: 21%; right: auto; bottom: auto; }
+.hub-seat.seat-2 { left: 100%; top: 79%; right: auto; bottom: auto; }
+.hub-seat.seat-3 { left: 50%; top: 108%; right: auto; bottom: auto; }
+.hub-seat.seat-4 { left: 0%; top: 79%; right: auto; bottom: auto; }
+.hub-seat.seat-5 { left: 0%; top: 21%; right: auto; bottom: auto; }
+
+.hub-speaking {
+  left: 100%;
+  right: auto;
+  top: 36%;
+  transform: translateX(-30%);
+}
+
+.hub-board-plane {
+  height: min(74%, 300px);
+}
+
+.hub-die {
+  bottom: max(6%, calc(50% - 190px));
+}

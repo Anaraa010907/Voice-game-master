@@ -3,7 +3,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
   ArrowLeft, Check, ChevronRight, X, Clipboard, Crown, LockKeyhole, MessageCircle, Moon,
-  Dices, Mic, Radio, RefreshCw, Settings as SettingsIcon, Shield, Skull, UserRound, Users, WandSparkles, Zap,
+  Mic, Radio, RefreshCw, Settings as SettingsIcon, Shield, Skull, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles } from './gameData';
 import RoleCardArtwork from './RoleCardArtwork';
@@ -329,28 +329,50 @@ function JoinRoom({ onBack, onJoin }: { onBack: () => void; onJoin: (code: strin
   </form></div></div>;
 }
 
-/** Choose a game: card & voice games or board games. */
+/** Choose a game type: two large cards (board game / voice game) with illustrations. */
 function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoose: (type: GameType) => void; onJoinCode: () => void }) {
-  const sections: Array<{ category: GameCategory; title: string; subtitle: string; icon: ReactNode }> = [
-    { category: 'card', title: 'Карт ба дуут тоглоом', subtitle: 'Нууц дүр, яриа, сэжиг', icon: <Mic size={18} /> },
-    { category: 'board', title: 'Board game', subtitle: 'Шоо, самбар, стратеги', icon: <Dices size={18} /> },
-  ];
-  return <div className="inner-screen hub-screen"><TopBar title="ТОГЛООМ СОНГОХ" subtitle="ТОГЛОХ" onBack={onBack} trailing={<button className="text-button hub-code-button" onClick={onJoinCode}><Radio size={14} /> КОДООР НЭГДЭХ</button>} />
-    <div className="hub-content">
-      {sections.map((section) => <section key={section.category} className={`hub-section hub-${section.category}`}>
-        <header><span className="hub-section-icon">{section.icon}</span><div><b>{section.title}</b><small>{section.subtitle}</small></div></header>
-        <div className="hub-games">
-          {Object.values(GAMES).filter((game) => game.category === section.category).map((game) => <button type="button" key={game.type} className={`hub-game hub-game-${game.type}`} onClick={() => onChoose(game.type)}>
-            <span className="hub-game-art" aria-hidden="true">{game.type === 'mafia' ? <Skull size={30} /> : <Dices size={30} />}</span>
-            <span className="hub-game-copy"><b>{game.title}</b><small>{game.tagline}</small><i>{game.players} · {game.duration}</i></span>
-            <ChevronRight size={18} />
-          </button>)}
-          {COMING_SOON.filter((game) => game.category === section.category).map((game) => <div key={game.title} className="hub-game is-soon" aria-disabled="true">
-            <span className="hub-game-art" aria-hidden="true"><LockKeyhole size={22} /></span>
-            <span className="hub-game-copy"><b>{game.title}</b><small>{game.tagline}</small><i>Удахгүй</i></span>
-          </div>)}
+  const soon = (category: GameCategory) => COMING_SOON.filter((game) => game.category === category).map((game) => game.title).join(', ');
+  return <div className="inner-screen hub-screen"><TopBar title="ТОГЛООМ СОНГОНО УУ" subtitle="ТОГЛОХ" onBack={onBack} trailing={<button className="text-button hub-code-button" onClick={onJoinCode}><Radio size={14} /> КОДООР НЭГДЭХ</button>} />
+    <div className="hub-cards">
+      <article className="hub-card hub-card-board">
+        <h2>BOARD GAME</h2>
+        <div className="hub-art hub-art-board" aria-hidden="true">
+          <div className="hub-board-plane">
+            {Array.from({ length: 25 }, (_, index) => {
+              const row = Math.floor(index / 5);
+              const col = index % 5;
+              const edge = row === 0 || row === 4 || col === 0 || col === 4;
+              const corner = (row === 0 || row === 4) && (col === 0 || col === 4);
+              const colors = ['brown', 'sky', 'pink', 'orange', 'red', 'yellow', 'green', 'navy'];
+              return <i key={index} className={!edge ? 'is-center' : corner ? 'is-corner' : `band-${colors[(row * 3 + col) % colors.length]}`} />;
+            })}
+            <span className="hub-board-title">МОНГОЛ</span>
+            <span className="hub-board-ger" />
+            <span className="hub-board-ger is-second" />
+            <span className="hub-board-token" />
+          </div>
+          <span className="hub-die is-left"><i /><i /><i /></span>
+          <span className="hub-die is-right"><i /><i /></span>
         </div>
-      </section>)}
+        <button type="button" className="hub-play" onClick={() => onChoose('monopoly')}>ТОГЛОХ <ChevronRight size={18} /></button>
+        <p className="hub-card-meta"><b>{GAMES.monopoly.title}</b>{GAMES.monopoly.players} · Монгол газрууд, гэр бааз</p>
+        {soon('board') && <p className="hub-card-soon">Удахгүй: {soon('board')}</p>}
+      </article>
+
+      <article className="hub-card hub-card-voice">
+        <h2>VOICE GAME</h2>
+        <div className="hub-art hub-art-voice" aria-hidden="true">
+          <div className="hub-table">
+            <div className="hub-table-center"><Skull size={22} /><small>МАФИ</small></div>
+            {Array.from({ length: 6 }, (_, index) => <i key={`card-${index}`} className="hub-table-card" style={{ transform: `rotate(${index * 60 + 30}deg) translateY(-185%)` }} />)}
+            {['rose', 'violet', 'gold', 'teal', 'blue', 'plum'].map((color, index) => <span key={color} className={`hub-seat avatar avatar-${color} seat-${index} ${index === 1 ? 'is-speaking' : ''}`}>{['Б', 'С', 'Т', 'Н', 'А', 'Ц'][index]}</span>)}
+            <span className="hub-speaking"><Mic size={11} /> Сараа ярьж байна</span>
+          </div>
+        </div>
+        <button type="button" className="hub-play" onClick={() => onChoose('mafia')}>ТОГЛОХ <ChevronRight size={18} /></button>
+        <p className="hub-card-meta"><b>{GAMES.mafia.title}</b>{GAMES.mafia.players} · Дуут чат, нууц дүр</p>
+        {soon('card') && <p className="hub-card-soon">Удахгүй: {soon('card')}</p>}
+      </article>
     </div>
   </div>;
 }
