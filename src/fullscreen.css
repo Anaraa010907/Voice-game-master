@@ -1005,3 +1005,100 @@ body {
   top: 12px;
   right: 12px;
 }
+
+/* ---------- Facebook sign-in and profile photo ---------- */
+
+.facebook-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  border-radius: 2px;
+  background: #1877f2;
+  color: #fff;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.facebook-button:hover:not(:disabled) {
+  background: #2d86f7;
+}
+
+.facebook-button:disabled {
+  opacity: .6;
+}
+
+.facebook-mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  color: #1877f2;
+  font-family: Arial, sans-serif;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0;
+  color: #8f8a8d;
+  font-size: 11px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #ffffff1c;
+}
+
+.avatar.has-photo {
+  background-size: cover;
+  background-position: center;
+  background-color: #1b1c22;
+}
+
+.profile-photo-block {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.profile-photo-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.viewport .game-frame .profile-photo-actions .secondary-button {
+  height: 30px;
+  padding: 0 8px;
+  font-size: 10px;
+  gap: 5px;
+}
+
+.viewport .game-frame .profile-photo-actions .text-button {
+  height: 30px;
+  padding: 0 6px;
+}
+
+.viewport .game-frame .profile-identity-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 16px;
+}
+
+.viewport .game-frame .profile-photo-actions .secondary-button {
+  white-space: nowrap;
+}

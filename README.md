@@ -87,6 +87,13 @@ npx supabase db push
 npx supabase functions deploy game
 ```
 
+## Facebook sign-in and profile photos
+
+- Sign-up/sign-in offers **Facebook** and **e-mail**. Phone sign-up is hidden until an SMS provider is configured.
+- Facebook setup: create a Facebook app (developers.facebook.com → Facebook Login), add `https://<project-ref>.supabase.co/auth/v1/callback` as a valid OAuth redirect URI, then enable the Facebook provider in Supabase → Authentication → Providers with the app ID and secret. In Supabase → Authentication → URL Configuration, allow `mafia-shadows://auth/callback` (Android) and the web origin.
+- On Android, Facebook opens in the system browser and returns through the `mafia-shadows://auth/callback` deep link.
+- Profile photos: chosen from the phone, center-cropped to 320×320 JPEG in the browser, stored in the public `avatars` bucket under the player's own folder (`20261022_profile_photos_facebook.sql`). Lobby seats copy the photo when a player joins.
+
 ## Game rules
 
 - **Night:** the Mafia picks one victim (simulated Mafia members agree on the same target). The Doctor protects one player and may protect themselves, but never the same player two nights in a row. The Detective learns whether a player is Mafia-aligned, and every result stays in their private notebook for the rest of the game.

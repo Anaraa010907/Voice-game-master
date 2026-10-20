@@ -12,6 +12,8 @@ import Auth, { type AuthView } from './Auth';
 import { ProfileScreen } from './AccountScreens';
 import { supabase, supabaseConfigured, type PublicProfile } from './supabaseClient';
 import { i18n, translateMessage } from './i18n';
+import { removeProfilePhoto, uploadProfilePhoto } from './avatarUpload';
+import Avatar from './Avatar';
 import { callGame, useRoom, type ListedRoom, type RoomSeat } from './multiplayer';
 import { MIN_PLAYERS } from './gameEngine';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
@@ -175,6 +177,24 @@ export default function App() {
     setScreen('auth');
   };
 
+  const saveProfilePhoto = async (file: File | null) => {
+    if (!supabase || !userId) return translateMessage('Sign in again before editing your profile.');
+    const previous = profile?.avatar_url ?? null;
+    try {
+      const url = file ? await uploadProfilePhoto(userId, file) : null;
+      const { data, error } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', userId).select('*').single();
+      if (error) {
+        if (url) await removeProfilePhoto(userId, url);
+        return 'Профайл зургийг хадгалж чадсангүй.';
+      }
+      setProfile(data as PublicProfile);
+      if (previous && previous !== url) await removeProfilePhoto(userId, previous);
+      return '';
+    } catch (cause) {
+      return cause instanceof Error ? cause.message : 'Профайл зургийг хадгалж чадсангүй.';
+    }
+  };
+
   const saveProfile = async (displayName: string, avatarKey: string) => {
     if (!supabase || !userId) return translateMessage('Sign in again before editing your profile.');
     const { data, error } = await supabase.from('profiles').update({ display_name: displayName, avatar_key: avatarKey }).eq('id', userId).select('*').single();
@@ -204,7 +224,7 @@ export default function App() {
         )}
         {screen === 'lobby' && (!roomCode || !userId) && <JoinRoom onBack={goBack} onJoin={joinRoom} />}
         {screen === 'roles' && <RoleGallery onBack={goBack} />}
-        {screen === 'profile' && <ProfileScreen profile={profile} loading={accountLoading} loadError={profileError} onBack={goBack} onSignIn={() => openAuth('sign-in')} onSignOut={() => openAuth('sign-out')} onSave={saveProfile} />}
+        {screen === 'profile' && <ProfileScreen profile={profile} loading={accountLoading} loadError={profileError} onBack={goBack} onSignIn={() => openAuth('sign-in')} onSignOut={() => openAuth('sign-out')} onSave={saveProfile} onPhoto={saveProfilePhoto} />}
         {screen === 'auth' && <Auth key={authView} initialView={authView} onBack={goBack} onAuthenticated={() => setScreen('profile')} onSignedOut={() => { setUserId(null); setProfile(null); setScreen('menu'); }} />}
         {screen === 'settings' && <Settings onBack={goBack} onNotice={notify} onProfile={() => setScreen('profile')} onAuth={() => openAuth(userId ? 'sign-out' : 'sign-in')} signedIn={Boolean(userId)} />}
         {notice && <div className="toast" role="status"><Check size={14} />{notice}</div>}
@@ -452,8 +472,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
 }
 
 function SeatCard({ seat, isHost, isMe }: { seat: RoomSeat; isHost: boolean; isMe: boolean }) {
-  const initials = seat.display_name.slice(0, 2).toUpperCase();
-  return <div className={`player-card compact-card ${seat.ready || isHost ? 'player-ready' : ''}`}><div className={`avatar avatar-${seat.color}`}><span>{initials}</span>{isHost && <i title="Өрөөний эзэн"><Crown size={11} /></i>}<VoiceAvatarIndicator name={seat.display_name} /></div><div className="player-name">{seat.display_name}{isMe && <small>ЧИ</small>}</div><div className={`player-status ${seat.ready || isHost ? 'online' : ''}`}>{isHost ? 'ЭЗЭН' : seat.ready ? 'БЭЛЭН' : 'ХҮЛЭЭЖ БАЙНА'}</div></div>;
+  return <div className={`player-card compact-card ${seat.ready || isHost ? 'player-ready' : ''}`}><Avatar name={seat.display_name} color={seat.color} url={seat.avatar_url}>{isHost && <i title="Өрөөний эзэн"><Crown size={11} /></i>}<VoiceAvatarIndicator name={seat.display_name} /></Avatar><div className="player-name">{seat.display_name}{isMe && <small>ЧИ</small>}</div><div className={`player-status ${seat.ready || isHost ? 'online' : ''}`}>{isHost ? 'ЭЗЭН' : seat.ready ? 'БЭЛЭН' : 'ХҮЛЭЭЖ БАЙНА'}</div></div>;
 }
 
 function TopBar({ title, subtitle, onBack, trailing }: { title: string; subtitle: string; onBack: () => void; trailing?: ReactNode }) {

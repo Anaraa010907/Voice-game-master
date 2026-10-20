@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ArrowLeft, Check, ChevronRight, LoaderCircle, LockKeyhole, Shield } from 'lucide-react';
+import { useRef } from 'react';
+import { ArrowLeft, Camera, Check, ChevronRight, LoaderCircle, LockKeyhole, Shield, Trash2 } from 'lucide-react';
+import Avatar from './Avatar';
 import { supabaseConfigured, type PublicProfile } from './supabaseClient';
 import { i18n } from './i18n';
 
@@ -14,10 +16,22 @@ export const avatarOptions = [
 
 
 
-export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, onSignOut, onSave }: {
+export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, onSignOut, onSave, onPhoto }: {
   profile: PublicProfile | null; loading: boolean; loadError: string; onBack: () => void; onSignIn: () => void; onSignOut: () => void;
   onSave: (displayName: string, avatarKey: string) => Promise<string>;
+  onPhoto: (file: File | null) => Promise<string>;
 }) {
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const changePhoto = async (file: File | null) => {
+    setError('');
+    setMessage('');
+    setUploading(true);
+    const result = await onPhoto(file);
+    setUploading(false);
+    if (result) setError(result);
+    else setMessage(file ? 'Профайл зураг шинэчлэгдлээ.' : 'Профайл зураг устгагдлаа.');
+  };
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(profile?.display_name ?? '');
   const [avatar, setAvatar] = useState(profile?.avatar_key ?? 'rose');
@@ -44,7 +58,7 @@ export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, o
 
   return <div className="inner-screen account-screen"><AccountTopBar title={i18n.account.yourFile.toUpperCase()} subtitle={i18n.account.playerProfile.toUpperCase()} onBack={onBack} trailing={profile && <button className="account-signout-link" onClick={onSignOut}>{i18n.account.signOut}</button>} />
     {!supabaseConfigured ? <BackendSetupNotice /> : loading ? <LoadingState label={i18n.account.loadingAccount} /> : !profile ? <AccountEmpty title={i18n.account.profileWaiting} detail={loadError || i18n.account.profileDetail} action={i18n.account.signInAction} onAction={onSignIn} /> : <div className="account-body profile-body">
-      <div className="profile-identity-row"><div className={`account-avatar avatar avatar-${profile.avatar_key}`}><span>{initials(profile.display_name)}</span></div><div className="profile-identity"><div className="eyebrow left-eye">{profile.is_verified ? i18n.account.verifiedAccount : i18n.account.verificationRequired} <span className={profile.is_verified ? 'verified-led' : 'unverified-led'} /></div><h1>{profile.display_name}</h1><p>{i18n.account.memberSince} {formatDate(profile.created_at)} · {profile.registration_method === 'email' ? i18n.account.emailAccount : i18n.account.phoneAccount}</p></div></div>
+      <div className="profile-identity-row"><div className="profile-photo-block"><Avatar name={profile.display_name} color={profile.avatar_key} url={profile.avatar_url} className="account-avatar" /><input ref={fileInput} type="file" accept="image/*" hidden onChange={(event) => { const file = event.target.files?.[0] ?? null; event.target.value = ''; if (file) void changePhoto(file); }} /><div className="profile-photo-actions"><button type="button" className="secondary-button" disabled={uploading} onClick={() => fileInput.current?.click()}>{uploading ? <LoaderCircle size={13} className="voice-spinner" /> : <Camera size={13} />}{uploading ? 'ХУУЛЖ БАЙНА…' : profile.avatar_url ? 'ЗУРАГ СОЛИХ' : 'ЗУРАГ ОРУУЛАХ'}</button>{profile.avatar_url && <button type="button" className="text-button" disabled={uploading} onClick={() => void changePhoto(null)} aria-label="Зураг устгах"><Trash2 size={13} /></button>}</div></div><div className="profile-identity"><div className="eyebrow left-eye">{profile.is_verified ? i18n.account.verifiedAccount : i18n.account.verificationRequired} <span className={profile.is_verified ? 'verified-led' : 'unverified-led'} /></div><h1>{profile.display_name}</h1><p>{i18n.account.memberSince} {formatDate(profile.created_at)} · {profile.registration_method === 'email' ? i18n.account.emailAccount : i18n.account.phoneAccount}</p></div></div>
       {loadError && <div className="account-inline-error">{loadError}</div>}
       {message && <div className="account-inline-success"><Check size={13} /> {message}</div>}
       <div className="profile-data-grid"><Stat value={profile.total_matches} label={i18n.account.matches} /><Stat value={profile.wins} label={i18n.account.wins} /><Stat value={profile.losses} label={i18n.account.losses} /><Stat value={`${profile.win_rate.toFixed(1)}%`} label={i18n.account.winRate} /><Stat value={profile.current_win_streak} label={i18n.account.currentStreak} /><Stat value={profile.best_win_streak} label={i18n.account.bestStreak} /><Stat value={`ТҮВШИН ${profile.player_level}`} label={i18n.account.level} /><Stat value={profile.is_verified ? i18n.account.verified : i18n.account.unverified} label={i18n.account.accountStatus} />

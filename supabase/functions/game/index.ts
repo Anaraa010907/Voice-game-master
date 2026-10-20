@@ -17,7 +17,7 @@ type Room = { room_code: string; name: string; host_id: string; max_players: num
 /** The stored engine also carries the match id used to record win/loss statistics exactly once. */
 type StoredGame = GameEngineState & { matchId?: string };
 const LISTED_LOBBY_HOURS = 6;
-type Seat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean };
+type Seat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null };
 type Body = Record<string, unknown>;
 
 class GameError extends Error {
@@ -117,14 +117,14 @@ class GameServer {
   }
 
   async seats(roomCode: string): Promise<Seat[]> {
-    const { data, error } = await this.admin.from('game_room_players').select('user_id,seat,display_name,color,ready').eq('room_code', roomCode).order('seat');
+    const { data, error } = await this.admin.from('game_room_players').select('user_id,seat,display_name,color,ready,avatar_url').eq('room_code', roomCode).order('seat');
     if (error) throw error;
     return (data ?? []) as Seat[];
   }
 
   async profile() {
-    const { data } = await this.admin.from('profiles').select('display_name,avatar_key').eq('id', this.userId).maybeSingle();
-    return { name: (data?.display_name as string | undefined)?.slice(0, 24) || 'Тоглогч', color: COLORS.includes(data?.avatar_key as string) ? data!.avatar_key as string : 'rose' };
+    const { data } = await this.admin.from('profiles').select('display_name,avatar_key,avatar_url').eq('id', this.userId).maybeSingle();
+    return { url: (data?.avatar_url as string | null | undefined) ?? null, name: (data?.display_name as string | undefined)?.slice(0, 24) || 'Тоглогч', color: COLORS.includes(data?.avatar_key as string) ? data!.avatar_key as string : 'rose' };
   }
 
   async touchRoom(roomCode: string, patch: Partial<Room> = {}) {
@@ -151,7 +151,7 @@ class GameServer {
       const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate });
       if (error?.code === '23505') continue;
       if (error) throw error;
-      const seat: Seat = { user_id: this.userId, seat: 1, display_name: me.name, color: me.color, ready: true };
+      const seat: Seat = { user_id: this.userId, seat: 1, display_name: me.name, color: me.color, ready: true, avatar_url: me.url };
       const results = await Promise.all([
         this.admin.from('game_states').insert({ room_code: roomCodeValue, password_hash: password ? await hashPassword(roomCodeValue, password) : null }),
         this.admin.from('game_room_players').insert({ room_code: roomCodeValue, ...seat }),
@@ -181,7 +181,7 @@ class GameServer {
     const taken = new Set(seats.map((seat) => seat.seat));
     const free = Array.from({ length: room.max_players }, (_, index) => index + 1).find((seat) => !taken.has(seat));
     if (!free) throw new GameError(409, 'Энэ өрөө дүүрсэн байна.');
-    const seat: Seat = { user_id: this.userId, seat: free, display_name: me.name, color: me.color, ready: false };
+    const seat: Seat = { user_id: this.userId, seat: free, display_name: me.name, color: me.color, ready: false, avatar_url: me.url };
     const { error } = await this.admin.from('game_room_players').insert({ room_code: roomCodeValue, ...seat });
     if (error?.code === '23505') throw new GameError(409, 'Суудал дөнгөж сая дүүрлээ. Дахин оролдоно уу.');
     if (error) throw error;
@@ -256,6 +256,7 @@ class GameServer {
       name: seat.display_name,
       initials: seat.display_name.slice(0, 2).toUpperCase(),
       color: seat.color,
+      avatarUrl: seat.avatar_url ?? null,
       host: seat.user_id === room.host_id,
     })), undefined, secureRandom);
     const engine: StoredGame = { ...dealt, matchId: crypto.randomUUID() };

@@ -19,6 +19,7 @@ export type PublicProfile = {
   id: string;
   display_name: string;
   avatar_key: string;
+  avatar_url?: string | null;
   registration_method: 'email' | 'phone';
   created_at: string;
   is_verified: boolean;
