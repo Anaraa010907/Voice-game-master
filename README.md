@@ -74,6 +74,8 @@ There are no simulated players. Every seat is a signed-in person.
 - `supabase/functions/game` is the authoritative server: `create`, `join`, `leave`, `ready`, `start`, `night`, `vote`, `tick` and `rematch`. It runs the shared rules engine in `supabase/functions/_shared/gameEngine.ts` (the browser imports the same file), uses optimistic locking so simultaneous actions never overwrite each other, and keeps `voice_rooms`/`voice_room_members` in step so LiveKit mutes the right people each phase.
 - Phases move on when everyone who must act has acted, or when the phase timer runs out (any phone nudges the server with `tick`; the server re-checks the deadline). The host can skip waiting phases.
 - At least 4 players are needed; everyone except the host must press Ready.
+- **Public rooms** appear in the room list (Play → open rooms) with live seat counts; **Quick join** picks the lobby closest to starting. Private rooms are joined by code only and may have a password.
+- There is no competitive rank. Finished games still add wins and losses to profile statistics; leaving a live game counts as a loss.
 
 Deploy from a Codespace terminal:
 

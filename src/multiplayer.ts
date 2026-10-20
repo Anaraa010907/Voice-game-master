@@ -4,6 +4,7 @@ import { translateMessage } from './i18n';
 import type { PrivateGameView, PublicGameView } from './gameEngine';
 
 export type RoomInfo = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished' };
+export type ListedRoom = { roomCode: string; name: string; players: number; maxPlayers: number; hostName: string; joined: boolean };
 export type RoomSeat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean };
 
 /** Calls the authoritative `game` Edge Function. Returns the data or throws a translated error. */

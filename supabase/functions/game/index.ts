@@ -14,6 +14,9 @@ import type { VoicePhase } from '../_shared/voicePolicy.ts';
  */
 
 type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished' };
+/** The stored engine also carries the match id used to record win/loss statistics exactly once. */
+type StoredGame = GameEngineState & { matchId?: string };
+const LISTED_LOBBY_HOURS = 6;
 type Seat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean };
 type Body = Record<string, unknown>;
 
@@ -137,7 +140,8 @@ class GameServer {
     const name = text(body, 'name', 32);
     const maxPlayers = Number(body.maxPlayers);
     if (![6, 8, 10, 12].includes(maxPlayers)) throw new GameError(400, 'Тоглогчийн тоо буруу байна.');
-    const isPrivate = body.isPrivate !== false;
+    // Public rooms appear in the room list; private rooms are joined by code only (optionally with a password).
+    const isPrivate = body.isPublic === true ? false : body.isPrivate !== false;
     const password = isPrivate ? text(body, 'password', 32, false) : '';
     if (password && password.length < 4) throw new GameError(400, 'Өрөөний нууц үг хамгийн багадаа 4 тэмдэгт байна.');
     const me = await this.profile();
@@ -200,6 +204,7 @@ class GameServer {
     await this.requireSeat(roomCodeValue);
     const { error } = await this.admin.from('game_room_players').update({ ready: body.ready === true }).eq('room_code', roomCodeValue).eq('user_id', this.userId);
     if (error) throw error;
+    await this.touchRoom(roomCodeValue);
     return { ready: body.ready === true };
   }
 
@@ -210,6 +215,10 @@ class GameServer {
     const remaining = seats.filter((seat) => seat.user_id !== this.userId);
 
     if (room.status === 'playing') {
+      // Leaving a live game counts as a loss, recorded first so the final tally cannot turn it into a win.
+      const { data: stored } = await this.admin.from('game_states').select('engine').eq('room_code', roomCodeValue).maybeSingle();
+      const game = stored?.engine as StoredGame | null;
+      if (game && game.phase !== 'Results') await this.recordOutcome(this.userId, 'loss', game.matchId);
       await this.mutate(roomCodeValue, (state) => removePlayer(state, mine.seat));
     }
     await Promise.all([
@@ -242,13 +251,14 @@ class GameServer {
     const notReady = seats.filter((seat) => seat.user_id !== room.host_id && !seat.ready);
     if (notReady.length) throw new GameError(409, `Бэлэн болоогүй: ${notReady.map((seat) => seat.display_name).join(', ')}`);
 
-    const engine = createInitialGame(seats.map((seat) => ({
+    const dealt = createInitialGame(seats.map((seat) => ({
       id: seat.seat,
       name: seat.display_name,
       initials: seat.display_name.slice(0, 2).toUpperCase(),
       color: seat.color,
       host: seat.user_id === room.host_id,
     })), undefined, secureRandom);
+    const engine: StoredGame = { ...dealt, matchId: crypto.randomUUID() };
     await this.admin.from('game_private').delete().eq('room_code', roomCodeValue);
     const { error } = await this.admin.from('game_states').update({ engine, version: 1, updated_at: new Date().toISOString() }).eq('room_code', roomCodeValue);
     if (error) throw error;
@@ -274,6 +284,7 @@ class GameServer {
       if (writeError) throw writeError;
       if (!written?.length) continue;
       await this.publish(roomCode, next, seats, data.version + 1, current);
+      if (next.phase === 'Results' && current.phase !== 'Results') await this.recordResults(next as StoredGame, seats);
       return next;
     }
     throw new GameError(409, 'Олон хүсэлт зэрэг ирлээ. Дахин оролдоно уу.');
@@ -319,6 +330,64 @@ class GameServer {
       // Voice permissions are best-effort; the game itself must keep going.
       console.error('voice sync failed', error);
     }
+  }
+
+  /** Adds the win or loss to the player's profile statistics. Idempotent per match and player. */
+  async recordOutcome(userId: string, outcome: 'win' | 'loss', matchId?: string) {
+    if (!matchId) return;
+    const { error } = await this.admin.rpc('process_verified_competitive_match', {
+      p_match_id: matchId, p_user_id: userId, p_outcome: outcome, p_match_completed: true, p_match_valid: true,
+    });
+    if (error) console.error('stats update failed', error);
+  }
+
+  async recordResults(state: StoredGame, seats: Seat[]) {
+    if (!state.winner) return;
+    for (const seat of seats) {
+      const secret = state.privatePlayers[seat.seat];
+      if (!secret) continue;
+      const won = (state.winner === 'Mafia') === (secret.team === 'mafia');
+      await this.recordOutcome(seat.user_id, won ? 'win' : 'loss', state.matchId);
+    }
+  }
+
+  /** Open public lobbies that still have a free seat, fullest first. */
+  async list() {
+    const since = new Date(Date.now() - LISTED_LOBBY_HOURS * 3600 * 1000).toISOString();
+    const { data: rooms, error } = await this.admin.from('game_rooms')
+      .select('room_code,name,host_id,max_players,updated_at')
+      .eq('status', 'lobby').eq('is_private', false).gte('updated_at', since)
+      .order('updated_at', { ascending: false }).limit(50);
+    if (error) throw error;
+    type ListedRow = { room_code: string; name: string; host_id: string; max_players: number };
+    type SeatedRow = { room_code: string; user_id: string; display_name: string };
+    const roomRows = (rooms ?? []) as ListedRow[];
+    const codes = roomRows.map((room) => room.room_code);
+    if (!codes.length) return { rooms: [] };
+    const { data: players, error: playerError } = await this.admin.from('game_room_players').select('room_code,user_id,display_name').in('room_code', codes);
+    if (playerError) throw playerError;
+    const playerRows = (players ?? []) as SeatedRow[];
+    const listed = roomRows.map((room) => {
+      const seated = playerRows.filter((player) => player.room_code === room.room_code);
+      return {
+        roomCode: room.room_code,
+        name: room.name,
+        players: seated.length,
+        maxPlayers: room.max_players,
+        hostName: seated.find((player) => player.user_id === room.host_id)?.display_name ?? '—',
+        joined: seated.some((player) => player.user_id === this.userId),
+      };
+    }).filter((room) => room.players > 0 && (room.players < room.maxPlayers || room.joined));
+    listed.sort((left, right) => right.players - left.players);
+    return { rooms: listed.slice(0, 30) };
+  }
+
+  /** Joins the public lobby closest to starting. */
+  async quick() {
+    const { rooms } = await this.list();
+    const pick = rooms.find((room) => room.players < room.maxPlayers && !room.joined);
+    if (!pick) return { roomCode: null };
+    return this.join({ roomCode: pick.roomCode });
   }
 
   async night(body: Body) {
@@ -425,6 +494,8 @@ Deno.serve(async (request) => {
       vote: (value) => server.vote(value),
       tick: (value) => server.tick(value),
       rematch: (value) => server.rematch(value),
+      list: () => server.list(),
+      quick: () => server.quick(),
     };
     const handler = typeof body.action === 'string' ? actions[body.action] : undefined;
     if (!handler) return respond(400, { error: 'Үйлдэл буруу байна.' });

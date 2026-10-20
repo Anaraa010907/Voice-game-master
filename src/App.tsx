@@ -1,25 +1,25 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
   ArrowLeft, Check, ChevronRight, Clipboard, Crown, LockKeyhole, MessageCircle, Moon,
-  Radio, Settings as SettingsIcon, Shield, Skull, UserRound, Users, WandSparkles,
+  Radio, RefreshCw, Settings as SettingsIcon, Shield, Skull, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles } from './gameData';
 import RoleCardArtwork from './RoleCardArtwork';
 import GameScreen from './Game';
 import Auth, { type AuthView } from './Auth';
-import { LeaderboardScreen, ProfileScreen, RankScreen } from './AccountScreens';
-import { supabase, supabaseConfigured, type PublicProfile, type RatingChange } from './supabaseClient';
+import { ProfileScreen } from './AccountScreens';
+import { supabase, supabaseConfigured, type PublicProfile } from './supabaseClient';
 import { i18n, translateMessage } from './i18n';
-import { callGame, useRoom, type RoomSeat } from './multiplayer';
+import { callGame, useRoom, type ListedRoom, type RoomSeat } from './multiplayer';
 import { MIN_PLAYERS } from './gameEngine';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { FullscreenToggle, useFullscreen, type FullscreenState } from './fullscreen';
 
-type Screen = 'menu' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'rank' | 'leaderboard' | 'settings' | 'auth';
+type Screen = 'menu' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth';
 
-type RoomSettings = { name: string; maxPlayers: number; isPrivate: boolean; password: string };
+type RoomSettings = { name: string; maxPlayers: number; isPublic: boolean; password: string };
 const ROOM_STORAGE_KEY = 'mafia-shadows:room';
 
 const readStoredRoom = () => {
@@ -39,10 +39,8 @@ export default function App() {
   const [authView, setAuthView] = useState<AuthView>('sign-in');
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<PublicProfile | null>(null);
-  const [ratingHistory, setRatingHistory] = useState<RatingChange[]>([]);
   const [accountLoading, setAccountLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
-  const [historyError, setHistoryError] = useState('');
   const [copied, setCopied] = useState(false);
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
@@ -55,18 +53,10 @@ export default function App() {
     const restoreAccount = async (id: string) => {
       setAccountLoading(true);
       setProfileError('');
-      setHistoryError('');
-      const [profileResult, historyResult] = await Promise.all([
-        client.from('profiles').select('*').eq('id', id).maybeSingle(),
-        client.from('rating_changes').select('id,match_id,outcome,rp_change,rank_points_before,rank_points_after,previous_rank,new_rank,created_at').eq('user_id', id).order('created_at', { ascending: false }).limit(20),
-      ]);
+      const profileResult = await client.from('profiles').select('*').eq('id', id).maybeSingle();
       if (!active) return;
       if (profileResult.error) setProfileError(i18n.account.profileLoadFailed);
       else setProfile(profileResult.data as PublicProfile | null);
-      if (historyResult.error) {
-        setHistoryError(i18n.account.ratingHistoryLoadFailed);
-        setRatingHistory([]);
-      } else setRatingHistory((historyResult.data ?? []) as RatingChange[]);
       setAccountLoading(false);
     };
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -74,7 +64,6 @@ export default function App() {
       setUserId(id);
       if (!id) {
         setProfile(null);
-        setRatingHistory([]);
         setAccountLoading(false);
       } else if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY') {
         window.setTimeout(() => { if (active) void restoreAccount(id); }, 0);
@@ -198,7 +187,8 @@ export default function App() {
     <main className="viewport">
       <section className={`game-frame screen-${screen}`} aria-label="MAFIA: SHADOWS тоглоом">
         <div className="grain" aria-hidden="true" />
-        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'join-room')} onCreate={() => requireAccount('create-room')} onJoin={() => requireAccount('join-room')} signedIn={Boolean(userId)} onAuth={openAuth} fullscreen={fullscreen} />}
+        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'browse')} onCreate={() => requireAccount('create-room')} onJoin={() => requireAccount('join-room')} signedIn={Boolean(userId)} onAuth={openAuth} fullscreen={fullscreen} />}
+        {screen === 'browse' && <RoomBrowser onBack={goBack} onCreate={() => setScreen('create-room')} onJoinCode={() => setScreen('join-room')} onEnter={enterRoom} />}
         {screen === 'create-room' && <CreateRoom onBack={() => setScreen('menu')} onCreate={createRoom} />}
         {screen === 'join-room' && <JoinRoom onBack={() => setScreen('menu')} onJoin={joinRoom} />}
         {screen === 'lobby' && roomCode && userId && (
@@ -215,10 +205,8 @@ export default function App() {
         {screen === 'lobby' && (!roomCode || !userId) && <JoinRoom onBack={goBack} onJoin={joinRoom} />}
         {screen === 'roles' && <RoleGallery onBack={goBack} />}
         {screen === 'profile' && <ProfileScreen profile={profile} loading={accountLoading} loadError={profileError} onBack={goBack} onSignIn={() => openAuth('sign-in')} onSignOut={() => openAuth('sign-out')} onSave={saveProfile} />}
-        {screen === 'rank' && <RankScreen profile={profile} history={ratingHistory} loading={accountLoading} error={historyError || profileError} onBack={goBack} onSignIn={() => openAuth('sign-in')} />}
-        {screen === 'leaderboard' && <LeaderboardScreen userId={userId} onBack={goBack} onSignIn={() => openAuth('sign-in')} />}
-        {screen === 'auth' && <Auth key={authView} initialView={authView} onBack={goBack} onAuthenticated={() => setScreen('profile')} onSignedOut={() => { setUserId(null); setProfile(null); setRatingHistory([]); setScreen('menu'); }} />}
-        {screen === 'settings' && <Settings onBack={goBack} onNotice={notify} onProfile={() => setScreen('profile')} onRank={() => setScreen('rank')} onLeaderboard={() => setScreen('leaderboard')} onAuth={() => openAuth(userId ? 'sign-out' : 'sign-in')} signedIn={Boolean(userId)} />}
+        {screen === 'auth' && <Auth key={authView} initialView={authView} onBack={goBack} onAuthenticated={() => setScreen('profile')} onSignedOut={() => { setUserId(null); setProfile(null); setScreen('menu'); }} />}
+        {screen === 'settings' && <Settings onBack={goBack} onNotice={notify} onProfile={() => setScreen('profile')} onAuth={() => openAuth(userId ? 'sign-out' : 'sign-in')} signedIn={Boolean(userId)} />}
         {notice && <div className="toast" role="status"><Check size={14} />{notice}</div>}
       </section>
       <div className="rotate-overlay" aria-live="polite">
@@ -251,8 +239,6 @@ function Menu({ onNavigate, onPlay, onCreate, onJoin, signedIn, onAuth, fullscre
         <button onClick={onJoin}><span className="nav-icon"><Radio size={16} /></span><span>{i18n.app.joinRoom}</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('roles')}><span className="nav-icon"><Shield size={16} /></span><span>{i18n.app.roleGallery}</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('profile')}><span className="nav-icon"><UserRound size={16} /></span><span>{i18n.app.profile}</span><ChevronRight size={14} /></button>
-        <button onClick={() => onNavigate('rank')}><span className="nav-icon"><Crown size={16} /></span><span>{i18n.app.rank}</span><ChevronRight size={14} /></button>
-        <button onClick={() => onNavigate('leaderboard')}><span className="nav-icon"><Shield size={16} /></span><span>{i18n.app.leaderboard}</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('settings')}><span className="nav-icon"><SettingsIcon size={16} /></span><span>{i18n.app.settings}</span><ChevronRight size={14} /></button>
         <button onClick={() => onAuth(signedIn ? 'sign-out' : 'sign-in')}><span className="nav-icon"><LockKeyhole size={16} /></span><span>{signedIn ? i18n.app.signOut : i18n.auth.signInAccount}</span><ChevronRight size={14} /></button>
       </nav>
@@ -264,7 +250,7 @@ function Menu({ onNavigate, onPlay, onCreate, onJoin, signedIn, onAuth, fullscre
 function CreateRoom({ onBack, onCreate }: { onBack: () => void; onCreate: (room: RoomSettings) => Promise<void> }) {
   const [name, setName] = useState('Блэкуотерын шөнө');
   const [maxPlayers, setMaxPlayers] = useState(8);
-  const [isPrivate, setIsPrivate] = useState(true);
+  const [isPublic, setIsPublic] = useState(true);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -272,11 +258,11 @@ function CreateRoom({ onBack, onCreate }: { onBack: () => void; onCreate: (room:
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!name.trim()) return setError('Өрөөний нэрийг оруулаад үүсгэнэ үү.');
-    if (isPrivate && password && password.length < 4) return setError('Өрөөний нууц үг хамгийн багадаа 4 тэмдэгт байна.');
+    if (!isPublic && password && password.length < 4) return setError('Өрөөний нууц үг хамгийн багадаа 4 тэмдэгт байна.');
     setError('');
     setBusy(true);
     try {
-      await onCreate({ name: name.trim(), maxPlayers, isPrivate, password: isPrivate ? password : '' });
+      await onCreate({ name: name.trim(), maxPlayers, isPublic, password: isPublic ? '' : password });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Өрөө үүсгэж чадсангүй.');
     } finally {
@@ -287,8 +273,8 @@ function CreateRoom({ onBack, onCreate }: { onBack: () => void; onCreate: (room:
   return <div className="inner-screen setup-screen"><TopBar title="ӨРӨӨ ҮҮСГЭХ" subtitle="ӨРӨӨНИЙ ТӨХИРГӨӨ" onBack={onBack} /><div className="setup-content"><div className="setup-heading"><div className="eyebrow left-eye">ТӨХИРГӨӨ СОНГОХ</div><h1>Өөрийнхөө <i>өрөөг</i> бүтээ.</h1><p>Өрөөний кодыг найзууддаа илгээгээрэй. Дор хаяж {MIN_PLAYERS} хүн нэгдвэл тоглоом эхэлнэ.</p></div><form className="room-form" onSubmit={submit}>
     <label className="form-field room-name-field"><span>{i18n.app.roomName.toUpperCase()}</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder="Өрөөний нэрээ оруулна уу" /></label>
     <label className="form-field"><span>{i18n.app.maxPlayers.toUpperCase()}</span><select value={maxPlayers} onChange={(event) => setMaxPlayers(Number(event.target.value))}>{[6, 8, 10, 12].map((count) => <option key={count} value={count}>{count} тоглогч</option>)}</select></label>
-    <div className="private-setting"><span><b>Нууц үгтэй өрөө</b><small>Нууц үг мэдэх хүн л нэгдэнэ</small></span><button type="button" role="switch" aria-checked={isPrivate} className={`toggle ${isPrivate ? 'toggle-on' : ''}`} onClick={() => setIsPrivate((value) => !value)}><i /></button></div>
-    {isPrivate && <label className="form-field password-field"><span>ӨРӨӨНИЙ НУУЦ ҮГ <small>СОНГОЛТТОЙ</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} maxLength={32} placeholder="Нууц үггүй орж болно" autoComplete="new-password" /></label>}
+    <div className="private-setting"><span><b>Нийтэд нээлттэй</b><small>{isPublic ? 'Өрөөний жагсаалтад харагдана, хэн ч нэгдэнэ' : 'Зөвхөн кодоор нэгдэнэ, нууц үг тавьж болно'}</small></span><button type="button" role="switch" aria-checked={isPublic} className={`toggle ${isPublic ? 'toggle-on' : ''}`} onClick={() => setIsPublic((value) => !value)}><i /></button></div>
+    {!isPublic && <label className="form-field password-field"><span>ӨРӨӨНИЙ НУУЦ ҮГ <small>СОНГОЛТТОЙ</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} maxLength={32} placeholder="Нууц үггүй орж болно" autoComplete="new-password" /></label>}
     {error && <p className="form-error" role="alert">{error}</p>}
     <div className="form-actions"><button type="button" className="secondary-button" onClick={onBack}><ArrowLeft size={15} /> {i18n.common.back.toUpperCase()}</button><button type="submit" className="primary-button" disabled={busy}><Users size={15} /> {busy ? 'ҮҮСГЭЖ БАЙНА…' : i18n.app.createRoom.toUpperCase()} <ChevronRight size={16} /></button></div>
   </form></div></div>;
@@ -317,6 +303,76 @@ function JoinRoom({ onBack, onJoin }: { onBack: () => void; onJoin: (code: strin
     {error && <p className="form-error" role="alert">{error}</p>}
     <div className="form-actions"><button type="button" className="secondary-button" onClick={onBack}><ArrowLeft size={15} /> {i18n.common.back.toUpperCase()}</button><button type="submit" className="primary-button" disabled={busy}><Radio size={15} /> {busy ? 'НЭГДЭЖ БАЙНА…' : i18n.app.joinRoom.toUpperCase()} <ChevronRight size={16} /></button></div>
   </form></div></div>;
+}
+
+/** Open public lobbies, refreshed automatically, plus quick join. */
+function RoomBrowser({ onBack, onCreate, onJoinCode, onEnter }: { onBack: () => void; onCreate: () => void; onJoinCode: () => void; onEnter: (code: string) => void }) {
+  const [rooms, setRooms] = useState<ListedRoom[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      const result = await callGame<{ rooms: ListedRoom[] }>('list');
+      setRooms(result.rooms);
+      setError('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Өрөөнүүдийг ачаалж чадсангүй.');
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    const id = window.setInterval(() => { void load(); }, 5000);
+    return () => window.clearInterval(id);
+  }, [load]);
+
+  const join = async (code: string) => {
+    setBusy(code);
+    try {
+      const result = await callGame<{ roomCode: string }>('join', { roomCode: code });
+      onEnter(result.roomCode);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Өрөөнд нэгдэж чадсангүй.');
+      void load();
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const quick = async () => {
+    setBusy('quick');
+    try {
+      const result = await callGame<{ roomCode: string | null }>('quick');
+      if (result.roomCode) onEnter(result.roomCode);
+      else setError('Одоогоор нээлттэй өрөө алга. Өөрөө өрөө үүсгээд бусдыг хүлээгээрэй.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Өрөө олдсонгүй.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  return <div className="inner-screen browse-screen"><TopBar title="НЭЭЛТТЭЙ ӨРӨӨНҮҮД" subtitle="ТОГЛОХ" onBack={onBack} trailing={<button className="icon-button" onClick={() => { void load(); }} aria-label="Шинэчлэх" title="Шинэчлэх"><RefreshCw size={15} /></button>} />
+    <div className="browse-content">
+      <section className="browse-list" aria-live="polite">
+        {rooms === null && !error && <div className="browse-empty">Өрөөнүүдийг хайж байна…</div>}
+        {rooms !== null && rooms.length === 0 && <div className="browse-empty"><Users size={20} /><b>Нээлттэй өрөө алга</b><span>Өөрөө өрөө үүсгээд кодоо найзууддаа илгээгээрэй.</span></div>}
+        {rooms?.map((room) => <div className="browse-room" key={room.roomCode}>
+          <div className="browse-room-copy"><b>{room.name}</b><span>Эзэн: {room.hostName} · {room.roomCode}</span></div>
+          <div className="browse-room-count"><div className="browse-seats" aria-hidden="true">{Array.from({ length: room.maxPlayers }, (_, index) => <i key={index} className={index < room.players ? 'taken' : ''} />)}</div><span>{room.players}/{room.maxPlayers}</span></div>
+          <button className="primary-button browse-join" disabled={Boolean(busy)} onClick={() => room.joined ? onEnter(room.roomCode) : join(room.roomCode)}>{room.joined ? 'БУЦАХ' : busy === room.roomCode ? '…' : 'НЭГДЭХ'} <ChevronRight size={14} /></button>
+        </div>)}
+      </section>
+      <aside className="browse-actions">
+        <button className="primary-button browse-quick" disabled={Boolean(busy)} onClick={quick}><Zap size={16} /> {busy === 'quick' ? 'ХАЙЖ БАЙНА…' : 'ХУРДАН НЭГДЭХ'}</button>
+        <button className="secondary-button" onClick={onCreate}><Users size={15} /> {i18n.app.createRoom.toUpperCase()}</button>
+        <button className="secondary-button" onClick={onJoinCode}><Radio size={15} /> КОДООР НЭГДЭХ</button>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <p className="browse-note">Тоглоом эхлэхэд дор хаяж {MIN_PLAYERS} хүн хэрэгтэй. Хурдан нэгдэх нь хамгийн дүүрэх дөхсөн өрөөнд оруулна.</p>
+      </aside>
+    </div>
+  </div>;
 }
 
 /** Lobby while the room waits; switches to the live game once the host starts. */
@@ -376,7 +432,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
             <div><div className="eyebrow left-eye">ХОТ СЭРЭХЭЭСЭЭ ӨМНӨ</div><h1>Бүлгээ <i>цуглуулаарай.</i></h1></div>
             <div className="room-code"><span>{i18n.app.roomCode.toUpperCase()}</span><strong>{roomCode}</strong><button aria-label="Өрөөний код хуулах" title="Өрөөний код хуулах" onClick={onCopy}>{copied ? <Check size={16} /> : <Clipboard size={16} />}</button></div>
           </div>
-          <div className="lobby-toolbar"><span><Users size={14} /> ТОГЛОГЧИД <b>{String(seats.length).padStart(2, '0')}</b> <span className="muted">/ {room.max_players}</span></span></div>
+          <div className="lobby-toolbar"><span><Users size={14} /> ТОГЛОГЧИД <b>{String(seats.length).padStart(2, '0')}</b> <span className="muted">/ {room.max_players}</span></span><span className="room-visibility">{room.is_private ? 'ХУВИЙН · ЗӨВХӨН КОДООР' : 'НИЙТЭД НЭЭЛТТЭЙ'}</span></div>
           <div className="player-grid">
             {seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={seat.user_id === userId} />)}
             {Array.from({ length: emptySlots }, (_, index) => <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>СУЛ СУУДАЛ</small></div>)}
@@ -408,10 +464,10 @@ function RoleGallery({ onBack }: { onBack: () => void }) {
   return <div className="inner-screen gallery-screen"><TopBar title="ДҮРИЙН ЛАВЛАХ" subtitle="ТОГЛООМЫН ДҮРЭМ" onBack={onBack} /><div className="gallery-heading"><div><div className="eyebrow left-eye">ДАЙСНАА БОЛОН ХАМТРАГЧАА МЭД.</div><h1>Дүрийн <i>архив.</i></h1></div><span>7 НУУЦ ДҮР</span></div><div className="role-grid">{roles.map((item, index) => <article className={`role-card team-${item.team}`} key={item.id}><div className="role-card-art"><RoleCardArtwork role={item} /><span className="role-index">0{index + 1}</span></div><div className="role-card-info"><span className={`team-tag ${item.team}`}>{item.faction === 'citizens' ? 'ИРГЭДИЙН БАГ' : 'МАФИЙН БАГ'}</span><h2>{item.displayName}</h2><p>{item.description}</p><p className="role-card-ability"><b>ТУСГАЙ ЧАДВАР</b>{item.ability}</p></div></article>)}</div></div>;
 }
 
-function Settings({ onBack, onNotice, onProfile, onRank, onLeaderboard, onAuth, signedIn }: { onBack: () => void; onNotice: (text: string) => void; onProfile: () => void; onRank: () => void; onLeaderboard: () => void; onAuth: () => void; signedIn: boolean }) {
+function Settings({ onBack, onNotice, onProfile, onAuth, signedIn }: { onBack: () => void; onNotice: (text: string) => void; onProfile: () => void; onAuth: () => void; signedIn: boolean }) {
   const [sound, setSound] = useState(true);
   const [motion, setMotion] = useState(true);
-  return <div className="inner-screen simple-screen"><TopBar title="ТОХИРГОО" subtitle="ТОХИРГОО" onBack={onBack} /><div className="settings-content">  <div className="settings-intro"><div className="eyebrow left-eye">ӨӨРТӨӨ ТОХИРУУЛ</div><h1>Уур амьсгалаа <i>сонго.</i></h1></div><div className="setting-list"><SettingRow icon={<Radio size={17} />} title="Дууны эффект" detail="Хотын дуу чимээ болон тоглоомын эффект" checked={sound} onToggle={() => setSound((value) => !value)} /><SettingRow icon={<WandSparkles size={17} />} title="Хөдөлгөөнийг багасгах" detail="Шилжилт, хөдөлгөөнт эффектийг хязгаарлах" checked={!motion} onToggle={() => setMotion((value) => !value)} /><button className="setting-row" onClick={() => onNotice('Хэл: Монгол')}><span className="setting-icon"><MessageCircle size={17} /></span><span className="setting-copy"><b>Хэл</b><small>Ширээний хэлээ сонгоно уу</small></span><strong className="language-value">Монгол <ChevronRight size={15} /></strong></button><SettingsLink icon={<UserRound size={17} />} label="Профайл" detail={signedIn ? 'Нэр болон аватар засах' : 'Бүртгэлээ харахын тулд нэвтэрнэ үү'} onClick={onProfile} /><SettingsLink icon={<Crown size={17} />} label="Зэрэглэл" detail="Өрсөлдөөний оноо, түүх" onClick={onRank} /><SettingsLink icon={<Shield size={17} />} label="Шилдэг тоглогчид" detail="Нийтийн байр" onClick={onLeaderboard} /><SettingsLink icon={<LockKeyhole size={17} />} label={signedIn ? 'Гарах' : 'Нэвтрэх / бүртгэл үүсгэх'} detail={signedIn ? 'Supabase бүртгэлээс гарах' : 'Бүртгэлийн боломжийг нээх'} onClick={onAuth} /></div><span className="settings-version">MAFIA: SHADOWS <i>•</i> ХУВИЛБАР 0.1.0</span></div></div>;
+  return <div className="inner-screen simple-screen"><TopBar title="ТОХИРГОО" subtitle="ТОХИРГОО" onBack={onBack} /><div className="settings-content">  <div className="settings-intro"><div className="eyebrow left-eye">ӨӨРТӨӨ ТОХИРУУЛ</div><h1>Уур амьсгалаа <i>сонго.</i></h1></div><div className="setting-list"><SettingRow icon={<Radio size={17} />} title="Дууны эффект" detail="Хотын дуу чимээ болон тоглоомын эффект" checked={sound} onToggle={() => setSound((value) => !value)} /><SettingRow icon={<WandSparkles size={17} />} title="Хөдөлгөөнийг багасгах" detail="Шилжилт, хөдөлгөөнт эффектийг хязгаарлах" checked={!motion} onToggle={() => setMotion((value) => !value)} /><button className="setting-row" onClick={() => onNotice('Хэл: Монгол')}><span className="setting-icon"><MessageCircle size={17} /></span><span className="setting-copy"><b>Хэл</b><small>Ширээний хэлээ сонгоно уу</small></span><strong className="language-value">Монгол <ChevronRight size={15} /></strong></button><SettingsLink icon={<UserRound size={17} />} label="Профайл" detail={signedIn ? 'Нэр болон аватар засах' : 'Бүртгэлээ харахын тулд нэвтэрнэ үү'} onClick={onProfile} /><SettingsLink icon={<LockKeyhole size={17} />} label={signedIn ? 'Гарах' : 'Нэвтрэх / бүртгэл үүсгэх'} detail={signedIn ? 'Supabase бүртгэлээс гарах' : 'Бүртгэлийн боломжийг нээх'} onClick={onAuth} /></div><span className="settings-version">MAFIA: SHADOWS <i>•</i> ХУВИЛБАР 0.1.0</span></div></div>;
 }
 
 function SettingsLink({ icon, label, detail, onClick }: { icon: ReactNode; label: string; detail: string; onClick: () => void }) {
