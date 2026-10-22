@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode, type 
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
-  ArrowLeft, Check, ChevronRight, X, Clipboard, Crown, LockKeyhole, MessageCircle, Moon,
+  ArrowLeft, Bot, Check, ChevronRight, X, Clipboard, Crown, LockKeyhole, MessageCircle, Moon,
   Radio, RefreshCw, Settings as SettingsIcon, Shield, Skull, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles } from './gameData';
@@ -476,6 +476,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
 
   const isHost = room.host_id === userId;
   const emptySlots = Math.max(room.max_players - seats.length, 0);
+  const botsAllowed = GAMES[room.game_type ?? 'mafia'].allowBots;
   const others = seats.filter((seat) => seat.user_id !== room.host_id);
   const waitingFor = others.filter((seat) => !seat.ready);
   const minimum = GAMES[room.game_type ?? 'mafia'].minPlayers;
@@ -495,8 +496,11 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
           </div>
           <div className="lobby-toolbar"><span><Users size={14} /> ТОГЛОГЧИД <b>{String(seats.length).padStart(2, '0')}</b> <span className="muted">/ {room.max_players}</span></span><span className="room-visibility">{room.is_private ? 'ХУВИЙН · ЗӨВХӨН КОДООР' : 'НИЙТЭД НЭЭЛТТЭЙ'}</span></div>
           <div className="player-grid">
-            {seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={seat.user_id === userId} />)}
-            {Array.from({ length: emptySlots }, (_, index) => <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>СУЛ СУУДАЛ</small></div>)}
+            {seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={seat.user_id === userId}
+              onRemoveBot={isHost && seat.is_bot ? () => run('bot-remove', { seat: seat.seat }) : undefined} busy={busy} />)}
+            {Array.from({ length: emptySlots }, (_, index) => isHost && botsAllowed
+              ? <button type="button" className="invite-slot add-bot-slot" key={`slot-${index}`} disabled={busy} onClick={() => run('bot-add')}><Bot size={20} /><small>БОТ НЭМЭХ</small></button>
+              : <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>СУЛ СУУДАЛ</small></div>)}
           </div>
           <div className="lobby-bottom">
             <div className="lobby-hint"><LockKeyhole size={14} /><span>{isHost ? 'ТА ӨРӨӨНИЙ ЭЗЭН' : 'ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА'} <b>•</b> {hint}</span></div>
@@ -512,8 +516,13 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
   );
 }
 
-function SeatCard({ seat, isHost, isMe }: { seat: RoomSeat; isHost: boolean; isMe: boolean }) {
-  return <div className={`player-card compact-card ${seat.ready || isHost ? 'player-ready' : ''}`}><Avatar name={seat.display_name} color={seat.color} url={seat.avatar_url}>{isHost && <i title="Өрөөний эзэн"><Crown size={11} /></i>}<VoiceAvatarIndicator name={seat.display_name} identity={seat.user_id} /></Avatar><div className="player-name">{seat.display_name}{isMe && <small>ЧИ</small>}</div><div className={`player-status ${seat.ready || isHost ? 'online' : ''}`}>{isHost ? 'ЭЗЭН' : seat.ready ? 'БЭЛЭН' : 'ХҮЛЭЭЖ БАЙНА'}</div></div>;
+function SeatCard({ seat, isHost, isMe, onRemoveBot, busy }: { seat: RoomSeat; isHost: boolean; isMe: boolean; onRemoveBot?: () => void; busy?: boolean }) {
+  return <div className={`player-card compact-card ${seat.ready || isHost ? 'player-ready' : ''} ${seat.is_bot ? 'is-bot' : ''}`}>
+    <Avatar name={seat.is_bot ? seat.display_name.replace(/ \(бот\)$/, '') : seat.display_name} color={seat.color} url={seat.avatar_url}>{isHost && <i title="Өрөөний эзэн"><Crown size={11} /></i>}{seat.is_bot ? <i className="bot-badge" title="Бот"><Bot size={11} /></i> : <VoiceAvatarIndicator name={seat.display_name} identity={seat.user_id} />}</Avatar>
+    <div className="player-name">{seat.display_name}{isMe && <small>ЧИ</small>}</div>
+    <div className={`player-status ${seat.ready || isHost ? 'online' : ''}`}>{isHost ? 'ЭЗЭН' : seat.is_bot ? 'БОТ' : seat.ready ? 'БЭЛЭН' : 'ХҮЛЭЭЖ БАЙНА'}</div>
+    {onRemoveBot && <button type="button" className="remove-bot-button" disabled={busy} onClick={onRemoveBot} aria-label={`${seat.display_name} хасах`} title="Ботыг хасах"><X size={13} /></button>}
+  </div>;
 }
 
 function TopBar({ title, subtitle, onBack, trailing }: { title: string; subtitle: string; onBack: () => void; trailing?: ReactNode }) {

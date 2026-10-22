@@ -8,6 +8,7 @@ import {
   MIN_MONOPOLY_PLAYERS, applyMonopolyAction, autoPlay, createMonopolyGame, removeMonopolyPlayer,
   type MonopolyAction, type MonopolyState,
 } from '../_shared/monopolyEngine.ts';
+import { BOT_STEP_SECONDS, boardBotToMove, mafiaBotsAct, monopolyBotStep, nextBotName } from '../_shared/bots.ts';
 import { isAllowedOrigin } from '../_shared/voiceRequest.ts';
 import type { VoicePhase } from '../_shared/voicePolicy.ts';
 
@@ -31,7 +32,9 @@ const MIN_SEATS: Record<GameType, number> = { mafia: MIN_PLAYERS, monopoly: MIN_
 const BOARD_STEP_SECONDS = 40;
 const BOARD_ACTIONS = ['roll', 'buy', 'decline', 'end', 'pay-jail', 'build', 'sell', 'mortgage', 'unmortgage'];
 const LISTED_LOBBY_HOURS = 6;
-type Seat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null };
+/** Which games let the host fill seats with bots. Mafia bots are a testing aid: set mafia to false to remove them. */
+const BOTS_ALLOWED: Record<GameType, boolean> = { mafia: true, monopoly: true };
+type Seat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null; is_bot?: boolean };
 type Body = Record<string, unknown>;
 
 class GameError extends Error {
@@ -91,7 +94,11 @@ function code(body: Body) {
 }
 
 function deadlineFor(state: AnyGame): string | null {
-  if (isBoard(state)) return state.phase === 'finished' ? null : new Date(Date.now() + BOARD_STEP_SECONDS * 1000).toISOString();
+  if (isBoard(state)) {
+    if (state.phase === 'finished') return null;
+    // A bot "thinks" for a moment; whoever's phone sees the timer run out asks the server to move it.
+    return new Date(Date.now() + (boardBotToMove(state) ? BOT_STEP_SECONDS : BOARD_STEP_SECONDS) * 1000).toISOString();
+  }
   if (state.phase === 'Results') return null;
   const key = state.phase === 'Voting'
     ? state.votesRevealed ? 'VoteReveal' : state.runoffCandidates ? 'Runoff' : 'Voting'
@@ -118,6 +125,17 @@ function settle(state: GameEngineState): GameEngineState {
   return state;
 }
 
+/** Lets bots act in every phase that opens, then skips waiting, until nothing more happens. */
+function progress(state: GameEngineState): GameEngineState {
+  let current = state;
+  for (let step = 0; step < 8; step += 1) {
+    const next = settle(mafiaBotsAct(current, secureRandom));
+    if (next === current) return current;
+    current = next;
+  }
+  return current;
+}
+
 // Board games keep voice open for everyone the whole match.
 const voicePhase = (state: AnyGame): VoicePhase => isBoard(state)
   ? state.phase === 'finished' ? 'results' : 'discussion'
@@ -136,7 +154,7 @@ class GameServer {
   }
 
   async seats(roomCode: string): Promise<Seat[]> {
-    const { data, error } = await this.admin.from('game_room_players').select('user_id,seat,display_name,color,ready,avatar_url').eq('room_code', roomCode).order('seat');
+    const { data, error } = await this.admin.from('game_room_players').select('user_id,seat,display_name,color,ready,avatar_url,is_bot').eq('room_code', roomCode).order('seat');
     if (error) throw error;
     return (data ?? []) as Seat[];
   }
@@ -242,7 +260,8 @@ class GameServer {
     const roomCodeValue = code(body);
     const room = await this.room(roomCodeValue);
     const { seats, mine } = await this.requireSeat(roomCodeValue);
-    const remaining = seats.filter((seat) => seat.user_id !== this.userId);
+    // Bots never keep a room alive or become its host.
+    const remaining = seats.filter((seat) => seat.user_id !== this.userId && !seat.is_bot);
 
     if (room.status === 'playing') {
       // Leaving a live game counts as a loss, recorded first so the final tally cannot turn it into a win.
@@ -290,6 +309,7 @@ class GameServer {
       color: seat.color,
       avatarUrl: seat.avatar_url ?? null,
       host: seat.user_id === room.host_id,
+      bot: seat.is_bot === true,
     }));
     const engine: AnyGame = room.game_type === 'monopoly'
       ? { ...createMonopolyGame(people, secureRandom), matchId: crypto.randomUUID() }
@@ -335,7 +355,7 @@ class GameServer {
     const writes = [
       this.admin.from('game_public').upsert({ room_code: roomCode, view: publicView(state), deadline, version, updated_at: new Date().toISOString() }),
       this.admin.from('game_private').upsert(seats
-        .filter((seat) => state.privatePlayers[seat.seat])
+        .filter((seat) => !seat.is_bot && state.privatePlayers[seat.seat])
         .map((seat) => ({ room_code: roomCode, user_id: seat.user_id, view: privateView(state, seat.seat), version }))),
     ];
     const results = await Promise.all(writes);
@@ -362,6 +382,7 @@ class GameServer {
       const phase = voicePhase(state);
       await this.admin.from('voice_rooms').update({ game_phase: phase, post_game_voice: phase === 'results', updated_at: new Date().toISOString() }).eq('room_code', roomCode);
       for (const seat of seats) {
+        if (seat.is_bot) continue;
         const alive = isBoard(state) ? true : state.publicPlayers.find((player) => player.id === seat.seat)?.alive ?? false;
         await this.admin.from('voice_room_members').update({ is_alive: alive }).eq('room_code', roomCode).eq('user_id', seat.user_id);
       }
@@ -390,7 +411,7 @@ class GameServer {
   async recordResults(state: AnyGame, seats: Seat[]) {
     if (isBoard(state)) {
       for (const seat of seats) {
-        if (!state.players.some((entry) => entry.id === seat.seat)) continue;
+        if (seat.is_bot || !state.players.some((entry) => entry.id === seat.seat)) continue;
         await this.recordOutcome(seat.user_id, state.winner === seat.seat ? 'win' : 'loss', state.matchId);
       }
       return;
@@ -398,7 +419,7 @@ class GameServer {
     if (!state.winner) return;
     for (const seat of seats) {
       const secret = state.privatePlayers[seat.seat];
-      if (!secret) continue;
+      if (!secret || seat.is_bot) continue;
       const won = (state.winner === 'Mafia') === (secret.team === 'mafia');
       await this.recordOutcome(seat.user_id, won ? 'win' : 'loss', state.matchId);
     }
@@ -474,7 +495,7 @@ class GameServer {
       if (isBoard(state)) return state;
       const result = submitNightAction(state, mine.seat, targetId);
       failure = result.error ?? '';
-      return result.error ? state : settle(result.state);
+      return result.error ? state : progress(result.state);
     });
     if (failure) throw new GameError(409, failure);
     return { ok: true };
@@ -489,7 +510,7 @@ class GameServer {
       if (isBoard(state)) return state;
       const result = recordVote(state, mine.seat, choice);
       failure = result.error ?? '';
-      return result.error ? state : settle(result.state);
+      return result.error ? state : progress(result.state);
     });
     if (failure) throw new GameError(409, failure);
     return { ok: true };
@@ -505,11 +526,48 @@ class GameServer {
     const expired = pub?.deadline ? Date.parse(pub.deadline) <= Date.now() + 500 : false;
     const hostSkip = body.skip === true && room.host_id === this.userId;
     await this.mutate(roomCodeValue, (state) => {
-      if (isBoard(state)) return expired ? autoPlay(state, secureRandom) : state;
+      // On a bot's turn the bot plays a real step; for a human who ran out of time the safe default is taken.
+      if (isBoard(state)) return !expired ? state : boardBotToMove(state) ? monopolyBotStep(state, secureRandom) : autoPlay(state, secureRandom);
       const skippable = state.phase === 'Role Reveal' || state.phase === 'Morning' || state.phase === 'Discussion' || (state.phase === 'Voting' && state.votesRevealed);
       if (!expired && !(hostSkip && skippable)) return state;
-      return settle(advance(state));
+      return progress(advance(state));
     });
+    return { ok: true };
+  }
+
+  /** Host-only: seats a bot in the lobby. */
+  async addBot(body: Body) {
+    const roomCodeValue = code(body);
+    const room = await this.room(roomCodeValue);
+    if (room.host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн бот нэмнэ.');
+    if (!BOTS_ALLOWED[room.game_type ?? 'mafia']) throw new GameError(409, 'Энэ тоглоомд бот нэмэх боломжгүй.');
+    if (room.status !== 'lobby') throw new GameError(409, 'Тоглоом эхэлсэн үед бот нэмэх боломжгүй.');
+    const seats = await this.seats(roomCodeValue);
+    if (seats.length >= room.max_players) throw new GameError(409, 'Өрөө дүүрсэн байна.');
+    const taken = new Set(seats.map((seat) => seat.seat));
+    const free = Array.from({ length: room.max_players }, (_, index) => index + 1).find((seat) => !taken.has(seat))!;
+    const name = nextBotName(seats.map((seat) => seat.display_name));
+    const { error } = await this.admin.from('game_room_players').insert({
+      room_code: roomCodeValue, user_id: crypto.randomUUID(), seat: free, display_name: name,
+      color: COLORS[(free - 1) % COLORS.length], ready: true, avatar_url: null, is_bot: true,
+    });
+    if (error?.code === '23505') throw new GameError(409, 'Суудал дөнгөж сая дүүрлээ. Дахин оролдоно уу.');
+    if (error) throw error;
+    await this.touchRoom(roomCodeValue);
+    return { seat: free, name };
+  }
+
+  /** Host-only: frees a bot's seat in the lobby. */
+  async removeBot(body: Body) {
+    const roomCodeValue = code(body);
+    const room = await this.room(roomCodeValue);
+    if (room.host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн бот хасна.');
+    if (room.status !== 'lobby') throw new GameError(409, 'Тоглоом эхэлсэн үед бот хасах боломжгүй.');
+    const seat = Number(body.seat);
+    if (!Number.isInteger(seat)) throw new GameError(400, 'Суудал буруу байна.');
+    const { error } = await this.admin.from('game_room_players').delete().eq('room_code', roomCodeValue).eq('seat', seat).eq('is_bot', true);
+    if (error) throw error;
+    await this.touchRoom(roomCodeValue);
     return { ok: true };
   }
 
@@ -522,7 +580,7 @@ class GameServer {
       this.admin.from('game_states').update({ engine: null, version: 0 }).eq('room_code', roomCodeValue),
       this.admin.from('game_public').delete().eq('room_code', roomCodeValue),
       this.admin.from('game_private').delete().eq('room_code', roomCodeValue),
-      this.admin.from('game_room_players').update({ ready: false }).eq('room_code', roomCodeValue).neq('user_id', room.host_id),
+      this.admin.from('game_room_players').update({ ready: false }).eq('room_code', roomCodeValue).neq('user_id', room.host_id).eq('is_bot', false),
       this.admin.from('voice_rooms').update({ game_phase: 'lobby', post_game_voice: false }).eq('room_code', roomCodeValue),
       this.admin.from('voice_room_members').update({ is_alive: true }).eq('room_code', roomCodeValue),
     ]);
@@ -574,6 +632,8 @@ Deno.serve(async (request) => {
       list: (value) => server.list(value),
       quick: (value) => server.quick(value),
       board: (value) => server.board(value),
+      'bot-add': (value) => server.addBot(value),
+      'bot-remove': (value) => server.removeBot(value),
     };
     const handler = typeof body.action === 'string' ? actions[body.action] : undefined;
     if (!handler) return respond(400, { error: 'Үйлдэл буруу байна.' });

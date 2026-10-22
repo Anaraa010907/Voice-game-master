@@ -27,14 +27,14 @@ export const roleTeams: Record<RoleName, Team> = {
   Citizen: 'town',
 };
 
-export type EnginePlayer = { id: number; name: string; initials: string; color: string; host?: boolean; avatarUrl?: string | null };
+export type EnginePlayer = { id: number; name: string; initials: string; color: string; host?: boolean; avatarUrl?: string | null; bot?: boolean };
 
 export type GamePhase = 'Role Reveal' | 'Night' | 'Morning' | 'Discussion' | 'Voting' | 'Results';
 export type VoteChoice = number | 'skip' | null;
 export type WinningTeam = 'Citizens' | 'Mafia' | null;
 export type NightRole = 'Mafia' | 'Doctor' | 'Detective';
 
-export type PublicGamePlayer = Pick<EnginePlayer, 'id' | 'name' | 'initials' | 'color' | 'host' | 'avatarUrl'> & {
+export type PublicGamePlayer = Pick<EnginePlayer, 'id' | 'name' | 'initials' | 'color' | 'host' | 'avatarUrl' | 'bot'> & {
   alive: boolean;
   voteStatus: 'hidden' | 'revealed' | 'not-eligible';
   voteTargetId: number | null;
@@ -191,7 +191,7 @@ export function createInitialGame(
   return {
     phase: 'Role Reveal',
     round: 1,
-    publicPlayers: players.map((player) => ({ id: player.id, name: player.name, initials: player.initials, color: player.color, host: player.host, avatarUrl: player.avatarUrl ?? null, alive: true, voteStatus: 'hidden', voteTargetId: null, revealedRole: null })),
+    publicPlayers: players.map((player) => ({ id: player.id, name: player.name, initials: player.initials, color: player.color, host: player.host, avatarUrl: player.avatarUrl ?? null, bot: player.bot ?? false, alive: true, voteStatus: 'hidden', voteTargetId: null, revealedRole: null })),
     privatePlayers,
     nightResolved: false,
     retaliationResolved: false,

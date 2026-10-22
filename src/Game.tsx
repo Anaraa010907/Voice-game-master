@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ArrowLeft, Check, ChevronRight, Clock3, Crown, Crosshair, Eye, Fingerprint,
   HeartPulse, Info, LockKeyhole, Mic, Moon, Radio, Settings,
@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { roles, type RoleName } from './gameData';
 import RoleCardArtwork from './RoleCardArtwork';
+import { MyRoleCard, RoleCardViewer, RoleRevealIntro } from './RoleCardReveal';
 import type { PrivateGameView, PublicGamePlayer, PublicGameView, VoteChoice } from './gameEngine';
 import { i18n, translateMessage, translatePhase, translateRole, translateTeam } from './i18n';
 import { VoiceAvatarIndicator, VoiceChatProvider, type VoicePhase } from './VoiceChat';
@@ -56,6 +57,11 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
   const [leaveDialog, setLeaveDialog] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [introOpen, setIntroOpen] = useState(false);
+  const [cardOpen, setCardOpen] = useState(false);
+  const revealShown = useRef(false);
+  const closeIntro = useCallback(() => setIntroOpen(false), []);
+  const closeCard = useCallback(() => setCardOpen(false), []);
   const tickedFor = useRef<number | null>(null);
   const stage = game ? `${game.phase}-${game.round}-${game.votesRevealed}-${game.runoffCandidates?.join() ?? ''}` : '';
 
@@ -95,6 +101,14 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
     const timer = window.setTimeout(() => { void callGame('tick', { roomCode }).then(reload).catch(() => undefined); }, 300 + Math.random() * 700);
     return () => window.clearTimeout(timer);
   }, [secondsLeft, deadline, roomCode, reload]);
+
+  // The flash-and-flip reveal plays once, when the match opens on the role screen.
+  const hasPrivate = Boolean(me);
+  useEffect(() => {
+    if (!hasPrivate || !game) return;
+    if (game.phase === 'Role Reveal' && !revealShown.current) setIntroOpen(true);
+    revealShown.current = true;
+  }, [game?.phase, hasPrivate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!game || !me) {
     return <div className="core-game"><div className="room-loading">Ширээ бэлдэж байна…</div></div>;
@@ -173,11 +187,13 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
           {game.phase === 'Voting' && <VotingPanel game={game} me={me} alive={currentPlayer.alive} voteSelection={voteSelection} voteConfirmOpen={voteConfirmOpen} isHost={isHost} busy={busy} nameOf={nameOf} onSkip={() => setVoteSelection('skip')} onReview={() => voteSelection === null ? onNotice(translateMessage('Choose a living player or Skip Vote.')) : setVoteConfirmOpen(true)} onSubmit={submitVote} onCancel={() => { setVoteConfirmOpen(false); setVoteSelection(null); }} onNext={hostSkip} />}
           <div className="public-event-log"><span><Info size={11} /> {i18n.game.messages.publicLogs}</span>{game.publicEventLog.slice(-2).map((entry, index) => <p key={`${entry}-${index}`}>{translateMessage(entry)}</p>)}</div>
         </section>
-        <aside className="game-player-list game-player-list-right"><div className="game-list-heading">{i18n.game.stillInIt} <span>{String(living.length).padStart(2, '0')}</span></div>{rightPlayers.map(renderPlayer)}<button className="private-info-button" onClick={() => setPrivateOpen((open) => !open)}><LockKeyhole size={13} /> {i18n.game.privateInfo}</button></aside>
+        <aside className="game-player-list game-player-list-right"><div className="game-list-heading">{i18n.game.stillInIt} <span>{String(living.length).padStart(2, '0')}</span></div>{rightPlayers.map(renderPlayer)}<MyRoleCard role={roleInfo(me.role)} dead={!currentPlayer.alive} onOpen={() => setCardOpen(true)} /><button className="private-info-button" onClick={() => setPrivateOpen((open) => !open)}><LockKeyhole size={13} /> {i18n.game.privateInfo}</button></aside>
       </div>
       <div className="core-game-bottom"><div className="phase-caption"><span>{game.phase === 'Night' ? <Moon size={12} /> : game.phase === 'Morning' ? <Sun size={12} /> : game.phase === 'Voting' ? <Vote size={12} /> : <Mic size={12} />}{translatePhase(game.phase)}</span><small>{phaseHint(game, currentPlayer.alive)}</small></div><div className="bottom-local-note"><Users size={12} /> {seats.length} тоглогч · {roomCode}</div></div>
     </>}
 
+    {introOpen && <RoleRevealIntro role={roleInfo(me.role)} onDone={closeIntro} />}
+    {cardOpen && <RoleCardViewer role={roleInfo(me.role)} onClose={closeCard} />}
     {privateOpen && <PrivateInfoPanel player={currentPlayer} me={me} mafiaNames={mafiaNames} namesOf={namesOf} onClose={() => setPrivateOpen(false)} />}
     {leaveDialog && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="leave-game-title"><div className="modal-symbol"><ArrowLeft size={18} /></div><h2 id="leave-game-title">Тоглоомоос гарах уу?</h2><p>Гарвал та хасагдсанд тооцогдож, энэ тоглолтод буцаж орох боломжгүй.</p><div className="modal-actions"><button className="secondary-button" onClick={() => setLeaveDialog(false)}>ҮЛДЭХ</button><button className="primary-button" onClick={onLeave}>ТОГЛООМООС ГАРАХ</button></div></section></div>}
     {settingsOpen && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title"><div className="modal-symbol"><Settings size={18} /></div><h2 id="game-settings-title">Тоглоомын тохиргоо</h2><p>Үе шат бүр цаг дуусахад автоматаар солигдоно. Өрөөний эзэн хүлээх үеийг алгасаж болно.</p><div className="modal-fullscreen"><FullscreenToggle fullscreen={fullscreen} /></div><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>ТОГЛООМ ҮРГЭЛЖЛҮҮЛЭХ</button></div></section></div>}

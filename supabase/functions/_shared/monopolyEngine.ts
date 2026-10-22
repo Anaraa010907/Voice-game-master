@@ -109,6 +109,8 @@ export type MonopolyPlayer = {
   color: string;
   avatarUrl?: string | null;
   host?: boolean;
+  /** A computer player: the server moves for it. */
+  bot?: boolean;
   money: number;
   position: number;
   inJail: boolean;
@@ -172,7 +174,7 @@ function log(state: MonopolyState, line: string): MonopolyState {
   return { ...state, log: [...state.log.slice(-19), line] };
 }
 
-export function createMonopolyGame(players: Array<Pick<MonopolyPlayer, 'id' | 'name' | 'initials' | 'color' | 'avatarUrl' | 'host'>>, random: RandomSource = Math.random): MonopolyState {
+export function createMonopolyGame(players: Array<Pick<MonopolyPlayer, 'id' | 'name' | 'initials' | 'color' | 'avatarUrl' | 'host' | 'bot'>>, random: RandomSource = Math.random): MonopolyState {
   const order = players.map((entry) => entry.id);
   for (let index = order.length - 1; index > 0; index -= 1) {
     const swap = Math.min(index, Math.floor(random() * (index + 1)));
@@ -394,6 +396,17 @@ export function canBuild(state: MonopolyState, id: number, tileId: number) {
 
 /** Applies one player action. Returns an error message (Mongolian) instead of changing state when invalid. */
 export function applyMonopolyAction(state: MonopolyState, actorId: number, action: MonopolyAction, random: RandomSource = Math.random): MonopolyResult {
+  const result = applyAction(state, actorId, action, random);
+  return result.error ? result : { state: skipBankruptTurn(result.state) };
+}
+
+/** A player who goes bankrupt on their own turn (rent, tax, a card) hands the turn on instead of freezing the game. */
+function skipBankruptTurn(state: MonopolyState): MonopolyState {
+  if (state.phase === 'finished' || !player(state, currentPlayerId(state)).bankrupt) return state;
+  return nextTurn({ ...state, phase: 'end', rollAgain: false });
+}
+
+function applyAction(state: MonopolyState, actorId: number, action: MonopolyAction, random: RandomSource): MonopolyResult {
   if (state.phase === 'finished') return { state, error: 'Тоглоом дууссан.' };
   const actor = state.players.find((entry) => entry.id === actorId);
   if (!actor || actor.bankrupt) return { state, error: 'Та энэ тоглоомд оролцохгүй байна.' };
@@ -498,6 +511,9 @@ export function applyMonopolyAction(state: MonopolyState, actorId: number, actio
 /** What happens when the current player's timer runs out: roll, skip buying, or end the turn. */
 export function autoPlay(state: MonopolyState, random: RandomSource = Math.random): MonopolyState {
   if (state.phase === 'finished') return state;
+  // Also unfreezes games saved before bankrupt turns were handed on.
+  const unstuck = skipBankruptTurn(state);
+  if (unstuck !== state) return unstuck;
   const actorId = currentPlayerId(state);
   const step: MonopolyAction = state.phase === 'roll' ? { type: 'roll' } : state.phase === 'buy' ? { type: 'decline' } : { type: 'end' };
   return applyMonopolyAction(state, actorId, step, random).state;

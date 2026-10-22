@@ -1,5 +1,5 @@
 /** Small synthesized sound effects (Web Audio) — no audio files to download. */
-export type Sfx = 'roll' | 'step' | 'buy' | 'turn' | 'night' | 'morning' | 'vote' | 'death' | 'win' | 'click';
+export type Sfx = 'roll' | 'step' | 'buy' | 'turn' | 'night' | 'morning' | 'vote' | 'death' | 'win' | 'click' | 'reveal';
 
 const KEY = 'night-table:sfx';
 let context: AudioContext | null = null;
@@ -73,6 +73,7 @@ export function playSfx(name: Sfx) {
       case 'death': tone(c, t, 180, 0.7, 'sawtooth', 0.12, 45); noise(c, t, 0.25, 0.1, 300); break;
       case 'win': [523, 659, 784, 1047, 1319].forEach((f, i) => tone(c, t + i * 0.12, f, 0.4, 'triangle', 0.14)); break;
       case 'click': tone(c, t, 700, 0.04, 'sine', 0.08); break;
+      case 'reveal': noise(c, t, 0.35, 0.12, 3200); tone(c, t, 330, 0.5, 'sine', 0.14, 1320); tone(c, t + 0.32, 98, 0.5, 'triangle', 0.26, 55); [659, 988].forEach((f, i) => tone(c, t + 0.35 + i * 0.09, f, 0.7, 'triangle', 0.1)); break;
     }
   } catch { /* audio is best-effort */ }
 }

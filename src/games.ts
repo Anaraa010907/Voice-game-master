@@ -12,6 +12,8 @@ export type GameInfo = {
   sizes: number[];
   defaultSize: number;
   defaultRoomName: string;
+  /** The host may fill empty seats with bots. Mafia bots are for testing only; turn this off to remove them. */
+  allowBots: boolean;
 };
 
 export const GAMES: Record<GameType, GameInfo> = {
@@ -26,6 +28,7 @@ export const GAMES: Record<GameType, GameInfo> = {
     sizes: [6, 8, 10, 12],
     defaultSize: 8,
     defaultRoomName: 'Блэкуотерын шөнө',
+    allowBots: true,
   },
   monopoly: {
     type: 'monopoly',
@@ -38,6 +41,7 @@ export const GAMES: Record<GameType, GameInfo> = {
     sizes: [2, 3, 4, 5, 6],
     defaultSize: 4,
     defaultRoomName: 'Талын наймаа',
+    allowBots: true,
   },
 };
 
