@@ -9,7 +9,7 @@ import {
 } from './monopolyEngine';
 import Avatar from './Avatar';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
-import { playSfx, startMusic, stopMusic } from './sfx';
+import { playSfx, startMusic } from './sfx';
 import { callGame, useCountdown, useGame, type RoomSeat } from './multiplayer';
 
 const GROUP_LABEL: Record<ColorGroup, string> = {
@@ -71,10 +71,7 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
 
   useEffect(() => {
     startMusic('monopoly');
-    // Browsers keep audio locked until the first touch, so retry then.
-    const unlock = () => startMusic('monopoly');
-    window.addEventListener('pointerdown', unlock, { once: true });
-    return () => { window.removeEventListener('pointerdown', unlock); stopMusic(); };
+    return () => startMusic('menu');
   }, []);
 
   // Sound cues: dice, buying, my turn, finish.

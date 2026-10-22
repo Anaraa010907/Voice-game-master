@@ -77,12 +77,13 @@ export function playSfx(name: Sfx) {
   } catch { /* audio is best-effort */ }
 }
 
-/* ---------- Background music: a quiet generative loop per game ---------- */
+/* ---------- Background music: a menu theme plus a quiet generative loop per game ---------- */
 
-export type MusicTheme = 'mafia' | 'monopoly';
+export type MusicTheme = 'menu' | 'mafia' | 'monopoly';
 const MUSIC_KEY = 'night-table:music';
 let musicOn = (() => { try { return localStorage.getItem(MUSIC_KEY) !== 'off'; } catch { return true; } })();
 let theme: MusicTheme | null = null;
+let playing: MusicTheme | null = null;
 let timer: number | null = null;
 let master: GainNode | null = null;
 let nextBeat = 0;
@@ -95,20 +96,44 @@ export function setMusicEnabled(value: boolean) {
   if (value && theme) startMusic(theme); else halt();
 }
 
-// Frequencies: A minor pentatonic for the night game, D major pentatonic (a steppe-song feel) for the board game.
-const SCALES: Record<MusicTheme, { root: number; notes: number[]; bpm: number; pad: number[] }> = {
+// Generative loops: A minor pentatonic for the night game, D major pentatonic (a steppe-song feel) for the board game.
+const SCALES: Record<'mafia' | 'monopoly', { root: number; notes: number[]; bpm: number; pad: number[] }> = {
   mafia: { root: 55, notes: [220, 261.6, 293.7, 329.6, 392, 440, 523.3], bpm: 62, pad: [110, 164.8] },
   monopoly: { root: 73.4, notes: [293.7, 329.6, 370, 440, 493.9, 587.3, 740], bpm: 84, pad: [146.8, 220] },
 };
 
-function pad(c: AudioContext, out: AudioNode, start: number, freqs: number[], length: number) {
+/*
+ * Menu theme "Шөнийн дараа": 8 bars in D minor, Dm–B♭–F–A | Dm–B♭–Gm–A, 76 bpm, eighth-note melody.
+ * 0 = rest. The loop resolves from A back to Dm so it repeats seamlessly.
+ */
+const N = { Cs4: 277.18, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392, A4: 440, Bb4: 466.16, C5: 523.25, Cs5: 554.37, D5: 587.33, E5: 659.26, F5: 698.46 };
+const MENU = {
+  bpm: 76,
+  melody: [
+    N.A4, 0, N.D5, 0, N.F5, N.E5, N.D5, 0,
+    N.D5, 0, N.C5, N.Bb4, N.A4, 0, 0, 0,
+    N.F4, 0, N.A4, 0, N.C5, N.Bb4, N.A4, 0,
+    N.E4, 0, N.A4, 0, N.Cs5, 0, 0, 0,
+    N.A4, 0, N.D5, 0, N.F5, N.E5, N.D5, 0,
+    N.F5, 0, N.E5, N.D5, N.C5, 0, N.D5, 0,
+    N.Bb4, 0, N.A4, N.G4, N.A4, 0, N.Bb4, 0,
+    N.A4, 0, N.G4, 0, N.E4, 0, N.Cs4, 0,
+  ],
+  bass: [73.42, 58.27, 87.31, 55, 73.42, 58.27, 98, 55],
+  chords: [
+    [146.83, 174.61, 220], [116.54, 146.83, 174.61], [174.61, 220, 261.63], [110, 138.59, 164.81],
+    [146.83, 174.61, 220], [116.54, 146.83, 174.61], [98, 116.54, 146.83], [110, 138.59, 164.81],
+  ],
+};
+
+function pad(c: AudioContext, out: AudioNode, start: number, freqs: number[], length: number, level = 0.5) {
   for (const freq of freqs) {
     const osc = c.createOscillator();
     const gain = c.createGain();
     osc.type = 'sine';
     osc.frequency.value = freq;
     gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.linearRampToValueAtTime(0.5, start + length * 0.4);
+    gain.gain.linearRampToValueAtTime(level, start + length * 0.4);
     gain.gain.linearRampToValueAtTime(0.0001, start + length);
     osc.connect(gain).connect(out);
     osc.start(start);
@@ -116,27 +141,48 @@ function pad(c: AudioContext, out: AudioNode, start: number, freqs: number[], le
   }
 }
 
-function pluck(c: AudioContext, out: AudioNode, start: number, freq: number, length: number, type: OscillatorType) {
+function pluck(c: AudioContext, out: AudioNode, start: number, freq: number, length: number, type: OscillatorType, level = 0.35) {
   const osc = c.createOscillator();
   const gain = c.createGain();
   osc.type = type;
   osc.frequency.value = freq;
   gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(0.35, start + 0.02);
+  gain.gain.exponentialRampToValueAtTime(level, start + 0.02);
   gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
   osc.connect(gain).connect(out);
   osc.start(start);
   osc.stop(start + length + 0.05);
 }
 
+function scheduleMenu(c: AudioContext, out: AudioNode) {
+  const step = 60 / MENU.bpm / 2;
+  while (nextBeat < c.currentTime + 1.2) {
+    const slot = beat % MENU.melody.length;
+    const bar = Math.floor(slot / 8);
+    const inBar = slot % 8;
+    const loop = Math.floor(beat / MENU.melody.length);
+    if (inBar === 0) pad(c, out, nextBeat, MENU.chords[bar], step * 8.6, 0.32);
+    if (inBar === 0 || inBar === 4) pluck(c, out, nextBeat, MENU.bass[bar], step * 3.5, 'sine', 0.5);
+    const note = MENU.melody[slot];
+    // The first pass is the bare melody; later passes add a soft octave shimmer.
+    if (note) {
+      pluck(c, out, nextBeat, note, step * 2.6, 'triangle', 0.3);
+      if (loop % 2 === 1) pluck(c, out, nextBeat, note * 2, step * 1.6, 'sine', 0.06);
+    }
+    nextBeat += step;
+    beat += 1;
+  }
+}
+
 function schedule() {
   const c = context;
-  if (!c || !master || !theme) return;
-  const cfg = SCALES[theme];
+  if (!c || !master || !playing) return;
+  if (playing === 'menu') { scheduleMenu(c, master); return; }
+  const cfg = SCALES[playing];
   const spb = 60 / cfg.bpm;
   while (nextBeat < c.currentTime + 1.2) {
     if (beat % 8 === 0) pad(c, master, nextBeat, cfg.pad, spb * 8.5);
-    const sparse = theme === 'mafia';
+    const sparse = playing === 'mafia';
     // The night game plays a few long, sparse notes; the board game a gentle walking pattern.
     if (sparse ? beat % 4 === 2 && Math.random() < 0.7 : beat % 2 === 0 || Math.random() < 0.3) {
       const note = cfg.notes[Math.floor(Math.random() * cfg.notes.length)];
@@ -153,15 +199,18 @@ function halt() {
   if (master && context) {
     const old = master;
     old.gain.cancelScheduledValues(context.currentTime);
-    old.gain.setTargetAtTime(0, context.currentTime, 0.2);
-    window.setTimeout(() => old.disconnect(), 900);
+    old.gain.setTargetAtTime(0, context.currentTime, 0.25);
+    window.setTimeout(() => old.disconnect(), 1200);
   }
   master = null;
+  playing = null;
 }
 
+/** Plays a theme. Asking for the theme that is already playing keeps it going, so menus can switch screens freely. */
 export function startMusic(next: MusicTheme) {
   theme = next;
   if (!musicOn) return;
+  if (playing === next && timer !== null) { if (context?.state === 'suspended') void context.resume(); return; }
   try {
     const c = ctx();
     if (!c) return;
@@ -170,14 +219,32 @@ export function startMusic(next: MusicTheme) {
     master.gain.value = 0;
     const filter = c.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.value = 1800;
+    filter.frequency.value = 2200;
+    // A soft echo gives the plucks some room.
+    const delay = c.createDelay(1);
+    const feedback = c.createGain();
+    const wet = c.createGain();
+    delay.delayTime.value = next === 'menu' ? 60 / MENU.bpm * 0.75 : 0.42;
+    feedback.gain.value = 0.28;
+    wet.gain.value = 0.35;
     master.connect(filter).connect(c.destination);
-    master.gain.setTargetAtTime(0.07, c.currentTime, 1.2);
+    master.connect(delay);
+    delay.connect(feedback).connect(delay);
+    delay.connect(wet).connect(filter);
+    master.gain.setTargetAtTime(next === 'menu' ? 0.09 : 0.07, c.currentTime, 1.2);
+    playing = next;
     nextBeat = c.currentTime + 0.1;
     beat = 0;
     timer = window.setInterval(schedule, 250);
     schedule();
   } catch { /* music is best-effort */ }
+}
+
+/** Browsers start audio only after a touch: call on any tap to wake the current theme. */
+export function wakeMusic() {
+  if (!musicOn || !theme) return;
+  if (context?.state === 'suspended') void context.resume();
+  if (playing !== theme || timer === null) startMusic(theme);
 }
 
 export function stopMusic() {
@@ -187,6 +254,7 @@ export function stopMusic() {
 
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { if (context && theme) void context.suspend(); } else if (context && theme) void context.resume();
+    if (!context || !theme) return;
+    if (document.hidden) void context.suspend(); else void context.resume();
   });
 }
