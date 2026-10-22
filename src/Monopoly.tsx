@@ -9,6 +9,7 @@ import {
 } from './monopolyEngine';
 import Avatar from './Avatar';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
+import { playSfx } from './sfx';
 import { callGame, useCountdown, useGame, type RoomSeat } from './multiplayer';
 
 const GROUP_LABEL: Record<ColorGroup, string> = {
@@ -67,6 +68,20 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
     const timer = window.setTimeout(() => { void callGame('tick', { roomCode }).then(reload).catch(() => undefined); }, 300 + Math.random() * 700);
     return () => window.clearTimeout(timer);
   }, [secondsLeft, deadline, roomCode, reload]);
+
+  // Sound cues: dice, buying, my turn, finish.
+  const diceKey = game?.dice ? `${game.dice[0]}-${game.dice[1]}-${game.log.length}` : '';
+  const ownedCount = game ? game.tiles.filter((entry) => entry.owner !== null).length : 0;
+  const turnNow = game ? currentPlayerId(game) : null;
+  const heard = useRef({ dice: diceKey, owned: ownedCount, turn: turnNow, finished: game?.phase === 'finished' });
+  useEffect(() => {
+    const last = heard.current;
+    if (diceKey && diceKey !== last.dice) { playSfx('roll'); window.setTimeout(() => playSfx('step'), 900); }
+    if (ownedCount > last.owned) playSfx('buy');
+    if (turnNow !== last.turn && turnNow === mySeat && game?.phase !== 'finished') playSfx('turn');
+    if (game?.phase === 'finished' && !last.finished) playSfx('win');
+    heard.current = { dice: diceKey, owned: ownedCount, turn: turnNow, finished: game?.phase === 'finished' };
+  }, [diceKey, ownedCount, turnNow, mySeat, game?.phase]);
 
   const ranking = useMemo(() => game ? [...game.players].sort((left, right) => netWorth(game, right.id) - netWorth(game, left.id)) : [], [game]);
 

@@ -17,6 +17,7 @@ import Avatar from './Avatar';
 import { callGame, useRoom, type ListedRoom, type RoomSeat } from './multiplayer';
 import { COMING_SOON, GAMES, type GameCategory, type GameType } from './games';
 import MonopolyScreen from './Monopoly';
+import { setSfxEnabled, sfxEnabled } from './sfx';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { FullscreenToggle, useFullscreen, type FullscreenState } from './fullscreen';
 
@@ -545,9 +546,9 @@ function RoleGallery({ onBack }: { onBack: () => void }) {
 }
 
 function Settings({ onBack, onNotice, onProfile, onAuth, signedIn }: { onBack: () => void; onNotice: (text: string) => void; onProfile: () => void; onAuth: () => void; signedIn: boolean }) {
-  const [sound, setSound] = useState(true);
+  const [sound, setSound] = useState(sfxEnabled());
   const [motion, setMotion] = useState(true);
-  return <div className="inner-screen simple-screen"><TopBar title="ТОХИРГОО" subtitle="ТОХИРГОО" onBack={onBack} /><div className="settings-content">  <div className="settings-intro"><div className="eyebrow left-eye">ӨӨРТӨӨ ТОХИРУУЛ</div><h1>Уур амьсгалаа <i>сонго.</i></h1></div><div className="setting-list"><SettingRow icon={<Radio size={17} />} title="Дууны эффект" detail="Хотын дуу чимээ болон тоглоомын эффект" checked={sound} onToggle={() => setSound((value) => !value)} /><SettingRow icon={<WandSparkles size={17} />} title="Хөдөлгөөнийг багасгах" detail="Шилжилт, хөдөлгөөнт эффектийг хязгаарлах" checked={!motion} onToggle={() => setMotion((value) => !value)} /><button className="setting-row" onClick={() => onNotice('Хэл: Монгол')}><span className="setting-icon"><MessageCircle size={17} /></span><span className="setting-copy"><b>Хэл</b><small>Ширээний хэлээ сонгоно уу</small></span><strong className="language-value">Монгол <ChevronRight size={15} /></strong></button><SettingsLink icon={<UserRound size={17} />} label="Профайл" detail={signedIn ? 'Нэр болон аватар засах' : 'Бүртгэлээ харахын тулд нэвтэрнэ үү'} onClick={onProfile} /><SettingsLink icon={<LockKeyhole size={17} />} label={signedIn ? 'Гарах' : 'Нэвтрэх / бүртгэл үүсгэх'} detail={signedIn ? 'Supabase бүртгэлээс гарах' : 'Бүртгэлийн боломжийг нээх'} onClick={onAuth} /></div><span className="settings-version">MAFIA: SHADOWS <i>•</i> ХУВИЛБАР 0.1.0</span></div></div>;
+  return <div className="inner-screen simple-screen"><TopBar title="ТОХИРГОО" subtitle="ТОХИРГОО" onBack={onBack} /><div className="settings-content">  <div className="settings-intro"><div className="eyebrow left-eye">ӨӨРТӨӨ ТОХИРУУЛ</div><h1>Уур амьсгалаа <i>сонго.</i></h1></div><div className="setting-list"><SettingRow icon={<Radio size={17} />} title="Дууны эффект" detail="Хотын дуу чимээ болон тоглоомын эффект" checked={sound} onToggle={() => { setSfxEnabled(!sound); setSound(!sound); }} /><SettingRow icon={<WandSparkles size={17} />} title="Хөдөлгөөнийг багасгах" detail="Шилжилт, хөдөлгөөнт эффектийг хязгаарлах" checked={!motion} onToggle={() => setMotion((value) => !value)} /><button className="setting-row" onClick={() => onNotice('Хэл: Монгол')}><span className="setting-icon"><MessageCircle size={17} /></span><span className="setting-copy"><b>Хэл</b><small>Ширээний хэлээ сонгоно уу</small></span><strong className="language-value">Монгол <ChevronRight size={15} /></strong></button><SettingsLink icon={<UserRound size={17} />} label="Профайл" detail={signedIn ? 'Нэр болон аватар засах' : 'Бүртгэлээ харахын тулд нэвтэрнэ үү'} onClick={onProfile} /><SettingsLink icon={<LockKeyhole size={17} />} label={signedIn ? 'Гарах' : 'Нэвтрэх / бүртгэл үүсгэх'} detail={signedIn ? 'Supabase бүртгэлээс гарах' : 'Бүртгэлийн боломжийг нээх'} onClick={onAuth} /></div><span className="settings-version">MAFIA: SHADOWS <i>•</i> ХУВИЛБАР 0.1.0</span></div></div>;
 }
 
 function SettingsLink({ icon, label, detail, onClick }: { icon: ReactNode; label: string; detail: string; onClick: () => void }) {

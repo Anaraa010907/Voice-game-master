@@ -11,6 +11,7 @@ import { i18n, translateMessage, translatePhase, translateRole, translateTeam } 
 import { VoiceAvatarIndicator, VoiceChatProvider, type VoicePhase } from './VoiceChat';
 import { FullscreenToggle, type FullscreenState } from './fullscreen';
 import { callGame, useCountdown, useGame, type RoomSeat } from './multiplayer';
+import { playSfx } from './sfx';
 import GhostVoice from './GhostVoice';
 import Avatar from './Avatar';
 
@@ -57,6 +58,23 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
   const [busy, setBusy] = useState(false);
   const tickedFor = useRef<number | null>(null);
   const stage = game ? `${game.phase}-${game.round}-${game.votesRevealed}-${game.runoffCandidates?.join() ?? ''}` : '';
+
+  // Sound cues for phase changes and my own death.
+  const heardPhase = useRef<string | null>(null);
+  const iAmAlive = game?.players.find((player) => player.id === me?.seat)?.alive ?? true;
+  const heardAlive = useRef(iAmAlive);
+  useEffect(() => {
+    const phase = game?.phase ?? null;
+    if (phase && heardPhase.current !== null && heardPhase.current !== phase) {
+      if (phase === 'Night') playSfx('night');
+      else if (phase === 'Morning') playSfx('morning');
+      else if (phase === 'Voting') playSfx('vote');
+      else if (phase === 'Results') playSfx('win');
+    }
+    heardPhase.current = phase;
+    if (heardAlive.current && !iAmAlive) playSfx('death');
+    heardAlive.current = iAmAlive;
+  }, [game?.phase, iAmAlive]);
 
   // Fresh selections for every new phase.
   useEffect(() => {
