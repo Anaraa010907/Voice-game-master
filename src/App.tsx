@@ -504,7 +504,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
 }
 
 function SeatCard({ seat, isHost, isMe }: { seat: RoomSeat; isHost: boolean; isMe: boolean }) {
-  return <div className={`player-card compact-card ${seat.ready || isHost ? 'player-ready' : ''}`}><Avatar name={seat.display_name} color={seat.color} url={seat.avatar_url}>{isHost && <i title="Өрөөний эзэн"><Crown size={11} /></i>}<VoiceAvatarIndicator name={seat.display_name} /></Avatar><div className="player-name">{seat.display_name}{isMe && <small>ЧИ</small>}</div><div className={`player-status ${seat.ready || isHost ? 'online' : ''}`}>{isHost ? 'ЭЗЭН' : seat.ready ? 'БЭЛЭН' : 'ХҮЛЭЭЖ БАЙНА'}</div></div>;
+  return <div className={`player-card compact-card ${seat.ready || isHost ? 'player-ready' : ''}`}><Avatar name={seat.display_name} color={seat.color} url={seat.avatar_url}>{isHost && <i title="Өрөөний эзэн"><Crown size={11} /></i>}<VoiceAvatarIndicator name={seat.display_name} identity={seat.user_id} /></Avatar><div className="player-name">{seat.display_name}{isMe && <small>ЧИ</small>}</div><div className={`player-status ${seat.ready || isHost ? 'online' : ''}`}>{isHost ? 'ЭЗЭН' : seat.ready ? 'БЭЛЭН' : 'ХҮЛЭЭЖ БАЙНА'}</div></div>;
 }
 
 function TopBar({ title, subtitle, onBack, trailing }: { title: string; subtitle: string; onBack: () => void; trailing?: ReactNode }) {

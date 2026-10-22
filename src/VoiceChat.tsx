@@ -15,6 +15,7 @@ type VoiceContextValue = {
   speakerOn: boolean;
   speakingNames: string[];
   participants: VoiceParticipant[];
+  seatIdentities: Map<number, string>;
   error: string;
   joinVoice: () => Promise<void>;
   leaveVoice: () => Promise<void>;
@@ -42,8 +43,10 @@ const participantWasMuted = (metadata?: string) => {
   }
 };
 
-export function VoiceChatProvider({ roomCode, userId, phase, alive, isHost, children }: {
+export function VoiceChatProvider({ roomCode, userId, phase, alive, isHost, seats, children }: {
   roomCode: string;
+  /** Seat number → account id, so avatars match voice participants by account rather than by (possibly shared) name. */
+  seats?: Array<{ seat: number; user_id: string }>;
   userId: string | null;
   phase: VoicePhase;
   alive: boolean;
@@ -166,7 +169,11 @@ export function VoiceChatProvider({ roomCode, userId, phase, alive, isHost, chil
           updateParticipants(room);
         })
         .on(RoomEvent.TrackMuted, () => updateParticipants(room))
-        .on(RoomEvent.TrackUnmuted, () => updateParticipants(room));
+        .on(RoomEvent.TrackUnmuted, () => updateParticipants(room))
+        .on(RoomEvent.TrackPublished, () => updateParticipants(room))
+        .on(RoomEvent.TrackUnpublished, () => updateParticipants(room))
+        .on(RoomEvent.LocalTrackPublished, () => updateParticipants(room))
+        .on(RoomEvent.LocalTrackUnpublished, () => updateParticipants(room));
 
       await room.connect(credentials.serverUrl, credentials.token);
       if (lifecycle !== lifecycleRef.current) {
@@ -231,6 +238,7 @@ export function VoiceChatProvider({ roomCode, userId, phase, alive, isHost, chil
       const room = roomRef.current;
       if (room) await room.localParticipant.setMicrophoneEnabled(false);
       setMicrophoneOn(false);
+      if (room) updateParticipants(room);
       return;
     }
     try {
@@ -327,10 +335,12 @@ export function VoiceChatProvider({ roomCode, userId, phase, alive, isHost, chil
     if (room) void room.disconnect(true);
   }, []);
 
+  const seatKey = (seats ?? []).map((entry) => `${entry.seat}:${entry.user_id}`).join(',');
+  const seatIdentities = useMemo(() => new Map((seats ?? []).map((entry) => [entry.seat, entry.user_id])), [seatKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const value = useMemo(() => ({
-    connection, microphoneOn, speakerOn, speakingNames, participants, error,
+    connection, microphoneOn, speakerOn, speakingNames, participants, error, seatIdentities,
     joinVoice, leaveVoice, toggleMicrophone, toggleSpeaker, muteParticipant,
-  }), [connection, microphoneOn, speakerOn, speakingNames, participants, error, joinVoice, leaveVoice, toggleMicrophone, toggleSpeaker, muteParticipant]);
+  }), [connection, microphoneOn, speakerOn, speakingNames, participants, error, seatIdentities, joinVoice, leaveVoice, toggleMicrophone, toggleSpeaker, muteParticipant]);
 
   return <VoiceContext.Provider value={value}>
     <div className="voice-scope">
@@ -344,9 +354,12 @@ export function useVoiceChat() {
   return useContext(VoiceContext);
 }
 
-export function VoiceAvatarIndicator({ name }: { name: string }) {
+/** Mic state on an avatar. Matched by account id (directly or via seat); a bare name is used only when it is unambiguous. */
+export function VoiceAvatarIndicator({ name, identity, seat }: { name: string; identity?: string; seat?: number }) {
   const voice = useVoiceChat();
-  const participant = voice?.participants.find((entry) => entry.name === name);
+  const id = identity ?? (seat !== undefined ? voice?.seatIdentities.get(seat) : undefined);
+  const byName = voice?.participants.filter((entry) => entry.name === name) ?? [];
+  const participant = id ? voice?.participants.find((entry) => entry.identity === id) : byName.length === 1 ? byName[0] : undefined;
   if (!participant) return null;
   const Icon = participant.speaking ? Mic : participant.microphoneOn ? Mic : MicOff;
   return <span className={`voice-avatar-indicator ${participant.speaking ? 'is-speaking' : participant.microphoneOn ? 'is-mic-on' : 'is-muted'}`}

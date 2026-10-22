@@ -93,7 +93,7 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
   const landingTile = BOARD[current.position];
   const detail = selected === null ? null : BOARD[selected];
 
-  return <VoiceChatProvider roomCode={roomCode} userId={userId} phase={game.phase === 'finished' ? 'results' : 'discussion'} alive isHost={isHost}>
+  return <VoiceChatProvider roomCode={roomCode} userId={userId} seats={seats} phase={game.phase === 'finished' ? 'results' : 'discussion'} alive isHost={isHost}>
     <div className="mono">
       <section className="mono-board" aria-label="Монгол Монополь самбар">
         {BOARD.map((tile) => {
@@ -160,7 +160,7 @@ function Die({ value }: { value: number }) {
 function PlayerRow({ entry, game, isTurn, isMe }: { entry: MonopolyPlayer; game: MonopolyState; isTurn: boolean; isMe: boolean }) {
   const owned = game.tiles.filter((tileState) => tileState.owner === entry.id).length;
   return <div className={`mono-player ${isTurn ? 'is-turn' : ''} ${entry.bankrupt ? 'is-bankrupt' : ''}`}>
-    <Avatar name={entry.name} color={entry.color} url={entry.avatarUrl} initials={entry.initials}>{entry.host && <i><Crown size={9} /></i>}<VoiceAvatarIndicator name={entry.name} /></Avatar>
+    <Avatar name={entry.name} color={entry.color} url={entry.avatarUrl} initials={entry.initials}>{entry.host && <i><Crown size={9} /></i>}<VoiceAvatarIndicator name={entry.name} seat={entry.id} /></Avatar>
     <span className="mono-player-copy"><b>{entry.name}{isMe && <small>ЧИ</small>}</b><span>{entry.bankrupt ? 'ДАМПУУРСАН' : entry.inJail ? `ШОРОНД · ${owned} газар` : `${owned} газар`}</span></span>
     <span className="mono-player-money">{entry.bankrupt ? '—' : money(entry.money)}</span>
   </div>;
