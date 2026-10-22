@@ -76,3 +76,117 @@ export function playSfx(name: Sfx) {
     }
   } catch { /* audio is best-effort */ }
 }
+
+/* ---------- Background music: a quiet generative loop per game ---------- */
+
+export type MusicTheme = 'mafia' | 'monopoly';
+const MUSIC_KEY = 'night-table:music';
+let musicOn = (() => { try { return localStorage.getItem(MUSIC_KEY) !== 'off'; } catch { return true; } })();
+let theme: MusicTheme | null = null;
+let timer: number | null = null;
+let master: GainNode | null = null;
+let nextBeat = 0;
+let beat = 0;
+
+export const musicEnabled = () => musicOn;
+export function setMusicEnabled(value: boolean) {
+  musicOn = value;
+  try { localStorage.setItem(MUSIC_KEY, value ? 'on' : 'off'); } catch { /* storage may be unavailable */ }
+  if (value && theme) startMusic(theme); else halt();
+}
+
+// Frequencies: A minor pentatonic for the night game, D major pentatonic (a steppe-song feel) for the board game.
+const SCALES: Record<MusicTheme, { root: number; notes: number[]; bpm: number; pad: number[] }> = {
+  mafia: { root: 55, notes: [220, 261.6, 293.7, 329.6, 392, 440, 523.3], bpm: 62, pad: [110, 164.8] },
+  monopoly: { root: 73.4, notes: [293.7, 329.6, 370, 440, 493.9, 587.3, 740], bpm: 84, pad: [146.8, 220] },
+};
+
+function pad(c: AudioContext, out: AudioNode, start: number, freqs: number[], length: number) {
+  for (const freq of freqs) {
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.linearRampToValueAtTime(0.5, start + length * 0.4);
+    gain.gain.linearRampToValueAtTime(0.0001, start + length);
+    osc.connect(gain).connect(out);
+    osc.start(start);
+    osc.stop(start + length + 0.05);
+  }
+}
+
+function pluck(c: AudioContext, out: AudioNode, start: number, freq: number, length: number, type: OscillatorType) {
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(0.35, start + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
+  osc.connect(gain).connect(out);
+  osc.start(start);
+  osc.stop(start + length + 0.05);
+}
+
+function schedule() {
+  const c = context;
+  if (!c || !master || !theme) return;
+  const cfg = SCALES[theme];
+  const spb = 60 / cfg.bpm;
+  while (nextBeat < c.currentTime + 1.2) {
+    if (beat % 8 === 0) pad(c, master, nextBeat, cfg.pad, spb * 8.5);
+    const sparse = theme === 'mafia';
+    // The night game plays a few long, sparse notes; the board game a gentle walking pattern.
+    if (sparse ? beat % 4 === 2 && Math.random() < 0.7 : beat % 2 === 0 || Math.random() < 0.3) {
+      const note = cfg.notes[Math.floor(Math.random() * cfg.notes.length)];
+      pluck(c, master, nextBeat, note, sparse ? spb * 3.2 : spb * 1.6, sparse ? 'sine' : 'triangle');
+    }
+    if (beat % 4 === 0) pluck(c, master, nextBeat, cfg.root, spb * 2.5, 'sine');
+    nextBeat += spb;
+    beat += 1;
+  }
+}
+
+function halt() {
+  if (timer !== null) { window.clearInterval(timer); timer = null; }
+  if (master && context) {
+    const old = master;
+    old.gain.cancelScheduledValues(context.currentTime);
+    old.gain.setTargetAtTime(0, context.currentTime, 0.2);
+    window.setTimeout(() => old.disconnect(), 900);
+  }
+  master = null;
+}
+
+export function startMusic(next: MusicTheme) {
+  theme = next;
+  if (!musicOn) return;
+  try {
+    const c = ctx();
+    if (!c) return;
+    halt();
+    master = c.createGain();
+    master.gain.value = 0;
+    const filter = c.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1800;
+    master.connect(filter).connect(c.destination);
+    master.gain.setTargetAtTime(0.07, c.currentTime, 1.2);
+    nextBeat = c.currentTime + 0.1;
+    beat = 0;
+    timer = window.setInterval(schedule, 250);
+    schedule();
+  } catch { /* music is best-effort */ }
+}
+
+export function stopMusic() {
+  theme = null;
+  halt();
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { if (context && theme) void context.suspend(); } else if (context && theme) void context.resume();
+  });
+}

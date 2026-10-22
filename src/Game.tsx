@@ -11,7 +11,7 @@ import { i18n, translateMessage, translatePhase, translateRole, translateTeam } 
 import { VoiceAvatarIndicator, VoiceChatProvider, type VoicePhase } from './VoiceChat';
 import { FullscreenToggle, type FullscreenState } from './fullscreen';
 import { callGame, useCountdown, useGame, type RoomSeat } from './multiplayer';
-import { playSfx } from './sfx';
+import { playSfx, startMusic, stopMusic } from './sfx';
 import GhostVoice from './GhostVoice';
 import Avatar from './Avatar';
 
@@ -58,6 +58,13 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
   const [busy, setBusy] = useState(false);
   const tickedFor = useRef<number | null>(null);
   const stage = game ? `${game.phase}-${game.round}-${game.votesRevealed}-${game.runoffCandidates?.join() ?? ''}` : '';
+
+  useEffect(() => {
+    startMusic('mafia');
+    const unlock = () => startMusic('mafia');
+    window.addEventListener('pointerdown', unlock, { once: true });
+    return () => { window.removeEventListener('pointerdown', unlock); stopMusic(); };
+  }, []);
 
   // Sound cues for phase changes and my own death.
   const heardPhase = useRef<string | null>(null);
