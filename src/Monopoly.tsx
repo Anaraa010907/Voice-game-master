@@ -118,9 +118,14 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
         <div className="mono-center">
           {detail ? <TileDetail tile={detail} game={game} me={me} myTurn={myTurn} busy={busy} onClose={() => setSelected(null)} onAction={(move) => void send(move, detail.id)} /> : <>
             <div className="mono-brand"><b>МОНГОЛ</b><span>МОНОПОЛЬ</span></div>
-            <div className="mono-dice" aria-label={game.dice ? `${game.dice[0]} ба ${game.dice[1]}` : 'Шоо'}>
-              {(game.dice ?? [0, 0]).map((value, index) => <Die key={index} value={value} />)}
+            <div className="mono-dice-tray" aria-label={game.dice ? `${game.dice[0]} ба ${game.dice[1]}` : 'Шоо'}>
+              <div className="mono-dice">
+                {(game.dice ?? [0, 0]).map((value, index) => <Die key={`${game.log.length}-${index}-${value}`} value={value} index={index} />)}
+              </div>
+              {game.dice && <span className="mono-dice-total">{game.dice[0] + game.dice[1]}</span>}
             </div>
+            {myTurn && game.phase === 'roll' && <button type="button" className="mono-roll-button" disabled={busy} onClick={() => void send('roll')}><Dices size={16} /> {me!.inJail ? 'ХОС ХАЯЖ ГАРАХ' : 'ШОО ХАЯХ'}</button>}
+            {!myTurn && game.phase !== 'finished' && <p className="mono-center-turn"><b>{current.name}</b> {game.phase === 'roll' ? 'шоо хаяна' : 'ээлжээ үргэлжлүүлж байна'}</p>}
             {game.card && <div className="mono-card"><b>{game.card.title}</b><span>{game.card.text}</span></div>}
             <div className="mono-log">{game.log.slice(-3).map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}</div>
           </>}
@@ -152,9 +157,9 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
   </VoiceChatProvider>;
 }
 
-function Die({ value }: { value: number }) {
+function Die({ value, index }: { value: number; index: number }) {
   const pips: Record<number, number[]> = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
-  return <span className={`mono-die ${value ? '' : 'is-empty'}`}>{Array.from({ length: 9 }, (_, index) => <i key={index} className={(pips[value] ?? []).includes(index + 1) ? 'on' : ''} />)}</span>;
+  return <span className={`mono-die ${value ? 'is-rolled' : 'is-empty'} die-${index}`}>{Array.from({ length: 9 }, (_, cell) => <i key={cell} className={(pips[value] ?? []).includes(cell + 1) ? 'on' : ''} />)}</span>;
 }
 
 function PlayerRow({ entry, game, isTurn, isMe }: { entry: MonopolyPlayer; game: MonopolyState; isTurn: boolean; isMe: boolean }) {
