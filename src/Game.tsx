@@ -11,7 +11,7 @@ import type { PrivateGameView, PublicGamePlayer, PublicGameView, VoteChoice } fr
 import { i18n, translateMessage, translatePhase, translateRole, translateTeam } from './i18n';
 import { VoiceAvatarIndicator, VoiceChatProvider, type VoicePhase } from './VoiceChat';
 import { FullscreenToggle, type FullscreenState } from './fullscreen';
-import { callGame, useCountdown, useGame, type RoomSeat } from './multiplayer';
+import { callGame, useCountdown, useGame, type NotifyFn, type RoomSeat } from './multiplayer';
 import { playSfx, startMusic } from './sfx';
 import GhostVoice from './GhostVoice';
 import Avatar from './Avatar';
@@ -46,7 +46,7 @@ function GamePlayerCard({ player, isCurrent, selected, selectable, voteCount, vo
 
 export default function GameScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice, fullscreen }: {
   roomCode: string; roomName: string; userId: string; isHost: boolean; seats: RoomSeat[];
-  onLeave: () => void; onRematch: () => void; onNotice: (message: string) => void; fullscreen: FullscreenState;
+  onLeave: () => void; onRematch: () => void; onNotice: NotifyFn; fullscreen: FullscreenState;
 }) {
   const { publicView: game, privateView: me, deadline, reload } = useGame(roomCode, userId);
   const secondsLeft = useCountdown(deadline);
@@ -132,7 +132,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
       await reload();
       return true;
     } catch (cause) {
-      onNotice(cause instanceof Error ? cause.message : 'Алдаа гарлаа.');
+      onNotice(cause instanceof Error ? cause.message : 'Алдаа гарлаа.', 'error');
       return false;
     } finally {
       setBusy(false);

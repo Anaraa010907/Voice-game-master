@@ -87,6 +87,17 @@ function text(body: Body, key: string, max: number, required = true) {
   return trimmed;
 }
 
+/** Two players called "Бат" at one table become "Бат" and "Бат 2", so votes and voice labels stay clear. */
+function uniqueName(name: string, taken: string[]) {
+  const used = new Set(taken.map((entry) => entry.trim().toLowerCase()));
+  if (!used.has(name.trim().toLowerCase())) return name;
+  for (let index = 2; index < 20; index += 1) {
+    const candidate = `${name.slice(0, 21)} ${index}`;
+    if (!used.has(candidate.toLowerCase())) return candidate;
+  }
+  return name;
+}
+
 function code(body: Body) {
   const value = text(body, 'roomCode', 32).toUpperCase();
   if (!/^[A-Z0-9-]{4,32}$/.test(value)) throw new GameError(400, 'Өрөөний код буруу байна.');
@@ -160,7 +171,9 @@ class GameServer {
   }
 
   async profile() {
-    const { data } = await this.admin.from('profiles').select('display_name,avatar_key,avatar_url').eq('id', this.userId).maybeSingle();
+    const { data, error } = await this.admin.from('profiles').select('display_name,avatar_key,avatar_url').eq('id', this.userId).maybeSingle();
+    // Seating still works without a profile, but say so loudly: a missing grant once made everyone "Тоглогч".
+    if (error) console.error('profile read failed', error);
     return { url: (data?.avatar_url as string | null | undefined) ?? null, name: (data?.display_name as string | undefined)?.slice(0, 24) || 'Тоглогч', color: COLORS.includes(data?.avatar_key as string) ? data!.avatar_key as string : 'rose' };
   }
 
@@ -229,7 +242,7 @@ class GameServer {
     const taken = new Set(seats.map((seat) => seat.seat));
     const free = Array.from({ length: room.max_players }, (_, index) => index + 1).find((seat) => !taken.has(seat));
     if (!free) throw new GameError(409, 'Энэ өрөө дүүрсэн байна.');
-    const seat: Seat = { user_id: this.userId, seat: free, display_name: me.name, color: me.color, ready: false, avatar_url: me.url };
+    const seat: Seat = { user_id: this.userId, seat: free, display_name: uniqueName(me.name, seats.map((other) => other.display_name)), color: me.color, ready: false, avatar_url: me.url };
     const { error } = await this.admin.from('game_room_players').insert({ room_code: roomCodeValue, ...seat });
     if (error?.code === '23505') throw new GameError(409, 'Суудал дөнгөж сая дүүрлээ. Дахин оролдоно уу.');
     if (error) throw error;
@@ -268,7 +281,8 @@ class GameServer {
       const { data: stored } = await this.admin.from('game_states').select('engine').eq('room_code', roomCodeValue).maybeSingle();
       const game = stored?.engine as AnyGame | null;
       if (game && !isFinished(game)) await this.recordOutcome(this.userId, 'loss', game.matchId);
-      await this.mutate(roomCodeValue, (state) => isBoard(state) ? removeMonopolyPlayer(state, mine.seat) : removePlayer(state, mine.seat));
+      // If the leaver was the last one the phase was waiting on, the game moves on right away.
+      await this.mutate(roomCodeValue, (state) => isBoard(state) ? removeMonopolyPlayer(state, mine.seat) : progress(removePlayer(state, mine.seat)));
     }
     await Promise.all([
       this.admin.from('game_room_players').delete().eq('room_code', roomCodeValue).eq('user_id', this.userId),

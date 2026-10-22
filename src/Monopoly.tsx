@@ -10,7 +10,7 @@ import {
 import Avatar from './Avatar';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { playSfx, startMusic } from './sfx';
-import { callGame, useCountdown, useGame, type RoomSeat } from './multiplayer';
+import { callGame, useCountdown, useGame, type NotifyFn, type RoomSeat } from './multiplayer';
 
 const GROUP_LABEL: Record<ColorGroup, string> = {
   brown: 'Говь', sky: 'Хойд нутаг', pink: 'Баруун нутаг', orange: 'Хангай',
@@ -50,7 +50,7 @@ const money = (value: number) => `${value.toLocaleString('en-US')}₮`;
 
 export default function MonopolyScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice }: {
   roomCode: string; roomName: string; userId: string; isHost: boolean; seats: RoomSeat[];
-  onLeave: () => void; onRematch: () => void; onNotice: (message: string) => void;
+  onLeave: () => void; onRematch: () => void; onNotice: NotifyFn;
 }) {
   const { publicView, deadline, reload } = useGame(roomCode, userId);
   const game = publicView as unknown as MonopolyState | null;
@@ -104,7 +104,7 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
       await callGame('board', { roomCode, move, ...(tile === undefined ? {} : { tile }) });
       await reload();
     } catch (cause) {
-      onNotice(cause instanceof Error ? cause.message : 'Алдаа гарлаа.');
+      onNotice(cause instanceof Error ? cause.message : 'Алдаа гарлаа.', 'error');
     } finally {
       setBusy(false);
     }

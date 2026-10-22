@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { boardBotToMove, mafiaBotsAct, monopolyBotStep, nextBotName } from '../supabase/functions/_shared/bots.ts';
 import {
-  allNightActionsSubmitted, allVotesSubmitted, createInitialGame, finishDay, openDiscussion, resolveNight,
-  resolveVoting, startNight, startVoting, type GameEngineState,
+  allNightActionsSubmitted, allVotesSubmitted, createInitialGame, finishDay, openDiscussion, recordVote, removePlayer,
+  resolveNight, resolveVoting, startNight, startVoting, type GameEngineState,
 } from '../supabase/functions/_shared/gameEngine.ts';
 import { autoPlay, createMonopolyGame, currentPlayerId } from '../supabase/functions/_shared/monopolyEngine.ts';
 
@@ -91,6 +91,15 @@ for (const seed of [5, 11, 2024]) {
   const moved = autoPlay(frozen, seeded(8));
   assert.notEqual(currentPlayerId(moved), stuckId, 'The turn leaves the bankrupt player.');
   assert.equal(moved.phase, 'roll', 'The next player rolls.');
+}
+
+// A player who leaves while everyone else has voted no longer holds the ballot open.
+{
+  const people = Array.from({ length: 6 }, (_, index) => ({ id: index + 1, name: `P${index + 1}`, initials: `P${index + 1}`, color: 'rose' }));
+  let state = startVoting(openDiscussion(createInitialGame(people, { 1: 'Mafia', 2: 'Doctor', 3: 'Detective', 4: 'Citizen', 5: 'Citizen', 6: 'Citizen' }, seeded(4))));
+  for (const voter of [1, 2, 3, 4, 5]) state = recordVote(state, voter, 'skip').state;
+  assert.equal(allVotesSubmitted(state), false, 'Player 6 has not voted yet.');
+  assert.equal(allVotesSubmitted(removePlayer(state, 6)), true, 'Once player 6 leaves, the ballot is complete.');
 }
 
 console.log('bot checks passed');

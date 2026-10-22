@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode, type CSSProperties } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
-  ArrowLeft, Bot, Check, ChevronRight, X, Clipboard, Crown, LockKeyhole, MessageCircle, Moon,
+  ArrowLeft, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, LockKeyhole, MessageCircle, Moon,
   Radio, RefreshCw, Settings as SettingsIcon, Shield, Skull, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles } from './gameData';
@@ -14,7 +14,7 @@ import { supabase, supabaseConfigured, type PublicProfile } from './supabaseClie
 import { i18n, translateMessage } from './i18n';
 import { removeProfilePhoto, uploadProfilePhoto } from './avatarUpload';
 import Avatar from './Avatar';
-import { callGame, useRoom, type ListedRoom, type RoomSeat } from './multiplayer';
+import { callGame, useRoom, type ListedRoom, type NoticeTone, type NotifyFn, type RoomSeat } from './multiplayer';
 import { COMING_SOON, GAMES, type GameCategory, type GameType } from './games';
 import MonopolyScreen from './Monopoly';
 import { musicEnabled, setMusicEnabled, setSfxEnabled, sfxEnabled, startMusic, wakeMusic } from './sfx';
@@ -48,7 +48,9 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [gameType, setGameType] = useState<GameType>('mafia');
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState<{ text: string; tone: NoticeTone } | null>(null);
+  const noticeTimer = useRef<number | null>(null);
+  const [namePromptDismissed, setNamePromptDismissed] = useState(false);
   const fullscreen = useFullscreen();
 
   // The menu theme starts on the main menu and keeps playing across menus and lobbies; games swap in their own music.
@@ -89,9 +91,11 @@ export default function App() {
     return () => { active = false; subscription.unsubscribe(); };
   }, []);
 
-  const notify = (text: string) => {
-    setNotice(text);
-    window.setTimeout(() => setNotice(''), 2600);
+  const notify: NotifyFn = (text, tone = 'info') => {
+    setNotice({ text, tone });
+    // A newer message restarts the clock; errors stay up a little longer.
+    if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(null), tone === 'error' ? 4200 : 2600);
   };
 
   useEffect(() => {
@@ -108,14 +112,14 @@ export default function App() {
       const accessToken = fragment.get('access_token');
       const refreshToken = fragment.get('refresh_token');
       const errorDescription = callbackUrl.searchParams.get('error_description') ?? fragment.get('error_description');
-      if (errorDescription) { notify(errorDescription); return; }
+      if (errorDescription) { notify(errorDescription, 'error'); return; }
 
       const result = code
         ? await client.auth.exchangeCodeForSession(code)
         : accessToken && refreshToken
           ? await client.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
           : null;
-      if (result?.error) notify(i18n.auth.invalidCredentials);
+      if (result?.error) notify(i18n.auth.invalidCredentials, 'error');
       if (callbackUrl.searchParams.get('type') === 'recovery' || fragment.get('type') === 'recovery') {
         setAuthView('reset-password');
         setScreen('auth');
@@ -160,7 +164,7 @@ export default function App() {
   const createRoom = async (room: RoomSettings) => {
     const result = await callGame<{ roomCode: string }>('create', room);
     enterRoom(result.roomCode);
-    notify(`${i18n.app.roomReady} ${result.roomCode}`);
+    notify(`${i18n.app.roomReady} ${result.roomCode}`, 'success');
   };
 
   const joinRoom = async (codeInput: string, passwordInput: string) => {
@@ -177,7 +181,7 @@ export default function App() {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
-      notify(`${i18n.app.roomCode}: ${roomCode}`);
+      notify(`${i18n.app.roomCode}: ${roomCode}`, 'success');
     }
   };
 
@@ -239,7 +243,9 @@ export default function App() {
         {screen === 'profile' && <ProfileScreen profile={profile} loading={accountLoading} loadError={profileError} onBack={goBack} onSignIn={() => openAuth('sign-in')} onSignOut={() => openAuth('sign-out')} onSave={saveProfile} onPhoto={saveProfilePhoto} />}
         {screen === 'auth' && <Auth key={authView} initialView={authView} onBack={goBack} onAuthenticated={() => setScreen('profile')} onSignedOut={() => { setUserId(null); setProfile(null); setScreen('menu'); }} />}
         {screen === 'settings' && <Settings onBack={goBack} onNotice={notify} onProfile={() => setScreen('profile')} onAuth={() => openAuth(userId ? 'sign-out' : 'sign-in')} signedIn={Boolean(userId)} />}
-        {notice && <div className="toast" role="status"><Check size={14} />{notice}</div>}
+        {userId && profile && needsName(profile.display_name) && !namePromptDismissed && screen !== 'auth' && screen !== 'profile'
+          && <NameSetup current={profile.display_name} onSave={(name) => saveProfile(name, profile.avatar_key)} onLater={() => setNamePromptDismissed(true)} onDone={() => notify('Нэр хадгалагдлаа.', 'success')} />}
+        {notice && <div className={`toast is-${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}>{notice.tone === 'error' ? <CircleAlert size={14} /> : notice.tone === 'success' ? <Check size={14} /> : <Info size={14} />}{notice.text}</div>}
       </section>
       <div className="rotate-overlay" aria-live="polite">
         <div className="rotate-phone"><span /></div>
@@ -433,7 +439,7 @@ function RoomBrowser({ gameType, onBack, onCreate, onJoinCode, onEnter }: { game
 
 /** Lobby while the room waits; switches to the live game once the host starts. */
 function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullscreen }: {
-  roomCode: string; userId: string; copied: boolean; onCopy: () => void; onLeft: () => void; onNotice: (text: string) => void; fullscreen: FullscreenState;
+  roomCode: string; userId: string; copied: boolean; onCopy: () => void; onLeft: () => void; onNotice: NotifyFn; fullscreen: FullscreenState;
 }) {
   const { room, seats, loaded, missing, error, reload } = useRoom(roomCode);
   const [busy, setBusy] = useState(false);
@@ -453,7 +459,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
       await callGame(action, { roomCode, ...body });
       await reload();
     } catch (cause) {
-      onNotice(cause instanceof Error ? cause.message : 'Алдаа гарлаа.');
+      onNotice(cause instanceof Error ? cause.message : 'Алдаа гарлаа.', 'error');
     } finally {
       setBusy(false);
     }
@@ -525,6 +531,34 @@ function SeatCard({ seat, isHost, isMe, onRemoveBot, busy }: { seat: RoomSeat; i
   </div>;
 }
 
+/** Accounts created without a name get the placeholder "Player" (see the sign-up trigger). */
+const needsName = (name: string) => name.trim() === '' || name.trim().toLowerCase() === 'player';
+
+/** Asks once for the name other players will see at the table. */
+function NameSetup({ current, onSave, onLater, onDone }: { current: string; onSave: (name: string) => Promise<string>; onLater: () => void; onDone: () => void }) {
+  const [name, setName] = useState(needsName(current) ? '' : current);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const clean = name.trim();
+    if (clean.length < 2 || clean.length > 24) { setError('Нэр 2–24 тэмдэгт байна.'); return; }
+    if (needsName(clean)) { setError('Өөр нэр сонгоно уу.'); return; }
+    setSaving(true);
+    const failure = await onSave(clean);
+    setSaving(false);
+    if (failure) setError(failure); else onDone();
+  };
+  return <div className="game-modal-backdrop name-setup-backdrop"><form className="game-modal name-setup" onSubmit={(event) => void submit(event)} aria-labelledby="name-setup-title">
+    <div className="modal-symbol"><UserRound size={18} /></div>
+    <h2 id="name-setup-title">Таныг хэн гэж дуудах вэ?</h2>
+    <p>Бусад тоглогчид ширээн дээр энэ нэрийг харна. Дараа нь профайлаасаа сольж болно.</p>
+    <input className="name-setup-input" value={name} onChange={(event) => { setName(event.target.value); setError(''); }} placeholder="Жишээ нь: Бат" maxLength={24} autoFocus aria-label="Нэр" />
+    {error && <p className="form-error" role="alert">{error}</p>}
+    <div className="modal-actions"><button type="button" className="secondary-button" onClick={onLater}>ДАРАА</button><button type="submit" className="primary-button" disabled={saving}>{saving ? 'ХАДГАЛЖ БАЙНА…' : 'ХАДГАЛАХ'} <Check size={14} /></button></div>
+  </form></div>;
+}
+
 function TopBar({ title, subtitle, onBack, trailing }: { title: string; subtitle: string; onBack: () => void; trailing?: ReactNode }) {
   return <header className="top-bar"><button className="icon-button back-button" onClick={onBack} aria-label="Цэс рүү буцах"><ArrowLeft size={17} /></button><div className="top-title"><span>{subtitle}</span><strong>{title}</strong></div><Brand compact /><div className="top-trailing">{trailing}</div></header>;
 }
@@ -562,7 +596,7 @@ function RoleGallery({ onBack }: { onBack: () => void }) {
   </div>;
 }
 
-function Settings({ onBack, onNotice, onProfile, onAuth, signedIn }: { onBack: () => void; onNotice: (text: string) => void; onProfile: () => void; onAuth: () => void; signedIn: boolean }) {
+function Settings({ onBack, onNotice, onProfile, onAuth, signedIn }: { onBack: () => void; onNotice: NotifyFn; onProfile: () => void; onAuth: () => void; signedIn: boolean }) {
   const [sound, setSound] = useState(sfxEnabled());
   const [music, setMusic] = useState(musicEnabled());
   const [motion, setMotion] = useState(true);
