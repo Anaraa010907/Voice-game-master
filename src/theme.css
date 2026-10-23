@@ -826,3 +826,16 @@
   background: rgba(6, 7, 11, .72);
   text-shadow: 0 1px 4px #000;
 }
+
+.viewport .game-frame .skip-vote {
+  border: 1px solid var(--gold-line);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #161821, #0c0e14);
+  color: #ecdcbc;
+}
+
+.viewport .game-frame .skip-vote.chosen {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #3a2c1a, #1c150d);
+  color: var(--gold-bright);
+}
