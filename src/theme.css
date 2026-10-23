@@ -800,3 +800,21 @@
     margin-right: 0;
   }
 }
+
+/* Readability over the painted office. */
+.viewport .game-frame .lobby-screen .player-grid .invite-slot {
+  background: rgba(7, 8, 12, .78);
+  backdrop-filter: blur(2px);
+}
+
+.viewport .game-frame .lobby-screen .lobby-actions .text-button {
+  padding: 0 14px;
+  border: 1px solid var(--gold-faint);
+  border-radius: 999px;
+  background: rgba(7, 8, 12, .78);
+}
+
+.viewport .game-frame .settings-version,
+.viewport .game-frame .menu-footer {
+  text-shadow: 0 1px 6px #000, 0 0 2px #000;
+}
