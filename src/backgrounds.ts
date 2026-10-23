@@ -7,7 +7,7 @@ export const BACKGROUNDS = ['menu', 'office', 'table-day', 'table-night', 'table
 export type BackgroundName = typeof BACKGROUNDS[number];
 
 /** Backgrounds whose image files have been added to public/assets/bg/. */
-const AVAILABLE: BackgroundName[] = ['menu', 'office', 'table-day'];
+const AVAILABLE: BackgroundName[] = ['menu', 'office', 'table-day', 'table-night'];
 
 export function installBackgrounds() {
   for (const name of AVAILABLE) {
