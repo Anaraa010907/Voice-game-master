@@ -818,3 +818,11 @@
 .viewport .game-frame .menu-footer {
   text-shadow: 0 1px 6px #000, 0 0 2px #000;
 }
+
+/* Stage labels stay readable over the bright window. */
+.viewport .game-frame .crime-stage-label > span {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(6, 7, 11, .72);
+  text-shadow: 0 1px 4px #000;
+}
