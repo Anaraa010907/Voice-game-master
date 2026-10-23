@@ -6,7 +6,7 @@
  *    turn timer runs out, so humans can watch their dice and moves.
  */
 import {
-  isMafiaAligned, nightRoleOf, recordVote, submitNightAction,
+  isMafiaAligned, nightRoleOf, recordVerdict, recordVote, submitNightAction,
   type GameEngineState, type RandomSource, type VoteChoice,
 } from './gameEngine.ts';
 import {
@@ -57,7 +57,20 @@ export function mafiaBotsAct(state: GameEngineState, random: RandomSource): Game
     }
   }
 
-  if (next.phase === 'Voting' && !next.votesRevealed) {
+  if (next.phase === 'Voting' && !next.votesRevealed && next.trial) {
+    const trial = next.trial;
+    for (const bot of bots) {
+      if (bot.id === trial.accusedId || next.trial?.verdicts[bot.id]) continue;
+      const secret = next.privatePlayers[bot.id];
+      // A Mafia-side bot shields a known teammate and pushes everyone else out; town bots lean guilty.
+      const shield = isMafiaAligned(secret.role) && secret.info.mafiaTeammateIds.includes(trial.accusedId);
+      const verdict = shield ? 'innocent' : isMafiaAligned(secret.role) ? 'guilty' : random() < 0.65 ? 'guilty' : 'innocent';
+      const result = recordVerdict(next, bot.id, verdict);
+      if (!result.error) next = result.state;
+    }
+  }
+
+  if (next.phase === 'Voting' && !next.votesRevealed && !next.trial) {
     for (const bot of bots) {
       const secret = next.privatePlayers[bot.id];
       if (secret.vote.submitted) continue;

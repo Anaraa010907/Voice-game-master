@@ -446,6 +446,10 @@ export const translateMessage = (message: string): string => {
     'Mafia cannot target a Mafia-aligned player.': 'Мафийн гишүүн өөр мафийн гишүүн рүү довтолж чадахгүй.',
     'Choose another living player to investigate.': 'Шалгах өөр амьд тоглогч сонгоно уу.',
     'Voting is closed.': 'Санал хураалт хаагдлаа.',
+    'There is no trial right now.': 'Одоо шүүх хурал явагдаагүй байна.',
+    'Choose guilty or innocent.': 'Гэмтэй эсвэл гэмгүйг сонгоно уу.',
+    'You cannot give a verdict in this trial.': 'Та энэ шүүх хуралд шийдвэр өгөх боломжгүй.',
+    'Your verdict is already locked.': 'Таны шийдвэр аль хэдийн баталгаажсан.',
     'You have already voted this round.': 'Та энэ ээлжинд аль хэдийн санал өгсөн байна.',
     'Votes can only target living players.': 'Санал зөвхөн амьд тоглогчид өгөх боломжтой.',
     'You cannot vote for yourself.': 'Өөрийгөө саналд оруулах боломжгүй.',
@@ -511,6 +515,14 @@ export const translateMessage = (message: string): string => {
   }
   const traces = message.match(/^Traces associated with (.+) were found\. Traces are clues, not proof\.$/);
   if (traces) return `${traces[1].replace(' and ', ' болон ')}-тэй холбоотой мөр олдлоо. Мөр бол сэжүүр болохоос нотолгоо биш.`;
+  const onTrial = message.match(/^(.+) is on trial with (\d+) votes\.$/);
+  if (onTrial) return `${onTrial[1]} ${onTrial[2]} саналаар шүүгдэж байна.`;
+  const guilty = message.match(/^(.+) was found guilty \((\d+)–(\d+)\) and eliminated\.$/);
+  if (guilty) return `${guilty[1]} гэм буруутай гэж тооцогдон (${guilty[2]}–${guilty[3]}) хасагдлаа.`;
+  const acquitted = message.match(/^(.+) was acquitted \((\d+)–(\d+)\)\. No one was eliminated\.$/);
+  if (acquitted) return `${acquitted[1]} цагаатгагдлаа (${acquitted[2]}–${acquitted[3]}). Хэн ч хасагдсангүй.`;
+  const fled = message.match(/^(.+) left before the verdict\. No one was eliminated\.$/);
+  if (fled) return `${fled[1]} шийдвэр гарахаас өмнө ширээг орхисон тул хэн ч хасагдсангүй.`;
   const left = message.match(/^(.+) left the table\.$/);
   if (left) return `${left[1]} ширээг орхиж, тоглоомоос хасагдлаа.`;
   const runoff = message.match(/^The vote was tied between (.+)\. A runoff vote begins\.$/);

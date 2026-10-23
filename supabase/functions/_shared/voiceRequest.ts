@@ -2,8 +2,11 @@ import type { VoicePhase } from './voicePolicy.ts';
 
 export type VoiceAction = 'token' | 'permissions' | 'mute' | 'leave' | 'sync';
 
-/** `ghost` is the separate voice room for eliminated players; living players can never join it. */
-export type VoiceChannel = 'main' | 'ghost';
+/**
+ * `ghost` is the separate voice room for eliminated players; living players can never join it.
+ * `mafia` is the night whisper room; only living Mafia get in, and only during the Night.
+ */
+export type VoiceChannel = 'main' | 'ghost' | 'mafia';
 
 export type VoiceRequest =
   | { action: 'token' | 'permissions' | 'leave'; roomCode: string; channel?: VoiceChannel }
@@ -56,13 +59,14 @@ export function parseVoiceRequest(value: unknown): VoiceRequest | null {
   }
 
   if (body.channel !== undefined) {
-    if (body.channel !== 'main' && body.channel !== 'ghost') return null;
-    if (body.channel === 'ghost') return { action: action as 'token' | 'leave', roomCode, channel: 'ghost' };
+    if (body.channel !== 'main' && body.channel !== 'ghost' && body.channel !== 'mafia') return null;
+    if (body.channel === 'ghost' || body.channel === 'mafia') return { action: action as 'token' | 'leave', roomCode, channel: body.channel };
   }
   return { action, roomCode };
 }
 
 export const ghostRoomName = (roomCode: string) => `${roomCode}-GHOST`;
+export const mafiaRoomName = (roomCode: string) => `${roomCode}-MAFIA`;
 
 export function isAllowedOrigin(origin: string | null, configuredOrigins: string): boolean {
   if (origin === null) return true;

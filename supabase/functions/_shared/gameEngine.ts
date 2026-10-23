@@ -31,6 +31,14 @@ export type EnginePlayer = { id: number; name: string; initials: string; color: 
 
 export type GamePhase = 'Role Reveal' | 'Night' | 'Morning' | 'Discussion' | 'Voting' | 'Results';
 export type VoteChoice = number | 'skip' | null;
+export type Verdict = 'guilty' | 'innocent';
+/** What happened each Night and Day, shown to everyone once the game is over. */
+export type HistoryEntry =
+  | { kind: 'night'; round: number; mafiaTargetId: number | null; outcome: 'killed' | 'protected' | 'shotgun' | 'none'; eliminatedId: number | null;
+      protectedIds: number[]; investigations: Array<{ detectiveId: number; targetId: number; mafia: boolean }> }
+  | { kind: 'day'; round: number; accusedId: number | null; guilty: number | null; innocent: number | null; eliminatedId: number | null };
+/** A nominated player defends themselves, then the table decides: guilty eliminates, innocent spares. */
+export type Trial = { accusedId: number; nominationVotes: number; verdicts: Record<number, Verdict> };
 export type WinningTeam = 'Citizens' | 'Mafia' | null;
 export type NightRole = 'Mafia' | 'Doctor' | 'Detective';
 
@@ -79,6 +87,10 @@ export type GameEngineState = {
   /** A tied ballot triggers exactly one runoff between the tied players. */
   runoffCandidates: number[] | null;
   runoffUsed: boolean;
+  /** Set once the nomination ballot picks one player; cleared at the next Voting or Night. */
+  trial: Trial | null;
+  /** Older saved games may not have it yet. */
+  history?: HistoryEntry[];
   winner: WinningTeam;
 };
 
@@ -189,6 +201,8 @@ export function createInitialGame(
     votesRevealed: false,
     runoffCandidates: null,
     runoffUsed: false,
+    trial: null,
+    history: [],
     winner: null,
   };
 }
@@ -224,6 +238,7 @@ export function startNight(state: GameEngineState): GameEngineState {
     votesRevealed: false,
     runoffCandidates: null,
     runoffUsed: false,
+    trial: null,
     voteCounts: {},
     voteSummary: '',
     publicPlayers: state.publicPlayers.map((player) => ({ ...player, voteStatus: player.alive ? 'hidden' : 'not-eligible', voteTargetId: null })),
@@ -249,6 +264,7 @@ export function startVoting(state: GameEngineState): GameEngineState {
     votesRevealed: false,
     runoffCandidates: null,
     runoffUsed: false,
+    trial: null,
     publicPlayers: state.publicPlayers.map((player) => ({ ...player, voteStatus: player.alive ? 'hidden' : 'not-eligible', voteTargetId: null })),
   };
 }
@@ -320,7 +336,7 @@ export function resolveMafiaTarget(state: GameEngineState) {
   return selectedMafiaTarget(state);
 }
 
-export function resolveNight(state: GameEngineState, random: RandomSource = defaultRandom): EngineResult {
+export function resolveNight(state: GameEngineState, _random: RandomSource = defaultRandom): EngineResult {
   if (state.phase !== 'Night' || state.winner || state.nightResolved) return { state, error: 'This Night has already been resolved or is closed.' };
 
   const { targetId: mafiaTargetId, attackerId } = selectedMafiaTarget(state);
@@ -334,11 +350,14 @@ export function resolveNight(state: GameEngineState, random: RandomSource = defa
   let publicPlayers = state.publicPlayers;
   let report = 'No Mafia attack reached the neighborhood tonight.';
   let retaliationResolved = false;
+  let outcome: 'killed' | 'protected' | 'shotgun' | 'none' = 'none';
+  let eliminatedId: number | null = null;
   const privatePlayers: Record<number, PrivateGamePlayer> = { ...state.privatePlayers };
 
   if (target && attackerId !== null) {
     const targetSecret = state.privatePlayers[target.id];
     if (protectedTarget) {
+      outcome = 'protected';
       report = 'A failed attack was reported before dawn. No one was eliminated.';
     } else if (targetSecret.role === 'Old Lady with Shotgun' && !targetSecret.shotgunSpent) {
       // The shotgun fires once. She survives the first attack, but the Mafia now knows where she lives.
@@ -346,7 +365,9 @@ export function resolveNight(state: GameEngineState, random: RandomSource = defa
         .filter((player) => player.alive && isMafiaAligned(state.privatePlayers[player.id].role))
         .sort((left, right) => left.id === attackerId ? -1 : right.id === attackerId ? 1 : left.id - right.id)[0];
       privatePlayers[target.id] = { ...targetSecret, shotgunSpent: true };
+      outcome = 'shotgun';
       if (retaliator) {
+        eliminatedId = retaliator.id;
         publicPlayers = publicPlayers.map((player) => player.id === retaliator.id ? { ...player, alive: false } : player);
         retaliationResolved = true;
         report = 'A shotgun answered from the dark. The attacker was eliminated before dawn.';
@@ -354,6 +375,8 @@ export function resolveNight(state: GameEngineState, random: RandomSource = defa
         report = 'An attempted attack was stopped at the old house. No one was eliminated.';
       }
     } else {
+      outcome = 'killed';
+      eliminatedId = target.id;
       publicPlayers = publicPlayers.map((player) => player.id === target.id ? { ...player, alive: false } : player);
       report = `${target.name} was eliminated during the night.`;
     }
@@ -376,6 +399,20 @@ export function resolveNight(state: GameEngineState, random: RandomSource = defa
 
   const livingCount = publicPlayers.filter((player) => player.alive).length;
   const morningReport = `${report} ${livingCount} players remain alive.`;
+  const nightEntry: HistoryEntry = {
+    kind: 'night',
+    round: state.round,
+    mafiaTargetId: target?.id ?? null,
+    outcome,
+    eliminatedId,
+    protectedIds: doctors.map((doctor) => state.privatePlayers[doctor.id].nightAction).filter((action) => action.submitted && action.targetId !== null).map((action) => action.targetId!),
+    investigations: state.publicPlayers
+      .filter((player) => nightRoleOf(state, player.id) === 'Detective' && state.privatePlayers[player.id].nightAction.submitted && state.privatePlayers[player.id].nightAction.targetId !== null)
+      .map((player) => {
+        const targetId = state.privatePlayers[player.id].nightAction.targetId!;
+        return { detectiveId: player.id, targetId, mafia: isMafiaAligned(state.privatePlayers[targetId].role) };
+      }),
+  };
   return {
     state: {
       ...state,
@@ -385,6 +422,7 @@ export function resolveNight(state: GameEngineState, random: RandomSource = defa
       nightResolved: true,
       retaliationResolved,
       morningReport,
+      history: [...(state.history ?? []), nightEntry],
       publicEventLog: [...state.publicEventLog.slice(-3), report],
       winner: getWinner({ publicPlayers, privatePlayers }),
     },
@@ -399,7 +437,7 @@ function isValidBallotChoice(state: GameEngineState, voterId: number, choice: Vo
 }
 
 export function recordVote(state: GameEngineState, voterId: number, choice: VoteChoice): EngineResult {
-  if (state.phase !== 'Voting' || state.winner || state.votesRevealed) return { state, error: 'Voting is closed.' };
+  if (state.phase !== 'Voting' || state.winner || state.votesRevealed || state.trial) return { state, error: 'Voting is closed.' };
   const voter = state.publicPlayers.find((player) => player.id === voterId);
   const secret = state.privatePlayers[voterId];
   if (!voter?.alive || !secret) return { state, error: 'Eliminated players cannot vote.' };
@@ -425,7 +463,7 @@ export function allVotesSubmitted(state: GameEngineState): boolean {
 
 /** Counts the ballot. Living players who did not vote before the deadline count as Skip. */
 export function resolveVoting(state: GameEngineState): EngineResult {
-  if (state.phase !== 'Voting' || state.winner || state.votesRevealed) return { state, error: 'Voting is closed.' };
+  if (state.phase !== 'Voting' || state.winner || state.votesRevealed || state.trial) return { state, error: 'Voting is closed.' };
 
   const ballots = state.publicPlayers.filter((player) => player.alive).map((voter) => {
     const vote = state.privatePlayers[voter.id].vote;
@@ -463,28 +501,40 @@ export function resolveVoting(state: GameEngineState): EngineResult {
     };
   }
 
-  const eliminatedId = leaders.length === 1 && leaders[0][0] !== 'skip' ? Number(leaders[0][0]) : null;
+  const accusedId = leaders.length === 1 && leaders[0][0] !== 'skip' ? Number(leaders[0][0]) : null;
   const publicPlayers = state.publicPlayers.map((player) => {
     const ballot = ballots.find((item) => item.voterId === player.id);
     return {
       ...player,
-      alive: player.alive && player.id !== eliminatedId,
-      revealedRole: player.id === eliminatedId ? state.privatePlayers[player.id].role : player.revealedRole,
       voteStatus: player.alive ? 'revealed' as const : 'not-eligible' as const,
       voteTargetId: typeof ballot?.choice === 'number' ? ballot.choice : null,
     };
   });
-  const eliminated = state.publicPlayers.find((player) => player.id === eliminatedId);
-  const voteSummary = eliminated
-    ? `${eliminated.name} was voted out with ${voteCounts[String(eliminated.id)]} votes.`
-    : state.runoffUsed && tiedPlayers.length > 1
-      ? 'The runoff was tied again. No one was eliminated.'
-      : 'The vote was tied or Skip Vote led the count. No one was eliminated.';
-  const roleReveal = eliminated ? `${eliminated.name} was revealed as ${state.privatePlayers[eliminated.id].role}.` : '';
   const privatePlayers = { ...state.privatePlayers };
   for (const ballot of ballots) {
     privatePlayers[ballot.voterId] = { ...privatePlayers[ballot.voterId], vote: { submitted: true, choice: ballot.choice } };
   }
+
+  // One clear leader goes on trial: they get to defend themselves before the verdict.
+  const accused = state.publicPlayers.find((player) => player.id === accusedId);
+  if (accused) {
+    const voteSummary = `${accused.name} is on trial with ${voteCounts[String(accused.id)]} votes.`;
+    return {
+      state: {
+        ...state,
+        publicPlayers,
+        privatePlayers,
+        voteCounts,
+        voteSummary,
+        trial: { accusedId: accused.id, nominationVotes: voteCounts[String(accused.id)], verdicts: {} },
+        publicEventLog: [...state.publicEventLog.slice(-3), voteSummary],
+      },
+    };
+  }
+
+  const voteSummary = state.runoffUsed && tiedPlayers.length > 1
+    ? 'The runoff was tied again. No one was eliminated.'
+    : 'The vote was tied or Skip Vote led the count. No one was eliminated.';
   return {
     state: {
       ...state,
@@ -494,7 +544,59 @@ export function resolveVoting(state: GameEngineState): EngineResult {
       voteCounts,
       voteSummary,
       votesRevealed: true,
+      history: [...(state.history ?? []), { kind: 'day', round: state.round, accusedId: null, guilty: null, innocent: null, eliminatedId: null }],
       winner: getWinner({ publicPlayers, privatePlayers }),
+      publicEventLog: [...state.publicEventLog.slice(-3), voteSummary],
+    },
+  };
+}
+
+/** Who may give a verdict: every living player except the accused. */
+function verdictVoters(state: GameEngineState) {
+  return state.publicPlayers.filter((player) => player.alive && player.id !== state.trial?.accusedId);
+}
+
+export function recordVerdict(state: GameEngineState, voterId: number, verdict: Verdict): EngineResult {
+  const trial = state.trial;
+  if (state.phase !== 'Voting' || state.winner || state.votesRevealed || !trial) return { state, error: 'There is no trial right now.' };
+  if (verdict !== 'guilty' && verdict !== 'innocent') return { state, error: 'Choose guilty or innocent.' };
+  if (!verdictVoters(state).some((player) => player.id === voterId)) return { state, error: 'You cannot give a verdict in this trial.' };
+  if (trial.verdicts[voterId]) return { state, error: 'Your verdict is already locked.' };
+  return { state: { ...state, trial: { ...trial, verdicts: { ...trial.verdicts, [voterId]: verdict } } } };
+}
+
+export function allVerdictsSubmitted(state: GameEngineState): boolean {
+  const trial = state.trial;
+  return Boolean(trial) && verdictVoters(state).every((player) => Boolean(trial!.verdicts[player.id]));
+}
+
+/** Counts the verdict. More guilty than innocent eliminates the accused; a tie or no votes spares them. */
+export function resolveTrial(state: GameEngineState): EngineResult {
+  const trial = state.trial;
+  if (state.phase !== 'Voting' || state.winner || state.votesRevealed || !trial) return { state, error: 'There is no trial right now.' };
+  const voters = verdictVoters(state);
+  const guilty = voters.filter((player) => trial.verdicts[player.id] === 'guilty').length;
+  const innocent = voters.filter((player) => trial.verdicts[player.id] === 'innocent').length;
+  const accused = state.publicPlayers.find((player) => player.id === trial.accusedId);
+  const convicted = Boolean(accused?.alive) && guilty > innocent;
+  const publicPlayers = state.publicPlayers.map((player) => player.id === trial.accusedId && convicted
+    ? { ...player, alive: false, revealedRole: state.privatePlayers[player.id].role }
+    : player);
+  const name = accused?.name ?? '?';
+  const voteSummary = !accused?.alive
+    ? `${name} left before the verdict. No one was eliminated.`
+    : convicted
+      ? `${name} was found guilty (${guilty}–${innocent}) and eliminated.`
+      : `${name} was acquitted (${guilty}–${innocent}). No one was eliminated.`;
+  const roleReveal = convicted ? `${name} was revealed as ${state.privatePlayers[trial.accusedId].role}.` : '';
+  return {
+    state: {
+      ...state,
+      publicPlayers,
+      voteSummary,
+      votesRevealed: true,
+      history: [...(state.history ?? []), { kind: 'day', round: state.round, accusedId: trial.accusedId, guilty, innocent, eliminatedId: convicted ? trial.accusedId : null }],
+      winner: getWinner({ publicPlayers, privatePlayers: state.privatePlayers }),
       publicEventLog: [...state.publicEventLog.slice(-3), voteSummary, ...(roleReveal ? [roleReveal] : [])],
     },
   };
@@ -519,11 +621,20 @@ export function publicView(state: GameEngineState) {
     players: state.publicPlayers,
     morningReport: state.morningReport,
     publicEventLog: state.publicEventLog,
-    voteCounts: state.votesRevealed ? state.voteCounts : {},
+    voteCounts: state.votesRevealed || state.trial ? state.voteCounts : {},
     voteSummary: state.voteSummary,
     votesRevealed: state.votesRevealed,
     runoffCandidates: state.runoffCandidates,
+    voteCountsOpen: state.votesRevealed || Boolean(state.trial),
+    trial: state.trial ? {
+      accusedId: state.trial.accusedId,
+      nominationVotes: state.trial.nominationVotes,
+      decided: Object.keys(state.trial.verdicts).length,
+      guilty: state.votesRevealed ? Object.values(state.trial.verdicts).filter((verdict) => verdict === 'guilty').length : null,
+      innocent: state.votesRevealed ? Object.values(state.trial.verdicts).filter((verdict) => verdict === 'innocent').length : null,
+    } : null,
     winner: state.winner,
+    history: finished ? state.history ?? [] : null,
     finalRoles: finished ? Object.fromEntries(Object.entries(state.privatePlayers).map(([id, player]) => [id, player.role])) as Record<number, RoleName> : null,
   };
 }
@@ -546,9 +657,16 @@ export function privateView(state: GameEngineState, playerId: number) {
     nightRole: nightRoleOf(state, playerId),
     nightAction: secret.nightAction,
     vote: secret.vote,
+    verdict: state.trial?.verdicts[playerId] ?? null,
     lastProtectedId: secret.lastProtectedId,
     knownAlignment: secret.knownAlignment,
     shotgunSpent: secret.shotgunSpent,
+    /** Night only, for the Mafia: which target each known teammate has locked (null = not yet). */
+    teamTargets: state.phase === 'Night' && nightRoleOf(state, playerId) === 'Mafia'
+      ? Object.fromEntries(secret.info.mafiaTeammateIds
+        .filter((id) => state.publicPlayers.find((player) => player.id === id)?.alive)
+        .map((id) => [id, state.privatePlayers[id].nightAction.submitted ? state.privatePlayers[id].nightAction.targetId : null])) as Record<number, number | null>
+      : null,
   };
 }
 export type PrivateGameView = NonNullable<ReturnType<typeof privateView>>;
@@ -604,6 +722,15 @@ export function runGameEngineSelfTests() {
 
   state = fixed({ 1: 'Good Informant', 2: 'Mafia', 3: 'Bad Informant', 4: 'Citizen' });
   require(state.privatePlayers[1].info.informantMafiaIds.includes(2) && !state.privatePlayers[1].info.informantMafiaIds.includes(3), 'Good Informant learns the Mafia members, not the Bad Informant.');
+
+  // Mafia see which target each teammate has locked, and only at Night.
+  {
+    let team = startNight(fixed({ 1: 'Mafia', 2: 'Mafia', 3: 'Citizen', 4: 'Doctor', 5: 'Citizen', 6: 'Detective' }));
+    require(privateView(team, 2)?.teamTargets?.[1] === null, 'A teammate with no pick shows as not chosen.');
+    team = submitNightAction(team, 1, 3).state;
+    require(privateView(team, 2)?.teamTargets?.[1] === 3, 'A teammate sees the locked Mafia target.');
+    require(privateView(team, 3)?.teamTargets === null, 'Town players never see Mafia targets.');
+  }
   require(!('role' in state.publicPlayers[1]), 'Public player data does not contain secret roles.');
   require(publicView(state).finalRoles === null, 'Roles stay hidden in the public view until the game ends.');
   require(state.privatePlayers[3].info.badInformantObjective.length > 0, 'Bad Informant receives a private objective.');
@@ -639,13 +766,29 @@ export function runGameEngineSelfTests() {
   resolved = resolveVoting(state);
   require(resolved.state.votesRevealed && resolved.state.voteCounts.skip === 3 && resolved.state.publicPlayers.every((player) => player.alive), 'Unsubmitted ballots count as Skip.');
 
-  // Voted-out players reveal their role and can end the game.
+  // The nomination winner goes on trial; a guilty verdict eliminates them, reveals the role, and can end the game.
   state = startVoting(fixed({ 1: 'Citizen', 2: 'Mafia', 3: 'Doctor', 4: 'Detective' }));
   for (const [voter, choice] of [[1, 2], [2, 1], [3, 2], [4, 2]] as const) state = recordVote(state, voter, choice).state;
   resolved = resolveVoting(state);
+  require(resolved.state.trial?.accusedId === 2 && !resolved.state.votesRevealed && resolved.state.publicPlayers.find((player) => player.id === 2)?.alive === true, 'One clear leader goes on trial instead of being eliminated at once.');
+  require(Boolean(recordVote(resolved.state, 1, 3).error), 'The nomination ballot is closed during a trial.');
+  require(Boolean(recordVerdict(resolved.state, 2, 'innocent').error), 'The accused cannot vote in their own trial.');
+  state = resolved.state;
+  for (const voter of [1, 3, 4]) state = recordVerdict(state, voter, 'guilty').state;
+  require(allVerdictsSubmitted(state) && Boolean(recordVerdict(state, 1, 'innocent').error), 'Each verdict locks once; the trial is complete when everyone else decided.');
+  resolved = resolveTrial(state);
   require(resolved.state.publicPlayers.find((player) => player.id === 2)?.revealedRole === 'Mafia', 'A voted-out player has their role revealed publicly.');
   require(resolved.state.winner === 'Citizens' && finishDay(resolved.state).phase === 'Results', 'A winning vote leads to Results.');
   require(publicView(finishDay(resolved.state)).finalRoles?.[3] === 'Doctor', 'All roles are revealed once the game ends.');
+
+  // A tie or a majority of innocent verdicts spares the accused.
+  state = startVoting(fixed({ 1: 'Citizen', 2: 'Mafia', 3: 'Doctor', 4: 'Detective', 5: 'Citizen' }));
+  for (const [voter, choice] of [[1, 2], [2, 1], [3, 2], [4, 2], [5, 2]] as const) state = recordVote(state, voter, choice).state;
+  state = resolveVoting(state).state;
+  state = recordVerdict(state, 1, 'guilty').state;
+  state = recordVerdict(state, 3, 'innocent').state;
+  resolved = resolveTrial(state);
+  require(resolved.state.votesRevealed && resolved.state.publicPlayers.every((player) => player.alive) && /acquitted \(1–1\)/.test(resolved.state.voteSummary), 'A tied verdict (missing votes abstain) acquits.');
 
   const citizenWin = fixed({ 1: 'Citizen', 2: 'Mafia', 3: 'Doctor', 4: 'Detective' });
   require(getWinner({ ...citizenWin, publicPlayers: citizenWin.publicPlayers.map((player) => player.id === 2 ? { ...player, alive: false } : player) }) === 'Citizens', 'Citizens win when all Mafia-aligned players are gone.');

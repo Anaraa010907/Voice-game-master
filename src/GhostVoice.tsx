@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Room as LiveKitRoom } from 'livekit-client';
-import { Ghost, Headphones, LoaderCircle, Mic, MicOff } from 'lucide-react';
+import { Ghost, Headphones, LoaderCircle, Mic, MicOff, Skull } from 'lucide-react';
 import { supabase, supabaseConfigured } from './supabaseClient';
 import { invokeFunction } from './multiplayer';
 import { i18n } from './i18n';
@@ -10,12 +10,19 @@ const tokenUrl = supabaseConfigured;
 type GhostState = 'idle' | 'connecting' | 'connected';
 type GhostMember = { identity: string; name: string; speaking: boolean };
 
+type SideChannel = 'ghost' | 'mafia';
+
+const COPY: Record<SideChannel, { title: string; note: string; idle: string; label: string }> = {
+  ghost: { title: 'ҮХЭГСДИЙН СУВАГ', note: 'Амьд тоглогчид сонсохгүй', idle: 'Хасагдсан тоглогчид энд хоорондоо ярьж, тоглолтыг хамт ажиглана.', label: 'Үхэгсдийн суваг' },
+  mafia: { title: 'МАФИЙН ШИВНЭЭ', note: 'Зөвхөн мафиуд сонсоно', idle: 'Хамтрагчтайгаа хэнийг онилохоо шөнөдөө нууцаар ярилц. Өглөө болоход суваг хаагдана.', label: 'Мафийн шивнээ' },
+};
+
 /**
- * Voice room for eliminated players. It is a separate LiveKit room that the server only lets
- * eliminated players into, so the living can never hear it. Ghosts still hear the main table
- * through the normal voice dock.
+ * A separate LiveKit room beside the table. `ghost`: eliminated players only, so the living can
+ * never hear it. `mafia`: living Mafia only, during the Night. The server enforces both.
  */
-export default function GhostVoice({ roomCode, userId }: { roomCode: string; userId: string }) {
+export default function GhostVoice({ roomCode, userId, channel = 'ghost' }: { roomCode: string; userId: string; channel?: SideChannel }) {
+  const copy = COPY[channel];
   const roomRef = useRef<LiveKitRoom | null>(null);
   const audio = useRef(new Set<HTMLMediaElement>());
   const [state, setState] = useState<GhostState>('idle');
@@ -28,8 +35,8 @@ export default function GhostVoice({ roomCode, userId }: { roomCode: string; use
     const { data } = await supabase.auth.getSession();
     const accessToken = data.session?.access_token;
     if (!accessToken || data.session?.user.id !== userId) throw new Error(i18n.voice.signInRequired);
-    return invokeFunction<{ token?: string; serverUrl?: string; canPublish?: boolean }>('livekit-voice', { action, roomCode, channel: 'ghost' });
-  }, [roomCode, userId]);
+    return invokeFunction<{ token?: string; serverUrl?: string; canPublish?: boolean }>('livekit-voice', { action, roomCode, channel });
+  }, [roomCode, userId, channel]);
 
   const refresh = useCallback((room: LiveKitRoom) => {
     const speaking = new Set(room.activeSpeakers.map((participant) => participant.identity));
@@ -126,11 +133,11 @@ export default function GhostVoice({ roomCode, userId }: { roomCode: string; use
     audio.current.clear();
   }, []);
 
-  return <section className="ghost-voice" aria-label="Үхэгсдийн суваг">
-    <header><Ghost size={15} /><b>ҮХЭГСДИЙН СУВАГ</b><small>Амьд тоглогчид сонсохгүй</small></header>
+  return <section className={`ghost-voice channel-${channel}`} aria-label={copy.label}>
+    <header>{channel === 'mafia' ? <Skull size={15} /> : <Ghost size={15} />}<b>{copy.title}</b><small>{copy.note}</small></header>
     {state === 'connected'
       ? <div className="ghost-members">{members.map((member) => <span key={member.identity} className={member.speaking ? 'is-speaking' : ''}>{member.name}{member.identity === userId ? ' (чи)' : ''}</span>)}</div>
-      : <p>Хасагдсан тоглогчид энд хоорондоо ярьж, тоглолтыг хамт ажиглана.</p>}
+      : <p>{copy.idle}</p>}
     <div className="ghost-actions">
       {state === 'connected'
         ? <><button type="button" className={`secondary-button ${micOn ? 'is-ready' : ''}`} onClick={() => void toggleMic()}>{micOn ? <Mic size={14} /> : <MicOff size={14} />}{micOn ? 'МИКРОФОН АСААЛТТАЙ' : 'МИКРОФОН АСААХ'}</button><button type="button" className="text-button" onClick={() => void leave()}>ГАРАХ</button></>

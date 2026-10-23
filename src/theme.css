@@ -933,3 +933,198 @@
 :root[data-reduce-motion] .role-intro-flash {
   display: none;
 }
+
+/* Mafia whisper panel: crimson instead of the ghost channel's gold. */
+.viewport .game-frame .ghost-voice.channel-mafia {
+  border-color: rgba(224, 90, 99, .7);
+  background: linear-gradient(180deg, rgba(44, 12, 18, .94), rgba(18, 7, 10, .96));
+}
+
+.viewport .game-frame .ghost-voice.channel-mafia header svg,
+.viewport .game-frame .ghost-voice.channel-mafia header b {
+  color: #f08a8f;
+}
+
+.viewport .game-frame .night-secret.team-picks {
+  border-color: #b4444e;
+  background: #241216;
+  color: #f2c4c4;
+}
+
+/* ---------- Trial ---------- */
+
+.viewport .game-frame .trial-panel {
+  border-color: rgba(224, 90, 99, .7);
+}
+
+.viewport .game-frame .verdict-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.viewport .game-frame .verdict-actions .primary-button,
+.viewport .game-frame .verdict-actions .secondary-button {
+  height: 40px;
+  font-size: 12px;
+}
+
+.viewport .game-frame .verdict-count-list b {
+  font-family: var(--display);
+}
+
+/* ---------- Match recap ---------- */
+
+.viewport .game-frame .match-recap {
+  width: min(560px, 94%);
+  max-height: 86%;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.viewport .game-frame .match-recap > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.viewport .game-frame .match-recap h2 {
+  font-family: var(--display);
+  color: var(--gold-bright);
+}
+
+.viewport .game-frame .recap-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.viewport .game-frame .recap-list li {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--gold);
+  border-radius: 6px;
+  background: rgba(8, 10, 15, .75);
+  color: #ddd3c3;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.viewport .game-frame .recap-list li.recap-night {
+  border-left-color: #8f9ce6;
+}
+
+.viewport .game-frame .recap-list b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.viewport .game-frame .recap-night b {
+  color: #b5bff5;
+}
+
+/* ---------- Quick replies ---------- */
+
+.viewport .game-frame .quick-replies {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.viewport .game-frame .quick-replies button {
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--gold-line);
+  border-radius: 999px;
+  background: rgba(8, 10, 15, .82);
+  color: #ecdcbc;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.viewport .game-frame .quick-replies button:active {
+  background: #2a2216;
+  border-color: var(--gold);
+}
+
+.viewport .game-frame .game-player-card {
+  overflow: visible;
+}
+
+.viewport .game-frame .quick-bubble {
+  position: absolute;
+  z-index: 5;
+  right: 6px;
+  top: -10px;
+  max-width: 75%;
+  padding: 3px 9px;
+  border: 1px solid var(--gold);
+  border-radius: 10px 10px 10px 2px;
+  background: linear-gradient(180deg, #2a2216, #17120c);
+  color: var(--gold-bright);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .6);
+  animation: bubble-pop .25s ease-out both;
+}
+
+@keyframes bubble-pop {
+  from { opacity: 0; transform: translateY(4px) scale(.9); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Quick replies: one scrollable row so they never push the panel up. */
+.viewport .game-frame .quick-replies {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, #000 88%, transparent);
+}
+
+.viewport .game-frame .quick-replies::-webkit-scrollbar {
+  display: none;
+}
+
+.viewport .game-frame .quick-replies button {
+  flex: none;
+}
+
+@media (max-height: 500px) {
+  .viewport .game-frame .quick-replies button {
+    height: 24px;
+    padding: 0 9px;
+    font-size: 10px;
+  }
+}
+
+/* Vote tallies sit in the corner so names keep their room. */
+.viewport .game-frame .game-player-card .player-vote-count {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1;
+}

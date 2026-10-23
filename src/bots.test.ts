@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { boardBotToMove, mafiaBotsAct, monopolyBotStep, nextBotName } from '../supabase/functions/_shared/bots.ts';
 import {
-  allNightActionsSubmitted, allVotesSubmitted, createInitialGame, finishDay, openDiscussion, recordVote, removePlayer,
-  resolveNight, resolveVoting, startNight, startVoting, type GameEngineState,
+  allNightActionsSubmitted, allVerdictsSubmitted, allVotesSubmitted, createInitialGame, finishDay, openDiscussion, recordVote, removePlayer,
+  publicView, resolveNight, resolveTrial, resolveVoting, startNight, startVoting, type GameEngineState,
 } from '../supabase/functions/_shared/gameEngine.ts';
 import { autoPlay, createMonopolyGame, currentPlayerId } from '../supabase/functions/_shared/monopolyEngine.ts';
 
@@ -19,7 +19,7 @@ function advance(state: GameEngineState, random: () => number): GameEngineState 
     case 'Night': return resolveNight(state, random).state;
     case 'Morning': return openDiscussion(state);
     case 'Discussion': return startVoting(state);
-    case 'Voting': return state.votesRevealed ? finishDay(state) : resolveVoting(state).state;
+    case 'Voting': return state.votesRevealed ? finishDay(state) : state.trial ? resolveTrial(state).state : resolveVoting(state).state;
     default: return state;
   }
 }
@@ -37,11 +37,14 @@ for (const seed of [1, 7, 42, 99, 1234]) {
   while (state.phase !== 'Results' && steps < 80) {
     state = mafiaBotsAct(advance(state, random), random);
     if (state.phase === 'Night' && !state.nightResolved) assert.ok(allNightActionsSubmitted(state), 'Bots lock every night action.');
-    if (state.phase === 'Voting' && !state.votesRevealed) assert.ok(allVotesSubmitted(state), 'Bots cast every vote.');
+    if (state.phase === 'Voting' && !state.votesRevealed) assert.ok(state.trial ? allVerdictsSubmitted(state) : allVotesSubmitted(state), 'Bots cast every vote and verdict.');
     steps += 1;
   }
   assert.equal(state.phase, 'Results', `Bot-only Mafia game ${seed} reaches Results.`);
   assert.ok(state.winner, 'A team wins.');
+  const recap = publicView(state).history ?? [];
+  assert.ok(recap.some((entry) => entry.kind === 'night') && recap.every((entry) => entry.round >= 1), 'The finished game carries a night-by-night recap.');
+  assert.equal(publicView({ ...state, phase: 'Night' }).history, null, 'The recap stays hidden until the game ends.');
 }
 
 // Mafia: humans are never moved for.

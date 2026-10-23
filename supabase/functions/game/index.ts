@@ -1,8 +1,8 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import {
-  MIN_PLAYERS, allNightActionsSubmitted, allVotesSubmitted, createInitialGame, finishDay, openDiscussion,
-  privateView, publicView, recordVote, removePlayer, resolveNight, resolveVoting, startNight, startVoting,
-  submitNightAction, type GameEngineState, type VoteChoice,
+  MIN_PLAYERS, allNightActionsSubmitted, allVerdictsSubmitted, allVotesSubmitted, createInitialGame, finishDay, openDiscussion,
+  privateView, publicView, recordVerdict, recordVote, removePlayer, resolveNight, resolveTrial, resolveVoting, startNight, startVoting,
+  submitNightAction, type GameEngineState, type Verdict, type VoteChoice,
 } from '../_shared/gameEngine.ts';
 import {
   MIN_MONOPOLY_PLAYERS, applyMonopolyAction, autoPlay, createMonopolyGame, removeMonopolyPlayer,
@@ -51,9 +51,10 @@ const PHASE_SECONDS: Record<string, number> = {
   'Role Reveal': 20,
   Night: 60,
   Morning: 15,
-  Discussion: 120,
   Voting: 45,
   Runoff: 30,
+  /** The accused defends themselves while everyone else gives a verdict. */
+  Trial: 35,
   VoteReveal: 10,
 };
 const COLORS = ['rose', 'violet', 'gold', 'teal', 'blue', 'plum'];
@@ -112,9 +113,19 @@ function deadlineFor(state: AnyGame): string | null {
   }
   if (state.phase === 'Results') return null;
   const key = state.phase === 'Voting'
-    ? state.votesRevealed ? 'VoteReveal' : state.runoffCandidates ? 'Runoff' : 'Voting'
+    ? state.votesRevealed ? 'VoteReveal' : state.trial ? 'Trial' : state.runoffCandidates ? 'Runoff' : 'Voting'
     : state.phase;
-  return new Date(Date.now() + PHASE_SECONDS[key] * 1000).toISOString();
+  return new Date(Date.now() + phaseSeconds(state, key) * 1000).toISOString();
+}
+
+/** Discussion grows with the table: about 15 seconds per living player, between 75 s and 3 minutes. */
+export function discussionSeconds(living: number) {
+  return Math.min(180, Math.max(75, 40 + living * 15));
+}
+
+function phaseSeconds(state: GameEngineState, key: string) {
+  if (key === 'Discussion') return discussionSeconds(state.publicPlayers.filter((player) => player.alive).length);
+  return PHASE_SECONDS[key];
 }
 
 /** Moves the game one step forward when its phase is over. */
@@ -124,7 +135,7 @@ function advance(state: GameEngineState): GameEngineState {
     case 'Night': return resolveNight(state, secureRandom).state;
     case 'Morning': return openDiscussion(state);
     case 'Discussion': return startVoting(state);
-    case 'Voting': return state.votesRevealed ? finishDay(state) : resolveVoting(state).state;
+    case 'Voting': return state.votesRevealed ? finishDay(state) : state.trial ? resolveTrial(state).state : resolveVoting(state).state;
     default: return state;
   }
 }
@@ -132,7 +143,7 @@ function advance(state: GameEngineState): GameEngineState {
 /** Skips waiting when everyone who must act already has. */
 function settle(state: GameEngineState): GameEngineState {
   if (state.phase === 'Night' && !state.nightResolved && allNightActionsSubmitted(state)) return advance(state);
-  if (state.phase === 'Voting' && !state.votesRevealed && allVotesSubmitted(state)) return advance(state);
+  if (state.phase === 'Voting' && !state.votesRevealed && (state.trial ? allVerdictsSubmitted(state) : allVotesSubmitted(state))) return advance(state);
   return state;
 }
 
@@ -363,7 +374,8 @@ class GameServer {
     if (isBoard(state)) return this.publishBoard(roomCode, state, seats, version, previous as StoredBoard | undefined);
     const prior = previous as StoredGame | undefined;
     const phaseChanged = !prior || prior.phase !== state.phase || prior.votesRevealed !== state.votesRevealed
-      || prior.runoffCandidates?.join() !== state.runoffCandidates?.join() || prior.round !== state.round;
+      || prior.runoffCandidates?.join() !== state.runoffCandidates?.join() || prior.round !== state.round
+      || prior.trial?.accusedId !== state.trial?.accusedId;
     const { data: currentPublic } = await this.admin.from('game_public').select('deadline').eq('room_code', roomCode).maybeSingle();
     const deadline = phaseChanged ? deadlineFor(state) : currentPublic?.deadline ?? deadlineFor(state);
     const writes = [
@@ -515,6 +527,23 @@ class GameServer {
     return { ok: true };
   }
 
+  /** Guilty or innocent, from a living player other than the accused, while a trial is open. */
+  async verdict(body: Body) {
+    const roomCodeValue = code(body);
+    const { mine } = await this.requireSeat(roomCodeValue);
+    const choice = body.choice === 'guilty' || body.choice === 'innocent' ? body.choice as Verdict : null;
+    if (!choice) throw new GameError(400, 'Шийдвэр буруу байна.');
+    let failure = '';
+    await this.mutate(roomCodeValue, (state) => {
+      if (isBoard(state)) return state;
+      const result = recordVerdict(state, mine.seat, choice);
+      failure = result.error ?? '';
+      return result.error ? state : progress(result.state);
+    });
+    if (failure) throw new GameError(409, failure);
+    return { ok: true };
+  }
+
   async vote(body: Body) {
     const roomCodeValue = code(body);
     const { mine } = await this.requireSeat(roomCodeValue);
@@ -641,6 +670,7 @@ Deno.serve(async (request) => {
       start: (value) => server.start(value),
       night: (value) => server.night(value),
       vote: (value) => server.vote(value),
+      verdict: (value) => server.verdict(value),
       tick: (value) => server.tick(value),
       rematch: (value) => server.rematch(value),
       list: (value) => server.list(value),

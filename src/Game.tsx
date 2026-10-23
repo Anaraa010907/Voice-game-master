@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowLeft, Check, ChevronRight, Clock3, Crown, Crosshair, Eye, Fingerprint,
   HeartPulse, Info, LockKeyhole, Mic, Moon, Radio, Settings,
-  Shield, Skull, Sun, Target, Users, Vote, X,
+  Shield, Skull, Sun, Target, Vote, X,
 } from 'lucide-react';
 import { roles, type RoleName } from './gameData';
 import RoleCardArtwork from './RoleCardArtwork';
@@ -14,6 +14,7 @@ import { FullscreenToggle, type FullscreenState } from './fullscreen';
 import { callGame, useCountdown, useGame, type NotifyFn, type RoomSeat } from './multiplayer';
 import { playSfx, startMusic } from './sfx';
 import GhostVoice from './GhostVoice';
+import { QUICK_REPLIES, useQuickReplies } from './quickReplies';
 import Avatar from './Avatar';
 
 function roleInfo(name: RoleName) {
@@ -31,8 +32,8 @@ function NightIcon({ role, size = 19 }: { role: RoleName; size?: number }) {
   return <Shield {...iconProps} />;
 }
 
-function GamePlayerCard({ player, isCurrent, selected, selectable, voteCount, voteTargetName, runoff, finalRole, onSelect }: {
-  player: PublicGamePlayer; isCurrent: boolean; selected: boolean; selectable: boolean; voteCount?: number; voteTargetName?: string; runoff?: boolean; finalRole?: RoleName; onSelect: () => void;
+function GamePlayerCard({ player, isCurrent, selected, selectable, voteCount, voteTargetName, runoff, finalRole, bubble, onSelect }: {
+  player: PublicGamePlayer; isCurrent: boolean; selected: boolean; selectable: boolean; voteCount?: number; voteTargetName?: string; runoff?: boolean; finalRole?: RoleName; bubble?: string; onSelect: () => void;
 }) {
   const shownRole = player.revealedRole ?? finalRole;
   return <button type="button" className={`game-player-card ${isCurrent ? 'is-current' : ''} ${selected ? 'is-selected' : ''} ${!player.alive ? 'is-dead' : ''} ${runoff ? 'is-runoff' : ''}`} onClick={onSelect} disabled={!selectable} aria-pressed={selected}>
@@ -41,6 +42,7 @@ function GamePlayerCard({ player, isCurrent, selected, selectable, voteCount, vo
     {voteCount !== undefined && <span className="player-vote-count">{voteCount} <small>САНАЛ</small></span>}
     {player.voteStatus === 'revealed' && <span className="player-vote-status">{player.voteTargetId === null ? 'АЛГАСАВ' : `САНАЛ ${voteTargetName ?? ''}`}</span>}
     {selectable && <Target className="game-player-target" size={14} />}
+    {bubble && <span className="quick-bubble" role="status">{bubble}</span>}
   </button>;
 }
 
@@ -110,6 +112,12 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
     revealShown.current = true;
   }, [game?.phase, hasPrivate]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Quick replies: living players, in the day phases only.
+  const mySeat = seats.find((seat) => seat.user_id === userId)?.seat ?? 0;
+  const seatedAlive = game?.players.find((player) => player.id === mySeat)?.alive ?? false;
+  const quickOpen = Boolean(game && me && seatedAlive && (game.phase === 'Morning' || game.phase === 'Discussion' || game.phase === 'Voting'));
+  const quick = useQuickReplies(roomCode, mySeat, quickOpen);
+
   if (!game || !me) {
     return <div className="core-game"><div className="room-loading">Ширээ бэлдэж байна…</div></div>;
   }
@@ -120,6 +128,8 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
   const nameOf = (id: number) => game.players.find((player) => player.id === id)?.name;
   const namesOf = (ids: number[]) => ids.map(nameOf).filter((name): name is string => Boolean(name));
   const mafiaNames = namesOf(me.role === 'Mafia' ? me.info.mafiaTeammateIds : me.role === 'Good Informant' ? me.info.informantMafiaIds : []);
+  const livingTeammates = me.info.mafiaTeammateIds.filter((id) => game.players.find((player) => player.id === id)?.alive);
+  const whisperOpen = game.phase === 'Night' && currentPlayer.alive && me.role === 'Mafia' && livingTeammates.length > 0;
   const leftPlayers = game.players.slice(0, Math.ceil(game.players.length / 2));
   const rightPlayers = game.players.slice(Math.ceil(game.players.length / 2));
   const time = secondsLeft === null ? '--:--' : `${String(Math.floor(secondsLeft / 60)).padStart(2, '0')}:${String(secondsLeft % 60).padStart(2, '0')}`;
@@ -148,17 +158,18 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
     return true;
   };
   const canSelectForVote = (player: PublicGamePlayer) => game.phase === 'Voting' && !game.votesRevealed && currentPlayer.alive && !me.vote.submitted && player.alive && player.id !== me.seat && (!game.runoffCandidates || game.runoffCandidates.includes(player.id));
-  const inRunoff = (player: PublicGamePlayer) => game.phase === 'Voting' && !game.votesRevealed && Boolean(game.runoffCandidates?.includes(player.id));
+  const inRunoff = (player: PublicGamePlayer) => game.phase === 'Voting' && !game.votesRevealed && !game.trial && Boolean(game.runoffCandidates?.includes(player.id));
   const select = (player: PublicGamePlayer) => {
     if (game.phase === 'Night' && canChooseNightTarget(player)) setNightSelection(player.id);
     if (game.phase === 'Voting' && canSelectForVote(player)) setVoteSelection(player.id);
   };
-  const renderPlayer = (player: PublicGamePlayer) => <GamePlayerCard key={player.id} player={player} isCurrent={player.id === me.seat} selected={game.phase === 'Night' ? nightSelection === player.id : voteSelection === player.id} selectable={game.phase === 'Night' ? canChooseNightTarget(player) : canSelectForVote(player)} voteCount={game.votesRevealed ? game.voteCounts[String(player.id)] : undefined} voteTargetName={player.voteTargetId === null ? undefined : nameOf(player.voteTargetId)} runoff={inRunoff(player)} finalRole={game.finalRoles?.[player.id] ?? me.spectatorRoles?.[player.id]} onSelect={() => select(player)} />;
+  const renderPlayer = (player: PublicGamePlayer) => <GamePlayerCard key={player.id} player={player} isCurrent={player.id === me.seat} selected={game.phase === 'Night' ? nightSelection === player.id : voteSelection === player.id} selectable={game.phase === 'Night' ? canChooseNightTarget(player) : canSelectForVote(player)} voteCount={game.voteCountsOpen ? game.voteCounts[String(player.id)] : undefined} voteTargetName={player.voteTargetId === null ? undefined : nameOf(player.voteTargetId)} runoff={inRunoff(player)} finalRole={game.finalRoles?.[player.id] ?? me.spectatorRoles?.[player.id]} bubble={quick.bubbles[player.id]?.text} onSelect={() => select(player)} />;
 
   const confirmNight = async () => {
     if (nightSelection === null) return onNotice(translateMessage('Select a living target first.'));
     if (await send('night', { targetId: nightSelection })) setNightSelection(null);
   };
+  const giveVerdict = (choice: 'guilty' | 'innocent') => { void send('verdict', { choice }); };
   const submitVote = async () => {
     if (await send('vote', { choice: voteSelection })) { setVoteConfirmOpen(false); setVoteSelection(null); }
   };
@@ -177,19 +188,18 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
 
     {game.phase === 'Role Reveal' ? <RoleReveal player={currentPlayer} me={me} namesOf={namesOf} roomName={roomName} isHost={isHost} busy={busy} secondsLeft={secondsLeft} onContinue={hostSkip} /> : <>
       <div className="core-game-board">
-        <aside className="game-player-list game-player-list-left"><div className="game-list-heading">{i18n.game.table} <span>{String(game.players.length).padStart(2, '0')}</span></div>{leftPlayers.map(renderPlayer)}{!currentPlayer.alive && <GhostVoice roomCode={roomCode} userId={userId} />}</aside>
+        <aside className="game-player-list game-player-list-left"><div className="game-list-heading">{i18n.game.table} <span>{String(game.players.length).padStart(2, '0')}</span></div>{leftPlayers.map(renderPlayer)}{!currentPlayer.alive && <GhostVoice roomCode={roomCode} userId={userId} />}{whisperOpen && <GhostVoice key="mafia-whisper" roomCode={roomCode} userId={userId} channel="mafia" />}</aside>
         <section className="crime-stage">
           <div className="crime-stage-art" aria-hidden="true"><div className="crime-window" /><div className="crime-light" /><div className="crime-table" /></div>
           <div className="crime-stage-label"><span><i /> {roomName.toUpperCase()} · {roomCode}</span>{me.spectatorRoles && <span className="spectator-tag">АЖИГЛАГЧ · БҮХ ДҮР ХАРАГДАНА</span>}</div>
-          {game.phase === 'Night' && <NightPanel round={game.round} player={currentPlayer} me={me} mafiaNames={mafiaNames} selectedName={nightSelection === null ? undefined : nameOf(nightSelection)} lockedName={me.nightAction.targetId === null ? undefined : nameOf(me.nightAction.targetId)} lastProtectedName={me.lastProtectedId === null ? undefined : nameOf(me.lastProtectedId)} busy={busy} onConfirm={confirmNight} onCancel={() => setNightSelection(null)} />}
+          {game.phase === 'Night' && <NightPanel round={game.round} player={currentPlayer} me={me} mafiaNames={mafiaNames} nameOf={nameOf} selectedName={nightSelection === null ? undefined : nameOf(nightSelection)} lockedName={me.nightAction.targetId === null ? undefined : nameOf(me.nightAction.targetId)} lastProtectedName={me.lastProtectedId === null ? undefined : nameOf(me.lastProtectedId)} busy={busy} onConfirm={confirmNight} onCancel={() => setNightSelection(null)} />}
           {game.phase === 'Morning' && <MorningPanel round={game.round} report={game.morningReport} winner={game.winner} isHost={isHost} busy={busy} onContinue={hostSkip} />}
           {game.phase === 'Discussion' && <DiscussionPanel round={game.round} alive={currentPlayer.alive} isHost={isHost} busy={busy} onVote={hostSkip} onPrivate={() => setPrivateOpen((open) => !open)} />}
-          {game.phase === 'Voting' && <VotingPanel game={game} me={me} alive={currentPlayer.alive} voteSelection={voteSelection} voteConfirmOpen={voteConfirmOpen} isHost={isHost} busy={busy} nameOf={nameOf} onSkip={() => setVoteSelection('skip')} onReview={() => voteSelection === null ? onNotice(translateMessage('Choose a living player or Skip Vote.')) : setVoteConfirmOpen(true)} onSubmit={submitVote} onCancel={() => { setVoteConfirmOpen(false); setVoteSelection(null); }} onNext={hostSkip} />}
-          <div className="public-event-log"><span><Info size={11} /> {i18n.game.messages.publicLogs}</span>{game.publicEventLog.slice(-2).map((entry, index) => <p key={`${entry}-${index}`}>{translateMessage(entry)}</p>)}</div>
+          {game.phase === 'Voting' && <VotingPanel game={game} me={me} alive={currentPlayer.alive} voteSelection={voteSelection} voteConfirmOpen={voteConfirmOpen} isHost={isHost} busy={busy} nameOf={nameOf} onSkip={() => setVoteSelection('skip')} onReview={() => voteSelection === null ? onNotice(translateMessage('Choose a living player or Skip Vote.')) : setVoteConfirmOpen(true)} onSubmit={submitVote} onCancel={() => { setVoteConfirmOpen(false); setVoteSelection(null); }} onNext={hostSkip} onVerdict={giveVerdict} />}
+          {quickOpen && <div className="quick-replies" aria-label="Хурдан хариулт">{QUICK_REPLIES.map((text) => <button type="button" key={text} onClick={() => quick.send(text)}>{text}</button>)}</div>}
         </section>
         <aside className="game-player-list game-player-list-right"><div className="game-list-heading">{i18n.game.stillInIt} <span>{String(living.length).padStart(2, '0')}</span></div>{rightPlayers.map(renderPlayer)}<MyRoleCard role={roleInfo(me.role)} dead={!currentPlayer.alive} onOpen={() => setCardOpen(true)} /><button className="private-info-button" onClick={() => setPrivateOpen((open) => !open)}><LockKeyhole size={13} /> {i18n.game.privateInfo}</button></aside>
       </div>
-      <div className="core-game-bottom"><div className="phase-caption"><span>{game.phase === 'Night' ? <Moon size={12} /> : game.phase === 'Morning' ? <Sun size={12} /> : game.phase === 'Voting' ? <Vote size={12} /> : <Mic size={12} />}{translatePhase(game.phase)}</span><small>{phaseHint(game, currentPlayer.alive)}</small></div><div className="bottom-local-note"><Users size={12} /> {seats.length} тоглогч · {roomCode}</div></div>
     </>}
 
     {introOpen && <RoleRevealIntro role={roleInfo(me.role)} onDone={closeIntro} />}
@@ -198,14 +208,6 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
     {leaveDialog && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="leave-game-title"><div className="modal-symbol"><ArrowLeft size={18} /></div><h2 id="leave-game-title">Тоглоомоос гарах уу?</h2><p>Гарвал та хасагдсанд тооцогдож, энэ тоглолтод буцаж орох боломжгүй.</p><div className="modal-actions"><button className="secondary-button" onClick={() => setLeaveDialog(false)}>ҮЛДЭХ</button><button className="primary-button" onClick={onLeave}>ТОГЛООМООС ГАРАХ</button></div></section></div>}
     {settingsOpen && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title"><div className="modal-symbol"><Settings size={18} /></div><h2 id="game-settings-title">Тоглоомын тохиргоо</h2><p>Үе шат бүр цаг дуусахад автоматаар солигдоно. Өрөөний эзэн хүлээх үеийг алгасаж болно.</p><div className="modal-fullscreen"><FullscreenToggle fullscreen={fullscreen} /></div><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>ТОГЛООМ ҮРГЭЛЖЛҮҮЛЭХ</button></div></section></div>}
   </div>);
-}
-
-function phaseHint(game: PublicGameView, alive: boolean) {
-  if (game.phase === 'Night') return alive ? 'Үйлдэлтэй дүрүүд зорилтоо сонгоно. Бусад нь хүлээнэ.' : translateMessage('You can only observe the simulated night.');
-  if (game.phase === 'Morning') return `${game.players.filter((player) => player.alive).length} тоглогч амьд үлдсэн.`;
-  if (game.phase === 'Discussion') return 'Микрофоноор ярилцаарай. Хувийн мэдээлэл хувийн хэвээр үлдэнэ.';
-  if (game.phase === 'Voting') return game.votesRevealed ? 'Санал хураалт дууслаа.' : 'Амьд тоглогч сонгох эсвэл саналаа алгасах боломжтой.';
-  return 'Таны дүр болон мэдээлэл хувийн хэвээр байна.';
 }
 
 function HostButton({ isHost, busy, label, onClick }: { isHost: boolean; busy: boolean; label: string; onClick: () => void }) {
@@ -219,8 +221,8 @@ function RoleReveal({ player, me, namesOf, roomName, isHost, busy, secondsLeft, 
   return <main className="role-reveal-screen"><div className="reveal-backdrop"><div className="reveal-moon" /><div className="reveal-city" /></div><div className="reveal-heading"><span>ЭЭЛЖ 01 <i>•</i> {roomName.toUpperCase()}</span><h1>Хот <em>шийдвэрээ гаргалаа.</em></h1><p>{player.name}, таны дүр нууц. Дэлгэцээ бусдад бүү харуул.</p></div><article className={`reveal-role-card team-${role.team}`}><div className="reveal-card-art"><RoleCardArtwork role={role} /><span>НУУЦ</span></div><div className="reveal-card-copy"><span className={`team-tag ${role.team}`}>{translateTeam(role.team).toUpperCase()} {i18n.game.messages.specialAbility.toUpperCase()}</span><h2>{role.displayName}</h2><p>{role.description}</p><p className="reveal-role-ability">{role.ability}</p>{roleSecret && <div className="role-reveal-secret"><LockKeyhole size={12} />{roleSecret}</div>}<div className="reveal-private-note"><LockKeyhole size={13} /><span>Энэ картыг зөвхөн та харах боломжтой.</span></div></div></article>{isHost ? <button className="primary-button reveal-continue" disabled={busy} onClick={onContinue}>ШӨНИЙГ ЭХЛҮҮЛЭХ <ChevronRight size={16} /></button> : <span className="reveal-continue reveal-wait">Шөнө {secondsLeft ?? '…'} секундын дараа эхэлнэ</span>}</main>;
 }
 
-function NightPanel({ round, player, me, mafiaNames, selectedName, lockedName, lastProtectedName, busy, onConfirm, onCancel }: {
-  round: number; player: PublicGamePlayer; me: PrivateGameView; mafiaNames: string[]; selectedName?: string; lockedName?: string; lastProtectedName?: string; busy: boolean; onConfirm: () => void; onCancel: () => void;
+function NightPanel({ round, player, me, mafiaNames, nameOf, selectedName, lockedName, lastProtectedName, busy, onConfirm, onCancel }: {
+  round: number; player: PublicGamePlayer; me: PrivateGameView; mafiaNames: string[]; nameOf: (id: number) => string | undefined; selectedName?: string; lockedName?: string; lastProtectedName?: string; busy: boolean; onConfirm: () => void; onCancel: () => void;
 }) {
   const role = me.role;
   const nightRole = me.nightRole;
@@ -231,6 +233,7 @@ function NightPanel({ round, player, me, mafiaNames, selectedName, lockedName, l
     {!player.alive ? <p>Та хасагдсан тул шөнийн үйлдэл хийх боломжгүй. Хот сэрэхийг хүлээнэ үү.</p> : <>
       <p>{nightRole ? targetVerb : 'Таны дүрд шөнийн үйлдэл байхгүй. Нүдээ аниад өглөөг хүлээнэ үү.'}</p>
       {role === 'Mafia' && mafiaNames.length > 0 && <div className="night-secret"><Skull size={12} /> Хамтрагчид: {mafiaNames.join(', ')}. Олонхийн сонгосон хүн рүү довтолно.</div>}
+      {me.teamTargets && Object.keys(me.teamTargets).length > 0 && <div className="night-secret team-picks"><Target size={12} /> Хамтрагчийн сонголт — {Object.entries(me.teamTargets).map(([id, target]) => `${nameOf(Number(id)) ?? '?'}: ${target === null ? 'сонгоогүй' : nameOf(target) ?? '?'}`).join(' · ')}</div>}
       {role === 'Good Informant' && <div className="night-secret"><LockKeyhole size={12} /> Таны хувийн сэжүүр: {mafiaNames.join(', ') || 'Идэвхтэй мафийн гишүүн алга.'}</div>}
       {nightRole === 'Doctor' && lastProtectedName && !submitted && <div className="night-secret"><HeartPulse size={12} /> Өчигдөр {lastProtectedName}-г хамгаалсан тул энэ шөнө өөр хүн сонгоно.</div>}
       {role === 'Old Lady with Shotgun' && <div className="night-secret"><Crosshair size={12} /> {me.shotgunSpent ? 'Таны буу аль хэдийн буудсан. Дахин хариу буудах боломжгүй.' : 'Мафи тан руу анх халдахад буугаар нэг удаа хариу буудна.'}</div>}
@@ -253,10 +256,11 @@ function DiscussionPanel({ round, alive, isHost, busy, onVote, onPrivate }: { ro
   return <div className="phase-panel discussion-panel"><div className="discussion-head"><div><small>ӨДӨР {round} · ХЭЛЭЛЦҮҮЛЭГ</small><h2>Юу харсан бэ?</h2></div><Mic size={19} /></div><p>{alive ? 'Микрофоноо асаагаад сэжүүрээ хуваалцаарай. Хэн худлаа ярьж байна вэ?' : 'Та хасагдсан тул сонсох боломжтой, ярих боломжгүй.'}</p><div className="discussion-actions"><button className="secondary-button" onClick={onPrivate}><LockKeyhole size={13} /> НУУЦ МЭДЭЭЛЭЛ</button>{isHost ? <button className="primary-button" disabled={busy} onClick={onVote}>САНАЛ ХУРААЛТ НЭЭХ <Vote size={14} /></button> : <span className="discussion-wait">Цаг дуусахад санал хураалт эхэлнэ</span>}</div></div>;
 }
 
-function VotingPanel({ game, me, alive, voteSelection, voteConfirmOpen, isHost, busy, nameOf, onSkip, onReview, onSubmit, onCancel, onNext }: {
+function VotingPanel({ game, me, alive, voteSelection, voteConfirmOpen, isHost, busy, nameOf, onSkip, onReview, onSubmit, onCancel, onNext, onVerdict }: {
   game: PublicGameView; me: PrivateGameView; alive: boolean; voteSelection: VoteChoice; voteConfirmOpen: boolean; isHost: boolean; busy: boolean; nameOf: (id: number) => string | undefined;
-  onSkip: () => void; onReview: () => void; onSubmit: () => void; onCancel: () => void; onNext: () => void;
+  onSkip: () => void; onReview: () => void; onSubmit: () => void; onCancel: () => void; onNext: () => void; onVerdict: (choice: 'guilty' | 'innocent') => void;
 }) {
+  if (game.trial && !game.votesRevealed) return <TrialPanel game={game} me={me} alive={alive} busy={busy} nameOf={nameOf} onVerdict={onVerdict} />;
   const totals = Object.entries(game.voteCounts).sort((left, right) => right[1] - left[1]);
   const runoffNames = game.runoffCandidates && !game.votesRevealed ? game.runoffCandidates.map((id) => nameOf(id) ?? '?') : null;
   const mine = me.vote.choice;
@@ -267,14 +271,36 @@ function VotingPanel({ game, me, alive, voteSelection, voteConfirmOpen, isHost, 
     {!game.votesRevealed ? <>
       {!alive ? <p>Та хасагдсан тул санал өгөх боломжгүй.</p>
         : me.vote.submitted ? <div className="action-locked"><Check size={13} /> Таны санал: {mineLabel}. Бусдыг хүлээж байна.</div>
-        : <>{!runoffNames && <p>Өөрөөсөө бусад амьд тоглогчийг сонгох эсвэл саналаа алгасна уу. Хамгийн олон санал авсан нэг тоглогч хасагдаж, дүр нь илчлэгдэнэ.</p>}<div className="vote-choices"><button className={`skip-vote ${voteSelection === 'skip' ? 'chosen' : ''}`} onClick={onSkip}><ArrowLeft size={13} /> САНАЛ АЛГАСАХ</button><span>{selectedName ? `Сонгосон: ${selectedName}` : voteSelection === 'skip' ? 'Сонгосон: Санал алгасах' : 'Тоглогчийн картыг товшино уу.'}</span></div><button className="primary-button" onClick={onReview} disabled={voteSelection === null}>САНАЛЫГ ХЯНАХ <ChevronRight size={15} /></button></>}
+        : <>{!runoffNames && <p>Өөрөөсөө бусад амьд тоглогчийг сонгох эсвэл саналаа алгасна уу. Хамгийн олон санал авсан тоглогч шүүгдэж, өөрийгөө хамгаалсны дараа хот гэмтэй эсэхийг шийднэ.</p>}<div className="vote-choices"><button className={`skip-vote ${voteSelection === 'skip' ? 'chosen' : ''}`} onClick={onSkip}><ArrowLeft size={13} /> САНАЛ АЛГАСАХ</button><span>{selectedName ? `Сонгосон: ${selectedName}` : voteSelection === 'skip' ? 'Сонгосон: Санал алгасах' : 'Тоглогчийн картыг товшино уу.'}</span></div><button className="primary-button" onClick={onReview} disabled={voteSelection === null}>САНАЛЫГ ХЯНАХ <ChevronRight size={15} /></button></>}
     </> : <>
       <p className="vote-summary">{translateMessage(game.voteSummary)}</p>
-      <p className="your-vote-status">ТАНЫ САНАЛ · {mineLabel}</p>
-      <div className="vote-count-list">{totals.map(([key, count]) => <div key={key}><span>{key === 'skip' ? 'САНАЛ АЛГАСАХ' : nameOf(Number(key)) ?? 'Үл мэдэгдэх'}</span><b>{count}</b></div>)}</div>
+      <p className="your-vote-status">ТАНЫ САНАЛ · {mineLabel}{me.verdict ? ` · ШИЙДВЭР: ${me.verdict === 'guilty' ? 'ГЭМТЭЙ' : 'ГЭМГҮЙ'}` : ''}</p>
+      {game.trial && game.trial.guilty !== null
+        ? <div className="vote-count-list verdict-count-list"><div><span>ГЭМТЭЙ</span><b>{game.trial.guilty}</b></div><div><span>ГЭМГҮЙ</span><b>{game.trial.innocent}</b></div></div>
+        : <div className="vote-count-list">{totals.map(([key, count]) => <div key={key}><span>{key === 'skip' ? 'САНАЛ АЛГАСАХ' : nameOf(Number(key)) ?? 'Үл мэдэгдэх'}</span><b>{count}</b></div>)}</div>}
       <HostButton isHost={isHost} busy={busy} label={game.winner ? 'ҮР ДҮНГ ҮЗЭХ' : 'ДАРААХ ШӨНӨ'} onClick={onNext} />
     </>}
     {voteConfirmOpen && !game.votesRevealed && alive && !me.vote.submitted && <div className="vote-confirm-card"><div><small>САНАЛАА БАТЛАХ</small><p>{voteSelection === 'skip' ? 'Саналаа алгасах уу?' : `${selectedName ?? 'Энэ тоглогч'}-г хасах санал өгөх үү?`}</p></div><div><button className="secondary-button" onClick={onCancel}>БОЛИХ</button><button className="primary-button" disabled={busy} onClick={onSubmit}>САНАЛ ИЛГЭЭХ <Check size={13} /></button></div></div>}
+  </div>;
+}
+
+/** The nominated player defends themselves; everyone else living gives a guilty / innocent verdict. */
+function TrialPanel({ game, me, alive, busy, nameOf, onVerdict }: {
+  game: PublicGameView; me: PrivateGameView; alive: boolean; busy: boolean; nameOf: (id: number) => string | undefined; onVerdict: (choice: 'guilty' | 'innocent') => void;
+}) {
+  const trial = game.trial!;
+  const accused = nameOf(trial.accusedId) ?? '?';
+  const iAmAccused = trial.accusedId === me.seat;
+  const eligible = game.players.filter((player) => player.alive && player.id !== trial.accusedId).length;
+  return <div className="phase-panel voting-panel trial-panel">
+    <div className="discussion-head"><div><small>ӨДӨР {game.round} · ШҮҮХ ХУРАЛ</small><h2>{iAmAccused ? 'Та буруутгагдлаа.' : `${accused} шүүгдэж байна.`}</h2></div><Vote size={19} /></div>
+    <p>{iAmAccused
+      ? `${trial.nominationVotes} хүн таныг сонголоо. Микрофоноор өөрийгөө хамгаалж, яагаад мафи биш гэдгээ тайлбарла.`
+      : `${accused} ${trial.nominationVotes} санал авлаа. Түүний хамгаалалтыг сонсоод шийдвэрээ гарга. Тэнцвэл цагаатгана.`}</p>
+    {!alive ? <p>Та хасагдсан тул шийдвэр өгөх боломжгүй.</p>
+      : iAmAccused ? <div className="action-locked"><Mic size={13} /> Бусад {eligible} тоглогч шийдвэрээ гаргаж байна · {trial.decided}/{eligible}</div>
+      : me.verdict ? <div className="action-locked"><Check size={13} /> Таны шийдвэр: {me.verdict === 'guilty' ? 'ГЭМТЭЙ' : 'ГЭМГҮЙ'}. Бусдыг хүлээж байна · {trial.decided}/{eligible}</div>
+      : <div className="verdict-actions"><button className="secondary-button" disabled={busy} onClick={() => onVerdict('innocent')}><Shield size={14} /> ГЭМГҮЙ</button><button className="primary-button" disabled={busy} onClick={() => onVerdict('guilty')}><Skull size={14} /> ГЭМТЭЙ</button></div>}
   </div>;
 }
 
@@ -293,8 +319,31 @@ function PrivateInfoPanel({ player, me, mafiaNames, namesOf, onClose }: { player
   </aside>;
 }
 
+/** Night-by-night and day-by-day recap, shown once the game is over. */
+function MatchRecap({ game, onClose }: { game: PublicGameView; onClose: () => void }) {
+  const name = (id: number | null) => id === null ? '?' : game.players.find((player) => player.id === id)?.name ?? '?';
+  const withRole = (id: number) => {
+    const role = game.finalRoles?.[id];
+    return role ? `${name(id)} (${translateRole(role)})` : name(id);
+  };
+  return <div className="game-modal-backdrop" onClick={onClose}><section className="game-modal match-recap" role="dialog" aria-modal="true" aria-label="Тоглолтын түүх" onClick={(event) => event.stopPropagation()}>
+    <header><h2>Тоглолтын түүх</h2><button type="button" className="game-icon-button" onClick={onClose} aria-label="Хаах"><X size={15} /></button></header>
+    <ol className="recap-list">{(game.history ?? []).map((entry, index) => entry.kind === 'night'
+      ? <li key={index} className="recap-night"><b><Moon size={13} /> ШӨНӨ {entry.round}</b>
+          <span>{entry.mafiaTargetId === null ? 'Мафи хэнийг ч онилоогүй.' : `Мафи ${withRole(entry.mafiaTargetId)}-г онилсон.`}
+            {entry.outcome === 'killed' ? ` ${name(entry.eliminatedId)} алагдсан.` : entry.outcome === 'protected' ? ' Эмч хамгаалж аварсан.' : entry.outcome === 'shotgun' ? (entry.eliminatedId === null ? ' Буутай эмээ халдлагыг няцаасан.' : ` Буутай эмээ хариу буудаж ${withRole(entry.eliminatedId)}-г хассан.`) : ''}</span>
+          {entry.protectedIds.length > 0 && <span>Эмч: {entry.protectedIds.map(name).join(', ')}-г хамгаалсан.</span>}
+          {entry.investigations.map((check) => <span key={`${check.detectiveId}-${check.targetId}`}>Цагдаа {name(check.detectiveId)}: {name(check.targetId)} — {check.mafia ? 'мафийн тал' : 'мафи биш'}.</span>)}
+        </li>
+      : <li key={index} className="recap-day"><b><Sun size={13} /> ӨДӨР {entry.round}</b>
+          <span>{entry.accusedId === null ? 'Хэн ч шүүгдээгүй.' : `${withRole(entry.accusedId)} шүүгдсэн: гэмтэй ${entry.guilty ?? 0} – гэмгүй ${entry.innocent ?? 0}. ${entry.eliminatedId === null ? 'Цагаатгагдсан.' : 'Хасагдсан.'}`}</span>
+        </li>)}</ol>
+  </section></div>;
+}
+
 function ResultsScreen({ game, me, roomName, isHost, onReplay, onMenu }: { game: PublicGameView; me: PrivateGameView; roomName: string; isHost: boolean; onReplay: () => void; onMenu: () => void }) {
+  const [recapOpen, setRecapOpen] = useState(false);
   const headline = game.winner === 'Citizens' ? i18n.game.results.citizensWin : game.winner === 'Mafia' ? i18n.game.results.mafiaWin : i18n.game.results.draw;
   const myTeamWon = (game.winner === 'Mafia') === (me.team === 'mafia');
-  return <main className="game-results-screen"><div className="results-glow" /><div className="results-heading"><span>ЭЭЛЖ {String(game.round).padStart(2, '0')} · {roomName.toUpperCase()}</span><h1>{headline}</h1><p>{myTeamWon ? 'Таны баг яллаа!' : 'Таны баг энэ удаа ялагдлаа.'}</p></div><div className="results-player-list">{game.players.map((player) => { const roleName = game.finalRoles?.[player.id]; const role = roleName ? roleInfo(roleName) : null; return <div className={`results-player ${!player.alive ? 'is-dead' : ''}`} key={player.id}><Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}><VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar><span className="results-name">{player.name}{player.id === me.seat && <small>ЧИ</small>}</span>{role && <span className={`team-tag ${role.team}`}>{translateRole(role.name)}</span>}<span className="results-status">{player.alive ? 'АМЬД' : 'ХАСАГДСАН'}</span></div>; })}</div><div className="results-actions"><button className="secondary-button" onClick={onMenu}><ArrowLeft size={14} /> {i18n.game.results.mainMenu}</button>{isHost ? <button className="primary-button" onClick={onReplay}>{i18n.game.results.playAgain} <ChevronRight size={15} /></button> : <span className="discussion-wait">Эзэн шинэ тоглолт эхлүүлэхийг хүлээж байна</span>}</div></main>;
+  return <main className="game-results-screen"><div className="results-glow" /><div className="results-heading"><span>ЭЭЛЖ {String(game.round).padStart(2, '0')} · {roomName.toUpperCase()}</span><h1>{headline}</h1><p>{myTeamWon ? 'Таны баг яллаа!' : 'Таны баг энэ удаа ялагдлаа.'}</p></div><div className="results-player-list">{game.players.map((player) => { const roleName = game.finalRoles?.[player.id]; const role = roleName ? roleInfo(roleName) : null; return <div className={`results-player ${!player.alive ? 'is-dead' : ''}`} key={player.id}><Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}><VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar><span className="results-name">{player.name}{player.id === me.seat && <small>ЧИ</small>}</span>{role && <span className={`team-tag ${role.team}`}>{translateRole(role.name)}</span>}<span className="results-status">{player.alive ? 'АМЬД' : 'ХАСАГДСАН'}</span></div>; })}</div><div className="results-actions"><button className="secondary-button" onClick={onMenu}><ArrowLeft size={14} /> {i18n.game.results.mainMenu}</button>{(game.history?.length ?? 0) > 0 && <button className="secondary-button" onClick={() => setRecapOpen(true)}><Info size={14} /> ТОГЛОЛТЫН ТҮҮХ</button>}{isHost ? <button className="primary-button" onClick={onReplay}>{i18n.game.results.playAgain} <ChevronRight size={15} /></button> : <span className="discussion-wait">Эзэн шинэ тоглолт эхлүүлэхийг хүлээж байна</span>}</div>{recapOpen && <MatchRecap game={game} onClose={() => setRecapOpen(false)} />}</main>;
 }
