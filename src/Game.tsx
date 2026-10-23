@@ -167,7 +167,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
 
   if (game.phase === 'Results') return withVoice(<ResultsScreen game={game} me={me} roomName={roomName} isHost={isHost} onReplay={onRematch} onMenu={onLeave} />);
 
-  return withVoice(<div className={`core-game ${game.phase === 'Night' ? 'is-night' : ''}`}>
+  return withVoice(<div className={`core-game ${game.phase === 'Night' ? 'is-night' : ''} stage-${game.phase === 'Night' ? 'night' : game.phase === 'Voting' ? 'vote' : 'day'}`}>
     <header className="core-game-topbar">
       <div className="round-label"><span>{i18n.game.round}</span><strong>{String(game.round).padStart(2, '0')}</strong></div>
       <div className={`current-phase phase-${game.phase.toLowerCase().replace(' ', '-')}`}><span>{translatePhase(game.phase)}</span></div>

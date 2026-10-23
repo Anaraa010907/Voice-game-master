@@ -6,6 +6,10 @@ import './account.css';
 import './responsive.css';
 import './fullscreen.css';
 import './board.css';
+import './theme.css';
+import { installBackgrounds } from './backgrounds';
+
+installBackgrounds();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

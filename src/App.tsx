@@ -376,7 +376,7 @@ function RoomBrowser({ gameType, onBack, onCreate, onJoinCode, onEnter }: { game
   const load = useCallback(async () => {
     try {
       const result = await callGame<{ rooms: ListedRoom[] }>('list', { gameType });
-      setRooms(result.rooms);
+      setRooms(Array.isArray(result?.rooms) ? result.rooms : []);
       setError('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Өрөөнүүдийг ачаалж чадсангүй.');
