@@ -128,12 +128,14 @@ export function roleComposition(playerCount: number): RoleName[] {
   const pool: RoleName[] = ['Mafia', 'Doctor', 'Detective'];
   const mafiaQuota = Math.max(1, Math.floor((playerCount - 1) / 3));
   let mafiaCount = 1;
-  if (playerCount >= 5) pool.push('Good Informant');
   if (playerCount >= 6) pool.push('Old Lady with Shotgun');
   if (playerCount >= 7) {
     pool.push('Bad Informant');
     mafiaCount += 1;
   }
+  // The Good Informant knows every Mafia-aligned player. At small tables (one or two Mafia) that
+  // decides the game on day one, so the role only joins tables of eight or more.
+  if (playerCount >= 8) pool.push('Good Informant');
   while (mafiaCount < mafiaQuota) {
     pool.push('Mafia');
     mafiaCount += 1;
@@ -158,7 +160,9 @@ export function createInitialGame(
       team: roleTeams[role],
       info: {
         mafiaTeammateIds: role === 'Mafia' ? mafiaIds.filter((id) => id !== player.id && roleById[id] === 'Mafia') : [],
-        informantMafiaIds: role === 'Good Informant' ? mafiaIds : [],
+        // "Мафийн гишүүд" on the card: the Mafia themselves. The Bad Informant stays hidden so the
+        // Mafia side keeps one unknown piece even after the Informant speaks up.
+        informantMafiaIds: role === 'Good Informant' ? mafiaIds.filter((id) => roleById[id] === 'Mafia') : [],
         badInformantObjective: role === 'Bad Informant' ? 'Help the Mafia survive and mislead the citizens.' : '',
         investigationResult: '',
         protectionResult: '',
@@ -562,6 +566,7 @@ export function runGameEngineSelfTests() {
 
   // Role composition always fills every seat.
   for (let count = MIN_PLAYERS; count <= 12; count += 1) require(roleComposition(count).length === count, `Role composition fills ${count} seats.`);
+  for (let count = MIN_PLAYERS; count <= 12; count += 1) require(roleComposition(count).includes('Good Informant') === count >= 8, `Good Informant only at tables of 8+ (${count}).`);
 
   let state = startNight(fixed({ 1: 'Doctor', 2: 'Mafia', 3: 'Citizen', 4: 'Citizen' }));
   require(!allNightActionsSubmitted(state), 'Night waits for the Doctor and Mafia.');
@@ -598,7 +603,7 @@ export function runGameEngineSelfTests() {
   require(!resolved.error && resolved.state.publicPlayers.find((player) => player.id === 2)?.alive === true, 'Doctor protection suppresses Old Lady retaliation.');
 
   state = fixed({ 1: 'Good Informant', 2: 'Mafia', 3: 'Bad Informant', 4: 'Citizen' });
-  require(state.privatePlayers[1].info.informantMafiaIds.includes(2) && state.privatePlayers[1].info.informantMafiaIds.includes(3), 'Good Informant receives Mafia-aligned identities privately.');
+  require(state.privatePlayers[1].info.informantMafiaIds.includes(2) && !state.privatePlayers[1].info.informantMafiaIds.includes(3), 'Good Informant learns the Mafia members, not the Bad Informant.');
   require(!('role' in state.publicPlayers[1]), 'Public player data does not contain secret roles.');
   require(publicView(state).finalRoles === null, 'Roles stay hidden in the public view until the game ends.');
   require(state.privatePlayers[3].info.badInformantObjective.length > 0, 'Bad Informant receives a private objective.');
