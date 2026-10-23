@@ -839,3 +839,81 @@
   background: linear-gradient(180deg, #3a2c1a, #1c150d);
   color: var(--gold-bright);
 }
+
+/* Let the ger show through the Monopoly side panel. */
+.viewport .game-frame .mono-side {
+  background: linear-gradient(180deg, rgba(14, 10, 9, .74), rgba(9, 7, 6, .84));
+  backdrop-filter: blur(4px);
+}
+
+.viewport .game-frame .mono-side {
+  background: linear-gradient(180deg, rgba(14, 10, 9, .52), rgba(9, 7, 6, .66));
+  backdrop-filter: blur(2px);
+}
+
+.viewport .game-frame .mono-player {
+  background: linear-gradient(180deg, rgba(20, 16, 14, .86), rgba(10, 8, 8, .9));
+}
+
+/* Taller screens float the voice dock over the side panel's top edge; keep the header below it. */
+@media (min-height: 501px) and (min-width: 561px) {
+  .viewport .game-frame .mono-side {
+    padding-top: 52px;
+  }
+}
+
+/* Role screen: shade the left so the heading reads over the city; the card art already says it's secret. */
+.viewport .game-frame .role-reveal-screen {
+  background: linear-gradient(90deg, rgba(4, 5, 9, .82) 0%, rgba(4, 5, 9, .55) 38%, rgba(4, 5, 9, .15) 60%),
+    radial-gradient(ellipse at 70% 50%, rgba(210, 176, 115, .14), transparent 45%),
+    var(--bg-reveal, none) center / cover no-repeat,
+    linear-gradient(180deg, #0a0d18, #07080d);
+}
+
+.viewport .game-frame .reveal-card-art > span {
+  display: none;
+}
+
+.viewport .game-frame .reveal-heading p {
+  color: #d6ccbd;
+  text-shadow: 0 1px 6px #000;
+}
+
+/* "Бат ЧИ" — keep a gap before the "you" tag. */
+.viewport .game-frame .results-name small,
+.viewport .game-frame .game-player-copy > b small {
+  margin-left: 5px;
+}
+
+/* ---------- Painted emblem and card back ---------- */
+
+.viewport .game-frame .brand-emblem,
+.viewport .game-frame .brand-mark.compact .brand-emblem {
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.viewport .game-frame .brand-emblem img {
+  display: block;
+  filter: drop-shadow(0 0 8px rgba(210, 176, 115, .35));
+}
+
+.viewport .game-frame .auth-brand-emblem {
+  vertical-align: middle;
+  filter: drop-shadow(0 0 6px rgba(210, 176, 115, .3));
+}
+
+.viewport .game-frame .role-intro-back {
+  border-color: var(--gold);
+  background: #0b1020;
+}
+
+.viewport .game-frame .role-intro-back img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

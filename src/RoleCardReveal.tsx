@@ -25,7 +25,7 @@ export function RoleRevealIntro({ role, onDone }: { role: Role; onDone: () => vo
     <div className="role-intro-glow" aria-hidden="true" />
     <p className="role-intro-kicker">ТАНЫ ДҮР</p>
     <div className="role-intro-card">
-      <div className="role-intro-face role-intro-back" aria-hidden="true"><span>?</span></div>
+      <div className="role-intro-face role-intro-back" aria-hidden="true"><img src="/assets/cards/card-back.jpg" alt="" /></div>
       <div className="role-intro-face role-intro-front"><RoleCardArtwork role={role} /></div>
     </div>
     <div className="role-intro-copy">
