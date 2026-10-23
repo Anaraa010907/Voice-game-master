@@ -44,9 +44,3 @@ export const GAMES: Record<GameType, GameInfo> = {
     allowBots: true,
   },
 };
-
-/** Games that are planned but not playable yet, shown greyed out in the hub. */
-export const COMING_SOON: Array<{ category: GameCategory; title: string; tagline: string }> = [
-  { category: 'card', title: 'Тагнуулын ширээ', tagline: 'Spyfall маягийн дуут тоглоом. Хэн тагнуул вэ?' },
-  { category: 'board', title: 'Талын уралдаан', tagline: 'Морин уралдааны шоотой самбарын тоглоом.' },
-];

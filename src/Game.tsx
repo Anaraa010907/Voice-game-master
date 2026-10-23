@@ -245,7 +245,7 @@ function NightPanel({ round, player, me, mafiaNames, selectedName, lockedName, l
 }
 
 function MorningPanel({ round, report, winner, isHost, busy, onContinue }: { round: number; report: string; winner: PublicGameView['winner']; isHost: boolean; busy: boolean; onContinue: () => void }) {
-  const headline = report.includes('No Mafia attack') ? 'Шөнө тайван өнгөрлөө.' : report.includes('shotgun answered') ? 'Харанхуйд буун дуу гарав.' : report.includes('No one was eliminated') || report.includes('stopped') ? 'Халдлага няцаагдлаа.' : 'Бие олдлоо.';
+  const headline = report.includes('No Mafia attack') ? 'Шөнө тайван өнгөрлөө.' : report.includes('shotgun answered') ? 'Харанхуйд буун дуу гарав.' : report.includes('No one was eliminated') || report.includes('stopped') ? 'Халдлага няцаагдлаа.' : 'Хотод хохирогч гарлаа.';
   return <div className="phase-panel morning-panel"><div className="morning-seal"><Sun size={21} /></div><div className="morning-kicker">ӨГЛӨӨНИЙ ТАЙЛАН · ЭЭЛЖ {round}</div><h2>{headline}</h2><p className="morning-report-text">{translateMessage(report)}</p><HostButton isHost={isHost} busy={busy} label={winner ? 'ҮР ДҮНГ ҮЗЭХ' : 'ХЭЛЭЛЦҮҮЛЭГ НЭЭХ'} onClick={onContinue} /></div>;
 }
 

@@ -7,8 +7,8 @@ export const i18n = {
     trustNoOne: 'Хэнд ч бүү итгэ.',
     darkStory: 'Харанхуй гүйх үед үнэнийг ч бас дагуулна.',
     playNow: 'Одоо тоглох',
-    tableCount: '6 тоглогчтой ширээ',
-    duration: '10–20 минут',
+    tableCount: '2–12 тоглогч',
+    duration: 'Мафи ба Монгол Монополь',
     createRoom: 'Өрөө үүсгэх',
     joinRoom: 'Өрөөнд нэгдэх',
     roleGallery: 'Дүрийн цомог',
@@ -491,6 +491,8 @@ export const translateMessage = (message: string): string => {
     const clue = splitAt >= 0 ? body.slice(splitAt + 1) : '';
     return `${translateMessage(event)}${clue ? ` ${translateMessage(clue)}` : ''} ${morning[2]} тоглогч амьд үлдлээ.`;
   }
+  const eliminated = message.match(/^(.+) was eliminated during the night\.$/);
+  if (eliminated) return `${eliminated[1]} шөнө алагдлаа.`;
   const death = message.match(/^(.+) was found at (.+), killed by (.+)\.$/);
   if (death) {
     const location: Record<string, string> = {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
-  ArrowLeft, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, LockKeyhole, MessageCircle, Moon,
+  ArrowLeft, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, LockKeyhole, Moon,
   Radio, RefreshCw, Settings as SettingsIcon, Shield, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles } from './gameData';
@@ -15,8 +15,9 @@ import { i18n, translateMessage } from './i18n';
 import { removeProfilePhoto, uploadProfilePhoto } from './avatarUpload';
 import Avatar from './Avatar';
 import { callGame, useRoom, type ListedRoom, type NoticeTone, type NotifyFn, type RoomSeat } from './multiplayer';
-import { COMING_SOON, GAMES, type GameCategory, type GameType } from './games';
+import { GAMES, type GameType } from './games';
 import MonopolyScreen from './Monopoly';
+import { motionReduced, setMotionReduced } from './motion';
 import { musicEnabled, setMusicEnabled, setSfxEnabled, sfxEnabled, startMusic, wakeMusic } from './sfx';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { FullscreenToggle, useFullscreen, type FullscreenState } from './fullscreen';
@@ -242,7 +243,7 @@ export default function App() {
         {screen === 'roles' && <RoleGallery onBack={goBack} />}
         {screen === 'profile' && <ProfileScreen profile={profile} loading={accountLoading} loadError={profileError} onBack={goBack} onSignIn={() => openAuth('sign-in')} onSignOut={() => openAuth('sign-out')} onSave={saveProfile} onPhoto={saveProfilePhoto} />}
         {screen === 'auth' && <Auth key={authView} initialView={authView} onBack={goBack} onAuthenticated={() => setScreen('profile')} onSignedOut={() => { setUserId(null); setProfile(null); setScreen('menu'); }} />}
-        {screen === 'settings' && <Settings onBack={goBack} onNotice={notify} onProfile={() => setScreen('profile')} onAuth={() => openAuth(userId ? 'sign-out' : 'sign-in')} signedIn={Boolean(userId)} />}
+        {screen === 'settings' && <Settings onBack={goBack} onProfile={() => setScreen('profile')} onAuth={() => openAuth(userId ? 'sign-out' : 'sign-in')} signedIn={Boolean(userId)} />}
         {userId && profile && needsName(profile.display_name) && !namePromptDismissed && screen !== 'auth' && screen !== 'profile'
           && <NameSetup current={profile.display_name} onSave={(name) => saveProfile(name, profile.avatar_key)} onLater={() => setNamePromptDismissed(true)} onDone={() => notify('Нэр хадгалагдлаа.', 'success')} />}
         {notice && <div className={`toast is-${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}>{notice.tone === 'error' ? <CircleAlert size={14} /> : notice.tone === 'success' ? <Check size={14} /> : <Info size={14} />}{notice.text}</div>}
@@ -346,21 +347,18 @@ function JoinRoom({ onBack, onJoin }: { onBack: () => void; onJoin: (code: strin
 
 /** Choose a game type: two large cards (board game / voice game) with illustrations. */
 function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoose: (type: GameType) => void; onJoinCode: () => void }) {
-  const soon = (category: GameCategory) => COMING_SOON.filter((game) => game.category === category).map((game) => game.title).join(', ');
   return <div className="inner-screen hub-screen"><TopBar title="ТОГЛООМ СОНГОНО УУ" subtitle="ТОГЛОХ" onBack={onBack} trailing={<button className="text-button hub-code-button" onClick={onJoinCode}><Radio size={14} /> КОДООР НЭГДЭХ</button>} />
     <div className="hub-cards">
       <article className="hub-card hub-card-board" style={{ '--hub-bg': "url('/assets/hub/board-bg.jpg')" } as CSSProperties}>
         <h2>BOARD GAME</h2>
         <button type="button" className="hub-play" onClick={() => onChoose('monopoly')}>ТОГЛОХ <ChevronRight size={18} /></button>
         <p className="hub-card-meta"><b>{GAMES.monopoly.title}</b>{GAMES.monopoly.players} · Монгол газрууд, гэр бааз</p>
-        {soon('board') && <p className="hub-card-soon">Удахгүй: {soon('board')}</p>}
       </article>
 
       <article className="hub-card hub-card-voice" style={{ '--hub-bg': "url('/assets/hub/voice-bg.jpg')" } as CSSProperties}>
         <h2>VOICE GAME</h2>
         <button type="button" className="hub-play" onClick={() => onChoose('mafia')}>ТОГЛОХ <ChevronRight size={18} /></button>
         <p className="hub-card-meta"><b>{GAMES.mafia.title}</b>{GAMES.mafia.players} · Дуут чат, нууц дүр</p>
-        {soon('card') && <p className="hub-card-soon">Удахгүй: {soon('card')}</p>}
       </article>
     </div>
   </div>;
@@ -596,11 +594,11 @@ function RoleGallery({ onBack }: { onBack: () => void }) {
   </div>;
 }
 
-function Settings({ onBack, onNotice, onProfile, onAuth, signedIn }: { onBack: () => void; onNotice: NotifyFn; onProfile: () => void; onAuth: () => void; signedIn: boolean }) {
+function Settings({ onBack, onProfile, onAuth, signedIn }: { onBack: () => void; onProfile: () => void; onAuth: () => void; signedIn: boolean }) {
   const [sound, setSound] = useState(sfxEnabled());
   const [music, setMusic] = useState(musicEnabled());
-  const [motion, setMotion] = useState(true);
-  return <div className="inner-screen simple-screen"><TopBar title="ТОХИРГОО" subtitle="ТОХИРГОО" onBack={onBack} /><div className="settings-content">  <div className="settings-intro"><div className="eyebrow left-eye">ӨӨРТӨӨ ТОХИРУУЛ</div><h1>Уур амьсгалаа <i>сонго.</i></h1></div><div className="setting-list"><SettingRow icon={<Radio size={17} />} title="Дууны эффект" detail="Хотын дуу чимээ болон тоглоомын эффект" checked={sound} onToggle={() => { setSfxEnabled(!sound); setSound(!sound); }} /><SettingRow icon={<Radio size={17} />} title="Дэвсгэр хөгжим" detail="Цэс болон тоглоом дундах аялгуу" checked={music} onToggle={() => { setMusicEnabled(!music); setMusic(!music); }} /><SettingRow icon={<WandSparkles size={17} />} title="Хөдөлгөөнийг багасгах" detail="Шилжилт, хөдөлгөөнт эффектийг хязгаарлах" checked={!motion} onToggle={() => setMotion((value) => !value)} /><button className="setting-row" onClick={() => onNotice('Хэл: Монгол')}><span className="setting-icon"><MessageCircle size={17} /></span><span className="setting-copy"><b>Хэл</b><small>Ширээний хэлээ сонгоно уу</small></span><strong className="language-value">Монгол <ChevronRight size={15} /></strong></button><SettingsLink icon={<UserRound size={17} />} label="Профайл" detail={signedIn ? 'Нэр болон аватар засах' : 'Бүртгэлээ харахын тулд нэвтэрнэ үү'} onClick={onProfile} /><SettingsLink icon={<LockKeyhole size={17} />} label={signedIn ? 'Гарах' : 'Нэвтрэх / бүртгэл үүсгэх'} detail={signedIn ? 'Supabase бүртгэлээс гарах' : 'Бүртгэлийн боломжийг нээх'} onClick={onAuth} /></div><span className="settings-version">MAFIA: SHADOWS <i>•</i> ХУВИЛБАР 0.1.0</span></div></div>;
+  const [reduceMotion, setReduceMotion] = useState(motionReduced());
+  return <div className="inner-screen simple-screen"><TopBar title="ТОХИРГОО" subtitle="ТОХИРГОО" onBack={onBack} /><div className="settings-content">  <div className="settings-intro"><div className="eyebrow left-eye">ӨӨРТӨӨ ТОХИРУУЛ</div><h1>Уур амьсгалаа <i>сонго.</i></h1></div><div className="setting-list"><SettingRow icon={<Radio size={17} />} title="Дууны эффект" detail="Хотын дуу чимээ болон тоглоомын эффект" checked={sound} onToggle={() => { setSfxEnabled(!sound); setSound(!sound); }} /><SettingRow icon={<Radio size={17} />} title="Дэвсгэр хөгжим" detail="Цэс болон тоглоом дундах аялгуу" checked={music} onToggle={() => { setMusicEnabled(!music); setMusic(!music); }} /><SettingRow icon={<WandSparkles size={17} />} title="Хөдөлгөөнийг багасгах" detail="Анивчих эффект, хөдөлгөөнт шилжилтийг унтраах" checked={reduceMotion} onToggle={() => { setMotionReduced(!reduceMotion); setReduceMotion(!reduceMotion); }} /><SettingsLink icon={<UserRound size={17} />} label="Профайл" detail={signedIn ? 'Нэр болон аватар засах' : 'Бүртгэлээ харахын тулд нэвтэрнэ үү'} onClick={onProfile} /><SettingsLink icon={<LockKeyhole size={17} />} label={signedIn ? 'Гарах' : 'Нэвтрэх / бүртгэл үүсгэх'} detail={signedIn ? 'Supabase бүртгэлээс гарах' : 'Бүртгэлийн боломжийг нээх'} onClick={onAuth} /></div><span className="settings-version">MAFIA: SHADOWS <i>•</i> ХУВИЛБАР 0.1.0</span></div></div>;
 }
 
 function SettingsLink({ icon, label, detail, onClick }: { icon: ReactNode; label: string; detail: string; onClick: () => void }) {

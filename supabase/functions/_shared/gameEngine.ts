@@ -87,8 +87,6 @@ export type RandomSource = () => number;
 
 export const MIN_PLAYERS = 4;
 
-const locations = ['the old rail yard', 'the riverside arcade', 'an alley off Bell Street', 'the shuttered cinema'];
-const methods = ['a single gunshot', 'a broken bottle', 'a length of piano wire', 'a blunt strike in the dark'];
 
 const defaultRandom: RandomSource = () => Math.random();
 
@@ -99,11 +97,6 @@ function shuffle<T>(items: T[], random: RandomSource): T[] {
     [result[index], result[swap]] = [result[swap], result[index]];
   }
   return result;
-}
-
-function pick<T>(items: T[], random: RandomSource): T | undefined {
-  if (!items.length) return undefined;
-  return items[Math.min(items.length - 1, Math.floor(random() * items.length))];
 }
 
 export function isMafiaAligned(role: RoleName): boolean {
@@ -358,7 +351,7 @@ export function resolveNight(state: GameEngineState, random: RandomSource = defa
       }
     } else {
       publicPlayers = publicPlayers.map((player) => player.id === target.id ? { ...player, alive: false } : player);
-      report = `${target.name} was found at ${pick(locations, random)}, killed by ${pick(methods, random)}.`;
+      report = `${target.name} was eliminated during the night.`;
     }
   }
 
