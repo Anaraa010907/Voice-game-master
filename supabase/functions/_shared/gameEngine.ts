@@ -48,7 +48,6 @@ export type PrivatePlayerInfo = {
   badInformantObjective: string;
   investigationResult: string;
   protectionResult: string;
-  traceExplanation: string;
 };
 
 export type PrivateGamePlayer = {
@@ -72,7 +71,6 @@ export type GameEngineState = {
   privatePlayers: Record<number, PrivateGamePlayer>;
   nightResolved: boolean;
   retaliationResolved: boolean;
-  tracePlayerIds: number[];
   morningReport: string;
   publicEventLog: string[];
   voteCounts: Record<string, number>;
@@ -89,13 +87,6 @@ export type RandomSource = () => number;
 
 export const MIN_PLAYERS = 4;
 
-const traceStories = [
-  'A torn ticket stub from the last train was caught in the fence nearby.',
-  'A few drops of rainwater and ash marked the path beside the scene.',
-  'A thread of dark wool snagged on the gate after the storm.',
-  'Fresh grit from the river walk was pressed into the wet pavement.',
-  'A faint trace of machine oil led away toward the street.',
-];
 const locations = ['the old rail yard', 'the riverside arcade', 'an alley off Bell Street', 'the shuttered cinema'];
 const methods = ['a single gunshot', 'a broken bottle', 'a length of piano wire', 'a blunt strike in the dark'];
 
@@ -178,7 +169,6 @@ export function createInitialGame(
         badInformantObjective: role === 'Bad Informant' ? 'Help the Mafia survive and mislead the citizens.' : '',
         investigationResult: '',
         protectionResult: '',
-        traceExplanation: '',
       },
       nightAction: { submitted: false, targetId: null },
       vote: { submitted: false, choice: null },
@@ -195,7 +185,6 @@ export function createInitialGame(
     privatePlayers,
     nightResolved: false,
     retaliationResolved: false,
-    tracePlayerIds: [],
     morningReport: '',
     publicEventLog: ['The table is set. Roles have been dealt in secret.'],
     voteCounts: {},
@@ -222,7 +211,7 @@ export function startNight(state: GameEngineState): GameEngineState {
   const nextRound = state.phase === 'Role Reveal' ? state.round : state.round + 1;
   const privatePlayers = Object.fromEntries(Object.entries(state.privatePlayers).map(([id, player]) => [id, {
     ...player,
-    info: { ...player.info, investigationResult: '', protectionResult: '', traceExplanation: '' },
+    info: { ...player.info, investigationResult: '', protectionResult: '' },
     nightAction: { submitted: false, targetId: null },
     vote: { submitted: false, choice: null },
   }])) as Record<number, PrivateGamePlayer>;
@@ -234,7 +223,6 @@ export function startNight(state: GameEngineState): GameEngineState {
     privatePlayers,
     nightResolved: false,
     retaliationResolved: false,
-    tracePlayerIds: [],
     morningReport: '',
     votesRevealed: false,
     runoffCandidates: null,
@@ -389,20 +377,8 @@ export function resolveNight(state: GameEngineState, random: RandomSource = defa
     privatePlayers[doctor.id] = { ...doctorSecret, lastProtectedId: action.targetId, info: { ...doctorSecret.info, protectionResult: result } };
   }
 
-  const eligible = publicPlayers.filter((player) => player.alive && !isMafiaAligned(privatePlayers[player.id].role) && privatePlayers[player.id].role !== 'Doctor' && privatePlayers[player.id].role !== 'Detective');
-  const traces = shuffle(eligible, random).slice(0, Math.min(2, eligible.length));
-  for (const trace of traces) {
-    privatePlayers[trace.id] = {
-      ...privatePlayers[trace.id],
-      info: { ...privatePlayers[trace.id].info, traceExplanation: pick(traceStories, random) ?? traceStories[0] },
-    };
-  }
-  const traceNames = traces.map((player) => player.name);
-  const clueReport = traceNames.length
-    ? `Traces associated with ${traceNames.join(' and ')} were found. Traces are clues, not proof.`
-    : 'No eligible trace clues were found.';
   const livingCount = publicPlayers.filter((player) => player.alive).length;
-  const morningReport = `${report} ${clueReport} ${livingCount} players remain alive.`;
+  const morningReport = `${report} ${livingCount} players remain alive.`;
   return {
     state: {
       ...state,
@@ -411,9 +387,8 @@ export function resolveNight(state: GameEngineState, random: RandomSource = defa
       privatePlayers,
       nightResolved: true,
       retaliationResolved,
-      tracePlayerIds: traces.map((player) => player.id),
       morningReport,
-      publicEventLog: [...state.publicEventLog.slice(-3), report, clueReport],
+      publicEventLog: [...state.publicEventLog.slice(-3), report],
       winner: getWinner({ publicPlayers, privatePlayers }),
     },
   };
@@ -551,7 +526,6 @@ export function publicView(state: GameEngineState) {
     voteSummary: state.voteSummary,
     votesRevealed: state.votesRevealed,
     runoffCandidates: state.runoffCandidates,
-    tracePlayerIds: state.tracePlayerIds,
     winner: state.winner,
     finalRoles: finished ? Object.fromEntries(Object.entries(state.privatePlayers).map(([id, player]) => [id, player.role])) as Record<number, RoleName> : null,
   };
@@ -679,14 +653,11 @@ export function runGameEngineSelfTests() {
   require(getWinner({ ...citizenWin, publicPlayers: citizenWin.publicPlayers.map((player) => player.id === 2 ? { ...player, alive: false } : player) }) === 'Citizens', 'Citizens win when all Mafia-aligned players are gone.');
   require(getWinner({ ...citizenWin, publicPlayers: citizenWin.publicPlayers.map((player) => player.id > 2 ? { ...player, alive: false } : player) }) === 'Mafia', 'Mafia wins when aligned players equal or outnumber the living town.');
 
-  // Traces stay private and only go to plain town roles.
+  // The morning reports only what happened: no footprint or trace clues.
   state = startNight(fixed({ 1: 'Doctor', 2: 'Mafia', 3: 'Citizen', 4: 'Old Lady with Shotgun' }));
   state = submitNightAction(state, 1, 1).state;
   resolved = resolveNight(state, () => 0);
-  require(resolved.state.tracePlayerIds.length <= 2, 'Morning generates up to two eligible living traces.');
-  require(!resolved.state.privatePlayers[2].info.traceExplanation && !resolved.state.privatePlayers[1].info.traceExplanation, 'Mafia and Doctor receive no trace explanation.');
-  const privateText = Object.values(resolved.state.privatePlayers).map((player) => player.info.traceExplanation).filter(Boolean);
-  require(privateText.every((text) => !resolved.state.publicEventLog.join(' ').includes(text)), 'Private trace explanations never enter public logs.');
+  require(!/trace/i.test(resolved.state.morningReport) && !resolved.state.publicEventLog.some((line) => /trace/i.test(line)), 'Morning reports carry no trace clues.');
   require(resolveNight(resolved.state, () => 0).state === resolved.state, 'A completed Night cannot be resolved twice.');
 
   // Doctor cannot protect the same player on consecutive nights.

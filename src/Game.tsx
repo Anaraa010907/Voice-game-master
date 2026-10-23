@@ -246,7 +246,7 @@ function NightPanel({ round, player, me, mafiaNames, selectedName, lockedName, l
 
 function MorningPanel({ round, report, winner, isHost, busy, onContinue }: { round: number; report: string; winner: PublicGameView['winner']; isHost: boolean; busy: boolean; onContinue: () => void }) {
   const headline = report.includes('No Mafia attack') ? 'Шөнө тайван өнгөрлөө.' : report.includes('shotgun answered') ? 'Харанхуйд буун дуу гарав.' : report.includes('No one was eliminated') || report.includes('stopped') ? 'Халдлага няцаагдлаа.' : 'Бие олдлоо.';
-  return <div className="phase-panel morning-panel"><div className="morning-seal"><Sun size={21} /></div><div className="morning-kicker">ӨГЛӨӨНИЙ ТАЙЛАН · ЭЭЛЖ {round}</div><h2>{headline}</h2><p className="morning-report-text">{translateMessage(report)}</p><div className="clue-disclaimer"><Info size={13} /> Сэжүүр нь нотлох баримт биш, зөвхөн заалт юм.</div><HostButton isHost={isHost} busy={busy} label={winner ? 'ҮР ДҮНГ ҮЗЭХ' : 'ХЭЛЭЛЦҮҮЛЭГ НЭЭХ'} onClick={onContinue} /></div>;
+  return <div className="phase-panel morning-panel"><div className="morning-seal"><Sun size={21} /></div><div className="morning-kicker">ӨГЛӨӨНИЙ ТАЙЛАН · ЭЭЛЖ {round}</div><h2>{headline}</h2><p className="morning-report-text">{translateMessage(report)}</p><HostButton isHost={isHost} busy={busy} label={winner ? 'ҮР ДҮНГ ҮЗЭХ' : 'ХЭЛЭЛЦҮҮЛЭГ НЭЭХ'} onClick={onContinue} /></div>;
 }
 
 function DiscussionPanel({ round, alive, isHost, busy, onVote, onPrivate }: { round: number; alive: boolean; isHost: boolean; busy: boolean; onVote: () => void; onPrivate: () => void }) {
@@ -290,7 +290,6 @@ function PrivateInfoPanel({ player, me, mafiaNames, namesOf, onClose }: { player
     {me.role === 'Detective' && notebook.length > 0 && <div className="private-secret-line detective-notebook"><b>ЦАГДААГИЙН ТЭМДЭГЛЭЛ</b>{notebook.map(([id, alignment]) => <span key={id} className={`notebook-entry is-${alignment}`}>{namesOf([Number(id)])[0] ?? '?'} — {alignment === 'mafia' ? 'мафийн талд' : 'мафи биш'}</span>)}</div>}
     {info.protectionResult && <div className="private-secret-line"><b>ХАМГААЛАЛТ · ХУВИЙН</b><span>{translateMessage(info.protectionResult)}</span></div>}
     {me.role === 'Old Lady with Shotgun' && <div className="private-secret-line"><b>БУУ</b><span>{me.shotgunSpent ? 'Буудсан — дахин хариу буудах боломжгүй.' : 'Цэнэглэсэн — нэг удаа хариу буудна.'}</span></div>}
-    {info.traceExplanation && <div className="private-trace-card"><span><Fingerprint size={13} /> ТАНЫ ХУВИЙН СЭЖҮҮРИЙН ТАЙЛБАР</span><p>{translateMessage(info.traceExplanation)}</p><small>Хэлэлцүүлгийн үеэр энэ мөрийг тайлбарлаж болно.</small></div>}
   </aside>;
 }
 
