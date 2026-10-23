@@ -1,0 +1,26 @@
+{
+  "name": "MAFIA: SHADOWS",
+  "short_name": "Mafia Shadows",
+  "lang": "mn",
+  "start_url": "/",
+  "display": "fullscreen",
+  "display_override": [
+    "fullscreen",
+    "standalone"
+  ],
+  "orientation": "landscape",
+  "background_color": "#0a0c12",
+  "theme_color": "#090b11",
+  "icons": [
+    {
+      "src": "/assets/brand/emblem-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/brand/emblem-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

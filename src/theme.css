@@ -1,0 +1,1130 @@
+/*
+ * Noir theme layer (loaded last). Visual styling only — colours, frames, buttons and painted
+ * backgrounds — on top of the existing layouts, matching the gold-and-crimson mockups.
+ * Painted backgrounds come from var(--bg-*) (see src/backgrounds.ts); each screen keeps a
+ * gradient fallback so it looks finished before the images exist.
+ */
+
+:root {
+  --gold: #d2b073;
+  --gold-bright: #f1d79a;
+  --gold-deep: #8f6d3c;
+  --gold-line: rgba(210, 176, 115, .55);
+  --gold-faint: rgba(210, 176, 115, .18);
+  --crimson: #b8303f;
+  --crimson-deep: #6e1622;
+  --panel-fill: linear-gradient(180deg, rgba(17, 19, 27, .9), rgba(9, 11, 17, .93));
+  --panel-shadow: 0 14px 34px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(0, 0, 0, .55), inset 0 0 0 2px rgba(210, 176, 115, .07);
+  --display: 'Playfair Display', 'Barlow Condensed', Georgia, serif;
+}
+
+/* ---------- Shared building blocks ---------- */
+
+.viewport .game-frame .primary-button {
+  border: 1px solid #e3c27f;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #c93c4c 0%, #a02434 55%, #7c1826 100%);
+  color: #fff4e6;
+  box-shadow: 0 8px 20px rgba(110, 22, 34, .45), inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -2px 0 rgba(0, 0, 0, .25);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .4);
+}
+
+.viewport .game-frame .primary-button:hover:not(:disabled) {
+  background: linear-gradient(180deg, #d84a5a 0%, #ad2b3b 55%, #861b2a 100%);
+  transform: translateY(-1px);
+}
+
+.viewport .game-frame .primary-button svg {
+  color: var(--gold-bright);
+}
+
+.viewport .game-frame .secondary-button {
+  border: 1px solid var(--gold-line);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #161821, #0c0e14);
+  color: #ecdcbc;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+
+.viewport .game-frame .secondary-button:hover:not(:disabled) {
+  border-color: var(--gold);
+  background: #1c1b1f;
+  color: #fff3dc;
+}
+
+.viewport .game-frame .secondary-button svg,
+.viewport .game-frame .text-button svg {
+  color: var(--gold);
+}
+
+.viewport .game-frame .text-button {
+  color: #cdbf9f;
+}
+
+/* Square icon buttons with a gold frame (back, refresh, settings). */
+.viewport .game-frame .icon-button,
+.viewport .game-frame .back-button,
+.viewport .game-frame .game-icon-button {
+  border: 1px solid var(--gold-line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #1a1b22, #0c0e14);
+  color: var(--gold);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+
+.viewport .game-frame .icon-button:hover,
+.viewport .game-frame .back-button:hover,
+.viewport .game-frame .game-icon-button:hover {
+  border-color: var(--gold);
+  color: var(--gold-bright);
+}
+
+/* Gold toggle switch. */
+.viewport .game-frame .toggle {
+  border-color: var(--gold-line);
+  background: #0d0f15;
+}
+
+.viewport .game-frame .toggle.toggle-on {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #b78f50, #7d5d2c);
+}
+
+.viewport .game-frame .toggle.toggle-on i {
+  background: radial-gradient(circle at 35% 30%, #fff6dc, #e7c98c 60%, #b8914e);
+}
+
+/* Inputs. */
+.viewport .game-frame .form-field input,
+.viewport .game-frame .form-field select,
+.viewport .game-frame .auth-field input {
+  border: 1px solid var(--gold-faint);
+  border-radius: 8px;
+  background: rgba(7, 9, 14, .85);
+  color: #f1ebe2;
+}
+
+.viewport .game-frame .form-field input:focus,
+.viewport .game-frame .form-field select:focus,
+.viewport .game-frame .auth-field input:focus {
+  border-color: var(--gold);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(210, 176, 115, .15);
+}
+
+/* Framed glass panels. */
+.viewport .game-frame .room-form,
+.viewport .game-frame .join-form,
+.viewport .game-frame .browse-actions,
+.viewport .game-frame .browse-room,
+.viewport .game-frame .browse-empty,
+.viewport .game-frame .room-code,
+.viewport .game-frame .game-player-list,
+.viewport .game-frame .phase-panel,
+.viewport .game-frame .game-modal,
+.viewport .game-frame .game-private-panel,
+.viewport .game-frame .results-player,
+.viewport .game-frame .mono-side,
+.viewport .game-frame .setting-list,
+.viewport .game-frame .account-panel {
+  border: 1px solid var(--gold-line);
+  border-radius: 10px;
+  background: var(--panel-fill);
+  box-shadow: var(--panel-shadow);
+  backdrop-filter: blur(3px);
+}
+
+/* Top bar: dark glass strip, square back button, title in gold small caps. */
+.viewport .game-frame .top-bar {
+  border-bottom: 1px solid var(--gold-faint);
+  background: linear-gradient(180deg, rgba(8, 10, 15, .92), rgba(8, 10, 15, .65));
+}
+
+.viewport .game-frame .top-title span {
+  color: var(--gold);
+}
+
+.viewport .game-frame .top-title strong {
+  color: #f4ead7;
+}
+
+/* Section headings in the gold serif display face. */
+.viewport .game-frame .menu-copy h1,
+.viewport .game-frame .setup-heading h1,
+.viewport .game-frame .lobby-heading h1,
+.viewport .game-frame .settings-intro h1,
+.viewport .game-frame .gallery-heading h1,
+.viewport .game-frame .results-heading h1,
+.viewport .game-frame .reveal-heading h1 {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: .5px;
+  color: transparent;
+  background: linear-gradient(180deg, #fff1d0 0%, #e2c084 45%, #a87d3e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, .7));
+}
+
+.viewport .game-frame .menu-copy h1 i,
+.viewport .game-frame .setup-heading h1 i,
+.viewport .game-frame .lobby-heading h1 i,
+.viewport .game-frame .settings-intro h1 i,
+.viewport .game-frame .gallery-heading h1 i,
+.viewport .game-frame .results-heading h1 em,
+.viewport .game-frame .reveal-heading h1 em {
+  font-style: italic;
+  color: transparent;
+  background: linear-gradient(180deg, #ff7a86 0%, #d0394b 55%, #8e1a2a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* Eyebrow with gold rules and a centre diamond. */
+.viewport .game-frame .eyebrow {
+  color: var(--gold);
+}
+
+.viewport .game-frame .eyebrow span {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold));
+}
+
+.viewport .game-frame .eyebrow span:last-child {
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+
+/* Avatars: gold ring. */
+.viewport .game-frame .avatar {
+  border: 2px solid rgba(210, 176, 115, .75);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .55), 0 4px 10px rgba(0, 0, 0, .5);
+}
+
+/* ---------- Painted backgrounds with fallbacks ---------- */
+
+.viewport .game-frame {
+  --bg-shade-sides: linear-gradient(90deg, rgba(5, 6, 10, .55) 0%, rgba(5, 6, 10, .1) 40%, rgba(5, 6, 10, .1) 60%, rgba(5, 6, 10, .55) 100%);
+  --fallback-city: radial-gradient(circle at 74% 18%, rgba(244, 226, 190, .55) 0 2.2%, rgba(205, 170, 110, .18) 2.8%, transparent 14%),
+    linear-gradient(180deg, #0b1120 0%, #121a2c 42%, #0b0e16 70%, #07080c 100%);
+  --fallback-office: radial-gradient(ellipse at 8% 62%, rgba(232, 168, 82, .32), transparent 30%),
+    repeating-linear-gradient(180deg, rgba(70, 92, 130, .09) 0 5px, transparent 5px 14px) 100% 0 / 24% 58% no-repeat,
+    linear-gradient(180deg, #0d1018 0%, #0f1119 60%, #1a120d 100%);
+  --fallback-table: radial-gradient(ellipse at 50% 95%, rgba(120, 72, 40, .55), transparent 38%),
+    radial-gradient(ellipse at 50% 22%, rgba(214, 150, 82, .3), transparent 32%),
+    linear-gradient(180deg, #141019 0%, #120f15 60%, #0b0a0e 100%);
+}
+
+.viewport .game-frame .menu-screen {
+  background: var(--bg-shade-sides), var(--bg-menu, none) center / cover no-repeat, var(--fallback-city);
+}
+
+/* With a painted city the CSS skyline is no longer needed. */
+:root[data-bg-menu] .viewport .game-frame .menu-screen .city-art {
+  display: none;
+}
+
+.viewport .game-frame.screen-hub .inner-screen,
+.viewport .game-frame.screen-browse .inner-screen,
+.viewport .game-frame.screen-join-room .inner-screen,
+.viewport .game-frame.screen-roles .inner-screen {
+  background: linear-gradient(180deg, rgba(5, 6, 10, .35), rgba(5, 6, 10, .55)), var(--bg-menu, none) center / cover no-repeat, var(--fallback-city);
+}
+
+.viewport .game-frame.screen-create-room .inner-screen,
+.viewport .game-frame.screen-settings .inner-screen,
+.viewport .game-frame.screen-profile .inner-screen,
+.viewport .game-frame.screen-auth .inner-screen,
+.viewport .game-frame.screen-lobby .lobby-screen {
+  background: linear-gradient(90deg, rgba(5, 6, 10, .6), rgba(5, 6, 10, .25) 55%, rgba(5, 6, 10, .45)), var(--bg-office, none) center / cover no-repeat, var(--fallback-office);
+}
+
+/* ---------- Main menu ---------- */
+
+.viewport .game-frame .menu-nav button {
+  border: 1px solid var(--gold-line);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(20, 21, 28, .88), rgba(9, 10, 15, .92));
+  color: #efe3cb;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+
+.viewport .game-frame .menu-nav button:hover {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, rgba(36, 30, 24, .92), rgba(14, 12, 12, .95));
+}
+
+.viewport .game-frame .menu-nav .nav-icon {
+  color: var(--gold);
+  filter: drop-shadow(0 0 6px rgba(210, 176, 115, .35));
+}
+
+.viewport .game-frame .menu-nav button > svg {
+  color: var(--gold);
+}
+
+.viewport .game-frame .menu-subtext {
+  width: fit-content;
+  padding: 7px 12px;
+  border: 1px solid var(--gold-faint);
+  border-radius: 999px;
+  background: rgba(8, 10, 15, .7);
+  color: #d9cbb0;
+}
+
+.viewport .game-frame .menu-subtext svg {
+  color: var(--gold);
+}
+
+.viewport .game-frame .menu-footer {
+  border-top: 1px solid var(--gold-faint);
+  padding-top: 6px;
+}
+
+.viewport .game-frame .online-note {
+  padding: 5px 12px;
+  border: 1px solid var(--gold-faint);
+  border-radius: 999px;
+  background: rgba(8, 10, 15, .7);
+}
+
+.viewport .game-frame .brand-emblem {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--gold-line);
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #2a1c1f, #0b0c11);
+  color: var(--gold-bright);
+  box-shadow: 0 0 14px rgba(210, 176, 115, .25);
+}
+
+.viewport .game-frame .brand-mark.compact .brand-emblem {
+  width: 26px;
+  height: 26px;
+}
+
+/* ---------- Room browser ---------- */
+
+.viewport .game-frame .browse-room {
+  border-radius: 10px;
+}
+
+.viewport .game-frame .browse-room:hover {
+  border-color: var(--gold);
+}
+
+.viewport .game-frame .browse-room-copy b {
+  color: #f4ead7;
+}
+
+.viewport .game-frame .browse-seats i {
+  border: 1px solid var(--gold-line);
+  border-radius: 50%;
+  background: transparent;
+}
+
+.viewport .game-frame .browse-seats i.taken {
+  border-color: #f1d79a;
+  background: radial-gradient(circle at 35% 30%, #fff1cc, #d2b073 55%, #94703b);
+  box-shadow: 0 0 6px rgba(241, 215, 154, .45);
+}
+
+.viewport .game-frame .browse-room-count span {
+  padding: 2px 8px;
+  border: 1px solid var(--gold-faint);
+  border-radius: 6px;
+  background: rgba(8, 10, 15, .7);
+  color: #e8dcc2;
+}
+
+.viewport .game-frame .browse-note {
+  padding: 8px 10px;
+  border: 1px solid var(--gold-faint);
+  border-radius: 8px;
+  background: rgba(8, 10, 15, .6);
+}
+
+/* ---------- Create / join room ---------- */
+
+.viewport .game-frame .private-setting {
+  border: 1px solid var(--gold-faint);
+  border-radius: 8px;
+  background: rgba(7, 9, 14, .75);
+}
+
+.viewport .game-frame .form-field > span {
+  color: var(--gold);
+}
+
+/* ---------- Game hub ---------- */
+
+.viewport .game-frame .hub-card {
+  border-color: var(--gold-line);
+  border-radius: 12px;
+}
+
+/* ---------- Lobby ---------- */
+
+.viewport .game-frame .lobby-screen .player-grid .compact-card,
+.viewport .game-frame .lobby-screen .player-grid .invite-slot {
+  border-radius: 10px;
+}
+
+.viewport .game-frame .lobby-screen .player-grid .compact-card {
+  border: 1px solid var(--gold-line);
+  background: linear-gradient(180deg, rgba(20, 21, 28, .9), rgba(9, 10, 15, .94));
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .45);
+}
+
+.viewport .game-frame .lobby-screen .player-grid .compact-card.player-ready .player-status {
+  color: #8fd09d;
+}
+
+.viewport .game-frame .lobby-screen .player-grid .invite-slot {
+  border: 1px dashed rgba(210, 176, 115, .35);
+  background: rgba(8, 10, 15, .55);
+}
+
+.viewport .game-frame .lobby-screen .room-code strong {
+  color: #f4ead7;
+  letter-spacing: 3px;
+}
+
+.viewport .game-frame .lobby-screen .room-code button {
+  border: 1px solid var(--gold-line);
+  border-radius: 50%;
+  background: #0d0f15;
+  color: var(--gold);
+}
+
+.viewport .game-frame .lobby-screen .lobby-hint {
+  padding: 8px 10px;
+  border: 1px solid var(--gold-faint);
+  border-radius: 8px;
+  background: rgba(8, 10, 15, .7);
+}
+
+.viewport .game-frame .lobby-screen .lobby-hint svg {
+  color: var(--gold);
+}
+
+/* ---------- Voice dock ---------- */
+
+.viewport .game-frame .voice-dock {
+  border-color: var(--gold-line);
+  background: rgba(8, 10, 15, .82);
+}
+
+.viewport .game-frame .voice-summary-button {
+  border-color: var(--gold-line);
+  background: #0d0f15;
+  color: var(--gold);
+}
+
+/* ---------- Toasts ---------- */
+
+.viewport .game-frame .toast {
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .6);
+}
+
+/* Menu: keep the info pill clear of the footer on short phones. */
+@media (max-height: 500px) {
+  .viewport .game-frame .menu-copy {
+    top: 19%;
+  }
+
+  .viewport .game-frame .menu-subtext {
+    margin-top: 10px;
+  }
+}
+
+.viewport .game-frame .menu-footer {
+  border-top: 0;
+}
+
+.viewport .game-frame .browse-actions {
+  padding: 12px;
+}
+
+/* ================= Mafia game ================= */
+
+.viewport .game-frame .core-game {
+  background: linear-gradient(90deg, rgba(5, 6, 10, .55), rgba(5, 6, 10, .05) 30%, rgba(5, 6, 10, .05) 70%, rgba(5, 6, 10, .55)),
+    var(--bg-table-day, none) center / cover no-repeat, var(--fallback-table);
+}
+
+.viewport .game-frame .core-game.stage-night {
+  background: linear-gradient(90deg, rgba(3, 5, 14, .6), rgba(3, 5, 14, .1) 30%, rgba(3, 5, 14, .1) 70%, rgba(3, 5, 14, .6)),
+    var(--bg-table-night, none) center / cover no-repeat,
+    radial-gradient(circle at 50% 18%, rgba(190, 205, 255, .35) 0 3%, rgba(120, 140, 220, .12) 4%, transparent 18%),
+    linear-gradient(180deg, #0b1027 0%, #0c0f22 60%, #07080f 100%);
+}
+
+.viewport .game-frame .core-game.stage-vote {
+  background: linear-gradient(90deg, rgba(10, 3, 5, .6), rgba(10, 3, 5, .1) 30%, rgba(10, 3, 5, .1) 70%, rgba(10, 3, 5, .6)),
+    var(--bg-table-vote, none) center / cover no-repeat,
+    radial-gradient(ellipse at 50% 20%, rgba(214, 70, 60, .35), transparent 38%),
+    linear-gradient(180deg, #1d0c10 0%, #150a0e 60%, #0a0608 100%);
+}
+
+/* The painted room replaces the drawn window and table. */
+.viewport .game-frame .crime-stage {
+  border: 0;
+  background: transparent;
+}
+
+:root[data-bg-table-day] .viewport .game-frame .crime-stage-art {
+  display: none;
+}
+
+/* Top bar: round badge, phase pill, centred timer plate, framed square actions. */
+.viewport .game-frame .core-game-topbar {
+  position: relative;
+  border-bottom: 1px solid var(--gold-faint);
+  background: linear-gradient(180deg, rgba(6, 7, 11, .9), rgba(6, 7, 11, .45));
+}
+
+.viewport .game-frame .round-label {
+  gap: 6px;
+}
+
+.viewport .game-frame .round-label strong {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 2px solid var(--gold);
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #26201a, #0b0c11);
+  color: var(--gold-bright);
+  font-family: var(--display);
+  font-size: 17px;
+  box-shadow: 0 0 12px rgba(210, 176, 115, .3);
+}
+
+.viewport .game-frame .current-phase {
+  height: 26px;
+  padding: 0 14px;
+  border: 1px solid #e3c27f;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #d9b56c, #9c7436);
+  color: #22170a;
+  font-weight: 700;
+}
+
+.viewport .game-frame .stage-night .current-phase {
+  border-color: #8f9ce6;
+  background: linear-gradient(180deg, #4b56a8, #262c66);
+  color: #e3e7ff;
+}
+
+.viewport .game-frame .stage-vote .current-phase {
+  border-color: #e3c27f;
+  background: linear-gradient(180deg, #c93c4c, #7c1826);
+  color: #fff1e4;
+}
+
+.viewport .game-frame .demo-timer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 4px 16px;
+  border: 1px solid var(--gold-line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #15161d, #0a0b10);
+  color: #f4ead7;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .5);
+}
+
+.viewport .game-frame .demo-timer strong {
+  font-size: 18px;
+  letter-spacing: 1px;
+}
+
+.viewport .game-frame .demo-timer svg {
+  color: var(--gold);
+}
+
+.viewport .game-frame .game-icon-button,
+.viewport .game-frame .game-leave-button {
+  border-radius: 8px;
+}
+
+.viewport .game-frame .game-leave-button {
+  border: 1px solid rgba(201, 72, 86, .75);
+  background: linear-gradient(180deg, #24121a, #120a0e);
+  color: #f0b4b4;
+}
+
+/* Side lists. */
+.viewport .game-frame .game-player-list {
+  padding: 8px;
+}
+
+.viewport .game-frame .game-list-heading {
+  color: var(--gold);
+}
+
+.viewport .game-frame .game-player-card {
+  border: 1px solid rgba(210, 176, 115, .22);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(22, 23, 30, .92), rgba(11, 12, 17, .94));
+}
+
+.viewport .game-frame .game-player-card.is-current {
+  border-color: var(--gold);
+  background: linear-gradient(100deg, rgba(58, 44, 26, .9), rgba(17, 16, 20, .94));
+}
+
+.viewport .game-frame .game-player-card.is-selected {
+  border-color: #e05a63;
+  background: linear-gradient(100deg, rgba(92, 24, 34, .92), rgba(28, 12, 16, .94));
+  box-shadow: 0 0 16px rgba(224, 90, 99, .35);
+}
+
+.viewport .game-frame .stage-night .game-player-card:not(.is-dead) .alive-label {
+  color: #8fb7d8;
+}
+
+.viewport .game-frame .private-info-button {
+  border: 1px solid var(--gold-line);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #161821, #0c0e14);
+}
+
+/* Centre panels. */
+.viewport .game-frame .phase-panel {
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(16, 18, 26, .9), rgba(8, 9, 14, .94));
+}
+
+.viewport .game-frame .stage-night .phase-panel {
+  border-color: rgba(143, 156, 230, .55);
+  background: linear-gradient(180deg, rgba(14, 18, 40, .9), rgba(7, 9, 20, .94));
+}
+
+.viewport .game-frame .stage-vote .phase-panel {
+  border-color: rgba(224, 90, 99, .6);
+}
+
+.viewport .game-frame .phase-panel h2 {
+  font-family: var(--display);
+  color: #f4ead7;
+}
+
+.viewport .game-frame .public-event-log {
+  border: 1px solid var(--gold-faint);
+  border-radius: 8px;
+  background: rgba(6, 7, 11, .78);
+}
+
+.viewport .game-frame .core-game-bottom {
+  border-top: 1px solid var(--gold-faint);
+  background: linear-gradient(0deg, rgba(6, 7, 11, .92), rgba(6, 7, 11, .6));
+}
+
+/* Role reveal and results screens. */
+.viewport .game-frame .role-reveal-screen {
+  background: radial-gradient(ellipse at 70% 50%, rgba(210, 176, 115, .14), transparent 45%),
+    var(--bg-reveal, none) center / cover no-repeat,
+    linear-gradient(180deg, #0a0d18, #07080d);
+}
+
+:root[data-bg-reveal] .viewport .game-frame .reveal-backdrop {
+  display: none;
+}
+
+.viewport .game-frame .reveal-role-card {
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  box-shadow: 0 0 40px rgba(210, 176, 115, .25), 0 24px 60px rgba(0, 0, 0, .7);
+}
+
+.viewport .game-frame .game-results-screen {
+  background: radial-gradient(ellipse at 50% 0%, rgba(200, 40, 55, .45), transparent 55%),
+    var(--bg-victory, none) center / cover no-repeat,
+    linear-gradient(180deg, #160a0e, #08070b);
+}
+
+.viewport .game-frame .results-player {
+  border-radius: 10px;
+}
+
+.viewport .game-frame .role-intro {
+  background: radial-gradient(ellipse at 50% 55%, rgba(26, 24, 32, .55), rgba(7, 8, 13, .92) 70%),
+    var(--bg-reveal, none) center / cover no-repeat,
+    radial-gradient(ellipse at 50% 55%, #1a1820 0, #07080d 70%);
+}
+
+/* Ghost channel for eliminated players. */
+.viewport .game-frame .ghost-voice {
+  border: 1px solid var(--gold-line);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(20, 21, 30, .92), rgba(10, 11, 16, .94));
+  box-shadow: var(--panel-shadow);
+}
+
+.viewport .game-frame .ghost-voice .primary-button,
+.viewport .game-frame .ghost-voice .secondary-button {
+  white-space: nowrap;
+  font-size: 11px;
+  letter-spacing: .8px;
+}
+
+/* Full-screen toggle as a gold-framed pill. */
+.viewport .game-frame .fullscreen-toggle {
+  border: 1px solid var(--gold-line);
+  border-radius: 999px;
+  background: rgba(8, 10, 15, .75);
+  color: #ecdcbc;
+}
+
+.viewport .game-frame .fullscreen-toggle svg {
+  color: var(--gold);
+}
+
+/* ================= Mongol Monopoly ================= */
+
+.viewport .game-frame .voice-scope > .mono {
+  background: linear-gradient(90deg, rgba(8, 5, 4, .35), rgba(8, 5, 4, .55)),
+    var(--bg-ger, none) center / cover no-repeat,
+    radial-gradient(ellipse at 85% 80%, rgba(230, 140, 60, .28), transparent 35%),
+    radial-gradient(ellipse at 20% 10%, rgba(160, 60, 40, .25), transparent 45%),
+    linear-gradient(180deg, #1c120e 0%, #140d0b 60%, #0b0807 100%);
+}
+
+.viewport .game-frame .mono-side {
+  padding: 10px 12px;
+}
+
+.viewport .game-frame .mono-board {
+  border-color: #e3c27f;
+}
+
+.viewport .game-frame .mono-player {
+  border-color: rgba(210, 176, 115, .22);
+  background: linear-gradient(180deg, rgba(22, 23, 30, .92), rgba(11, 12, 17, .94));
+}
+
+/* ================= Profile ================= */
+
+.viewport .game-frame .profile-identity-row {
+  border: 1px solid var(--gold-line);
+  border-radius: 12px;
+  background: var(--panel-fill);
+  box-shadow: var(--panel-shadow);
+}
+
+.viewport .game-frame .profile-identity h1 {
+  font-family: var(--display);
+  color: transparent;
+  background: linear-gradient(180deg, #fff1d0 0%, #e2c084 45%, #a87d3e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.viewport .game-frame .account-avatar {
+  border: 3px solid var(--gold);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, .6), 0 0 26px rgba(210, 176, 115, .35);
+}
+
+.viewport .game-frame .account-stat {
+  border: 1px solid var(--gold-line);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(20, 21, 28, .92), rgba(9, 10, 15, .94));
+  box-shadow: var(--panel-shadow);
+}
+
+.viewport .game-frame .account-stat strong,
+.viewport .game-frame .account-stat b {
+  font-family: var(--display);
+  color: var(--gold-bright);
+}
+
+.viewport .game-frame .profile-footer {
+  border: 1px solid var(--gold-faint);
+  border-radius: 10px;
+  background: rgba(8, 10, 15, .7);
+  padding: 8px 12px;
+}
+
+.viewport .game-frame .account-signout-link {
+  border: 1px solid rgba(201, 72, 86, .7);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #24121a, #120a0e);
+  color: #f0b4b4;
+}
+
+/* Timer sits in the flow between the phase pill and the actions, so it never covers a button. */
+.viewport .game-frame .demo-timer {
+  position: static;
+  transform: none;
+  margin: 0 auto;
+}
+
+/* The voice dock owns the top-right corner inside rooms; the brand would sit under it. */
+.viewport .game-frame .voice-scope .top-bar > .brand-mark {
+  display: none;
+}
+
+/* Taller screens: lobby seats as upright cards (avatar, name, status), like the mockup. */
+@media (min-height: 501px) {
+  .viewport .game-frame .lobby-screen .player-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-auto-rows: minmax(128px, auto);
+    gap: 12px;
+  }
+
+  .viewport .game-frame .lobby-screen .player-grid .compact-card,
+  .viewport .game-frame .lobby-screen .player-grid .invite-slot {
+    height: auto;
+    min-height: 128px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .viewport .game-frame .lobby-screen .player-grid .compact-card > .player-status {
+    margin-left: 0;
+  }
+
+  .viewport .game-frame .lobby-screen .player-grid .avatar {
+    width: 56px;
+    height: 56px;
+    font-size: 20px;
+  }
+
+  .viewport .game-frame .player-card.is-bot .player-status {
+    margin-right: 0;
+  }
+}
+
+/* Readability over the painted office. */
+.viewport .game-frame .lobby-screen .player-grid .invite-slot {
+  background: rgba(7, 8, 12, .78);
+  backdrop-filter: blur(2px);
+}
+
+.viewport .game-frame .lobby-screen .lobby-actions .text-button {
+  padding: 0 14px;
+  border: 1px solid var(--gold-faint);
+  border-radius: 999px;
+  background: rgba(7, 8, 12, .78);
+}
+
+.viewport .game-frame .settings-version,
+.viewport .game-frame .menu-footer {
+  text-shadow: 0 1px 6px #000, 0 0 2px #000;
+}
+
+/* Stage labels stay readable over the bright window. */
+.viewport .game-frame .crime-stage-label > span {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(6, 7, 11, .72);
+  text-shadow: 0 1px 4px #000;
+}
+
+.viewport .game-frame .skip-vote {
+  border: 1px solid var(--gold-line);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #161821, #0c0e14);
+  color: #ecdcbc;
+}
+
+.viewport .game-frame .skip-vote.chosen {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #3a2c1a, #1c150d);
+  color: var(--gold-bright);
+}
+
+/* Let the ger show through the Monopoly side panel. */
+.viewport .game-frame .mono-side {
+  background: linear-gradient(180deg, rgba(14, 10, 9, .74), rgba(9, 7, 6, .84));
+  backdrop-filter: blur(4px);
+}
+
+.viewport .game-frame .mono-side {
+  background: linear-gradient(180deg, rgba(14, 10, 9, .52), rgba(9, 7, 6, .66));
+  backdrop-filter: blur(2px);
+}
+
+.viewport .game-frame .mono-player {
+  background: linear-gradient(180deg, rgba(20, 16, 14, .86), rgba(10, 8, 8, .9));
+}
+
+/* Taller screens float the voice dock over the side panel's top edge; keep the header below it. */
+@media (min-height: 501px) and (min-width: 561px) {
+  .viewport .game-frame .mono-side {
+    padding-top: 52px;
+  }
+}
+
+/* Role screen: shade the left so the heading reads over the city; the card art already says it's secret. */
+.viewport .game-frame .role-reveal-screen {
+  background: linear-gradient(90deg, rgba(4, 5, 9, .82) 0%, rgba(4, 5, 9, .55) 38%, rgba(4, 5, 9, .15) 60%),
+    radial-gradient(ellipse at 70% 50%, rgba(210, 176, 115, .14), transparent 45%),
+    var(--bg-reveal, none) center / cover no-repeat,
+    linear-gradient(180deg, #0a0d18, #07080d);
+}
+
+.viewport .game-frame .reveal-card-art > span {
+  display: none;
+}
+
+.viewport .game-frame .reveal-heading p {
+  color: #d6ccbd;
+  text-shadow: 0 1px 6px #000;
+}
+
+/* "Бат ЧИ" — keep a gap before the "you" tag. */
+.viewport .game-frame .results-name small,
+.viewport .game-frame .game-player-copy > b small {
+  margin-left: 5px;
+}
+
+/* ---------- Painted emblem and card back ---------- */
+
+.viewport .game-frame .brand-emblem,
+.viewport .game-frame .brand-mark.compact .brand-emblem {
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.viewport .game-frame .brand-emblem img {
+  display: block;
+  filter: drop-shadow(0 0 8px rgba(210, 176, 115, .35));
+}
+
+.viewport .game-frame .auth-brand-emblem {
+  vertical-align: middle;
+  filter: drop-shadow(0 0 6px rgba(210, 176, 115, .3));
+}
+
+.viewport .game-frame .role-intro-back {
+  border-color: var(--gold);
+  background: #0b1020;
+}
+
+.viewport .game-frame .role-intro-back img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---------- Reduce motion (Settings) ---------- */
+
+:root[data-reduce-motion] *,
+:root[data-reduce-motion] *::before,
+:root[data-reduce-motion] *::after {
+  animation-duration: .01ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .01ms !important;
+  scroll-behavior: auto !important;
+}
+
+:root[data-reduce-motion] .role-intro-flash {
+  display: none;
+}
+
+/* Mafia whisper panel: crimson instead of the ghost channel's gold. */
+.viewport .game-frame .ghost-voice.channel-mafia {
+  border-color: rgba(224, 90, 99, .7);
+  background: linear-gradient(180deg, rgba(44, 12, 18, .94), rgba(18, 7, 10, .96));
+}
+
+.viewport .game-frame .ghost-voice.channel-mafia header svg,
+.viewport .game-frame .ghost-voice.channel-mafia header b {
+  color: #f08a8f;
+}
+
+.viewport .game-frame .night-secret.team-picks {
+  border-color: #b4444e;
+  background: #241216;
+  color: #f2c4c4;
+}
+
+/* ---------- Trial ---------- */
+
+.viewport .game-frame .trial-panel {
+  border-color: rgba(224, 90, 99, .7);
+}
+
+.viewport .game-frame .verdict-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.viewport .game-frame .verdict-actions .primary-button,
+.viewport .game-frame .verdict-actions .secondary-button {
+  height: 40px;
+  font-size: 12px;
+}
+
+.viewport .game-frame .verdict-count-list b {
+  font-family: var(--display);
+}
+
+/* ---------- Match recap ---------- */
+
+.viewport .game-frame .match-recap {
+  width: min(560px, 94%);
+  max-height: 86%;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.viewport .game-frame .match-recap > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.viewport .game-frame .match-recap h2 {
+  font-family: var(--display);
+  color: var(--gold-bright);
+}
+
+.viewport .game-frame .recap-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.viewport .game-frame .recap-list li {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--gold);
+  border-radius: 6px;
+  background: rgba(8, 10, 15, .75);
+  color: #ddd3c3;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.viewport .game-frame .recap-list li.recap-night {
+  border-left-color: #8f9ce6;
+}
+
+.viewport .game-frame .recap-list b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.viewport .game-frame .recap-night b {
+  color: #b5bff5;
+}
+
+/* ---------- Quick replies ---------- */
+
+.viewport .game-frame .quick-replies {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.viewport .game-frame .quick-replies button {
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--gold-line);
+  border-radius: 999px;
+  background: rgba(8, 10, 15, .82);
+  color: #ecdcbc;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.viewport .game-frame .quick-replies button:active {
+  background: #2a2216;
+  border-color: var(--gold);
+}
+
+.viewport .game-frame .game-player-card {
+  overflow: visible;
+}
+
+.viewport .game-frame .quick-bubble {
+  position: absolute;
+  z-index: 5;
+  right: 6px;
+  top: -10px;
+  max-width: 75%;
+  padding: 3px 9px;
+  border: 1px solid var(--gold);
+  border-radius: 10px 10px 10px 2px;
+  background: linear-gradient(180deg, #2a2216, #17120c);
+  color: var(--gold-bright);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .6);
+  animation: bubble-pop .25s ease-out both;
+}
+
+@keyframes bubble-pop {
+  from { opacity: 0; transform: translateY(4px) scale(.9); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Quick replies: one scrollable row so they never push the panel up. */
+.viewport .game-frame .quick-replies {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, #000 88%, transparent);
+}
+
+.viewport .game-frame .quick-replies::-webkit-scrollbar {
+  display: none;
+}
+
+.viewport .game-frame .quick-replies button {
+  flex: none;
+}
+
+@media (max-height: 500px) {
+  .viewport .game-frame .quick-replies button {
+    height: 24px;
+    padding: 0 9px;
+    font-size: 10px;
+  }
+}
+
+/* Vote tallies sit in the corner so names keep their room. */
+.viewport .game-frame .game-player-card .player-vote-count {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1;
+}
