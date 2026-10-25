@@ -125,6 +125,10 @@ Deno.serve(async (request) => {
     if (authError || !user) return respond(401, { error: 'Нэвтрэлт хүчингүй байна. Дахин нэвтэрнэ үү.' });
 
     const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+    const { data: ban } = await admin.from('player_bans').select('banned_until').eq('user_id', user.id).maybeSingle();
+    if (ban && (!ban.banned_until || new Date(ban.banned_until).getTime() > Date.now())) {
+      return respond(403, { error: 'Таны бүртгэл хаагдсан тул дуу хоолойд холбогдох боломжгүй.' });
+    }
     const [{ data: membership, error: membershipError }, { data: voiceRoom, error: roomError }] = await Promise.all([
       admin.from('voice_room_members').select('participant_name,is_alive,is_muted,is_host').eq('room_code', roomCode).eq('user_id', user.id).maybeSingle(),
       admin.from('voice_rooms').select('game_phase,post_game_voice').eq('room_code', roomCode).maybeSingle(),

@@ -3,13 +3,14 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
   ArrowLeft, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, LockKeyhole, Moon,
-  Radio, RefreshCw, Settings as SettingsIcon, Shield, UserRound, Users, WandSparkles, Zap,
+  MessageSquare, Radio, RefreshCw, Settings as SettingsIcon, Shield, ShieldCheck, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles } from './gameData';
 import RoleCardArtwork from './RoleCardArtwork';
 import GameScreen from './Game';
-import Auth, { type AuthView } from './Auth';
+import Auth, { takeOAuthPending, type AuthView } from './Auth';
 import { ProfileScreen } from './AccountScreens';
+import { AdminScreen, AnnouncementBanner, BannedOverlay, FeedbackScreen, banActive, type PlayerBan } from './AdminScreens';
 import { supabase, supabaseConfigured, type PublicProfile } from './supabaseClient';
 import { i18n, translateMessage } from './i18n';
 import { removeProfilePhoto, uploadProfilePhoto } from './avatarUpload';
@@ -24,7 +25,7 @@ import { musicEnabled, setMusicEnabled, setSfxEnabled, sfxEnabled, startMusic, w
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { FullscreenToggle, useFullscreen, type FullscreenState } from './fullscreen';
 
-type Screen = 'menu' | 'hub' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth';
+type Screen = 'menu' | 'hub' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth' | 'feedback' | 'admin';
 
 type RoomSettings = { name: string; maxPlayers: number; isPublic: boolean; password: string; gameType: GameType; settings?: Record<string, unknown> };
 const ROOM_STORAGE_KEY = 'mafia-shadows:room';
@@ -54,6 +55,8 @@ export default function App() {
   const [notice, setNotice] = useState<{ text: string; tone: NoticeTone } | null>(null);
   const noticeTimer = useRef<number | null>(null);
   const [namePromptDismissed, setNamePromptDismissed] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [ban, setBan] = useState<PlayerBan | null>(null);
   const fullscreen = useFullscreen();
 
   // The menu theme starts on the main menu and keeps playing across menus and lobbies; games swap in their own music.
@@ -71,10 +74,16 @@ export default function App() {
     const restoreAccount = async (id: string) => {
       setAccountLoading(true);
       setProfileError('');
-      const profileResult = await client.from('profiles').select('*').eq('id', id).maybeSingle();
+      const [profileResult, adminResult, banResult] = await Promise.all([
+        client.from('profiles').select('*').eq('id', id).maybeSingle(),
+        client.rpc('is_admin'),
+        client.from('player_bans').select('reason,banned_until').eq('user_id', id).maybeSingle(),
+      ]);
       if (!active) return;
       if (profileResult.error) setProfileError(i18n.account.profileLoadFailed);
       else setProfile(profileResult.data as PublicProfile | null);
+      setIsAdmin(adminResult.data === true);
+      setBan((banResult.data as PlayerBan | null) ?? null);
       setAccountLoading(false);
     };
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -82,9 +91,13 @@ export default function App() {
       setUserId(id);
       if (!id) {
         setProfile(null);
+        setIsAdmin(false);
+        setBan(null);
         setAccountLoading(false);
       } else if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY') {
         window.setTimeout(() => { if (active) void restoreAccount(id); }, 0);
+        // Back from Facebook: show the new account's profile.
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && takeOAuthPending()) setScreen('profile');
       }
       if (event === 'PASSWORD_RECOVERY') {
         setAuthView('reset-password');
@@ -94,12 +107,12 @@ export default function App() {
     return () => { active = false; subscription.unsubscribe(); };
   }, []);
 
-  const notify: NotifyFn = (text, tone = 'info') => {
+  const notify: NotifyFn = useCallback((text, tone = 'info') => {
     setNotice({ text, tone });
     // A newer message restarts the clock; errors stay up a little longer.
     if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
     noticeTimer.current = window.setTimeout(() => setNotice(null), tone === 'error' ? 4200 : 2600);
-  };
+  }, []);
 
   useEffect(() => {
     const client = supabase;
@@ -115,7 +128,7 @@ export default function App() {
       const accessToken = fragment.get('access_token');
       const refreshToken = fragment.get('refresh_token');
       const errorDescription = callbackUrl.searchParams.get('error_description') ?? fragment.get('error_description');
-      if (errorDescription) { notify(errorDescription, 'error'); return; }
+      if (errorDescription) { takeOAuthPending(); notify(errorDescription, 'error'); return; }
 
       const result = code
         ? await client.auth.exchangeCodeForSession(code)
@@ -126,6 +139,9 @@ export default function App() {
       if (callbackUrl.searchParams.get('type') === 'recovery' || fragment.get('type') === 'recovery') {
         setAuthView('reset-password');
         setScreen('auth');
+      } else if (result && !result.error) {
+        takeOAuthPending();
+        setScreen('profile');
       }
     };
     const listener = CapacitorApp.addListener('appUrlOpen', ({ url }) => { void handleAuthCallback(url); });
@@ -236,7 +252,7 @@ export default function App() {
     <main className="viewport">
       <section className={`game-frame screen-${screen}`} aria-label="MAFIA: SHADOWS тоглоом">
         <div className="grain" aria-hidden="true" />
-        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} signedIn={Boolean(userId)} onAuth={openAuth} fullscreen={fullscreen} />}
+        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} onFeedback={() => requireAccount('feedback')} signedIn={Boolean(userId)} isAdmin={isAdmin} onAuth={openAuth} fullscreen={fullscreen} />}
         {screen === 'hub' && <GameHub onBack={goBack} onChoose={(type) => { setGameType(type); setScreen('browse'); }} onJoinCode={() => setScreen('join-room')} />}
         {screen === 'browse' && <RoomBrowser key={gameType} gameType={gameType} onBack={() => setScreen('hub')} onCreate={() => setScreen('create-room')} onJoinCode={() => setScreen('join-room')} onEnter={enterRoom} />}
         {screen === 'create-room' && <CreateRoom key={gameType} gameType={gameType} onBack={() => setScreen('browse')} onCreate={createRoom} />}
@@ -256,6 +272,10 @@ export default function App() {
         {screen === 'roles' && <RoleGallery onBack={goBack} />}
         {screen === 'profile' && <ProfileScreen profile={profile} loading={accountLoading} loadError={profileError} onBack={goBack} onSignIn={() => openAuth('sign-in')} onSignOut={() => openAuth('sign-out')} onSave={saveProfile} onPhoto={saveProfilePhoto} onPortrait={saveProfilePortrait} />}
         {screen === 'auth' && <Auth key={authView} initialView={authView} onBack={goBack} onAuthenticated={() => setScreen('profile')} onSignedOut={() => { setUserId(null); setProfile(null); setScreen('menu'); }} />}
+        {screen === 'feedback' && userId && <FeedbackScreen onBack={goBack} notify={notify} />}
+        {screen === 'admin' && isAdmin && <AdminScreen onBack={goBack} notify={notify} />}
+        {userId && banActive(ban) && screen !== 'feedback' && screen !== 'auth'
+          && <BannedOverlay ban={ban!} onSignOut={() => openAuth('sign-out')} onFeedback={() => setScreen('feedback')} />}
         {screen === 'settings' && <Settings onBack={goBack} onProfile={() => setScreen('profile')} onAuth={() => openAuth(userId ? 'sign-out' : 'sign-in')} signedIn={Boolean(userId)} />}
         {userId && profile && needsName(profile.display_name) && !namePromptDismissed && screen !== 'auth' && screen !== 'profile'
           && <NameSetup current={profile.display_name} onSave={(name) => saveProfile(name, profile.avatar_key)} onLater={() => setNamePromptDismissed(true)} onDone={() => notify('Нэр хадгалагдлаа.', 'success')} />}
@@ -274,11 +294,12 @@ function Brand({ compact = false }: { compact?: boolean }) {
   return <div className={`brand-mark ${compact ? 'compact' : ''}`}><span className="brand-emblem"><img src="/assets/brand/emblem-192.png" alt="" width={compact ? 30 : 42} height={compact ? 30 : 42} /></span><span>MAFIA<span className="brand-colon">:</span> <b>SHADOWS</b></span></div>;
 }
 
-function Menu({ onNavigate, onPlay, onCreate, onJoin, signedIn, onAuth, fullscreen }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; signedIn: boolean; onAuth: (view?: AuthView) => void; fullscreen: FullscreenState }) {
+function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, signedIn, isAdmin, onAuth, fullscreen }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; onFeedback: () => void; signedIn: boolean; isAdmin: boolean; onAuth: (view?: AuthView) => void; fullscreen: FullscreenState }) {
   return (
     <div className="menu-screen">
       <header className="menu-top"><Brand /><div className="menu-top-actions"><div className="online-note"><span className="status-dot" /> {signedIn ? 'ОНЛАЙН' : 'НЭВТРЭЭГҮЙ'}</div><FullscreenToggle fullscreen={fullscreen} /></div></header>
       <div className="city-art" aria-hidden="true"><div className="moon-glow" /><div className="cityline" /><div className="rain-lines" /></div>
+      <AnnouncementBanner />
       <div className="menu-copy">
         <div className="eyebrow"><span /> {i18n.app.cityOfSecrets} <span /></div>
         <h1>Хэнд ч <i>бүү итгэ.</i></h1>
@@ -291,7 +312,9 @@ function Menu({ onNavigate, onPlay, onCreate, onJoin, signedIn, onAuth, fullscre
         <button onClick={onJoin}><span className="nav-icon"><Radio size={16} /></span><span>{i18n.app.joinRoom}</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('roles')}><span className="nav-icon"><Shield size={16} /></span><span>{i18n.app.roleGallery}</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('profile')}><span className="nav-icon"><UserRound size={16} /></span><span>{i18n.app.profile}</span><ChevronRight size={14} /></button>
+        <button onClick={onFeedback}><span className="nav-icon"><MessageSquare size={16} /></span><span>Санал хүсэлт</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('settings')}><span className="nav-icon"><SettingsIcon size={16} /></span><span>{i18n.app.settings}</span><ChevronRight size={14} /></button>
+        {isAdmin && <button className="menu-nav-admin" onClick={() => onNavigate('admin')}><span className="nav-icon"><ShieldCheck size={16} /></span><span>Админ</span><ChevronRight size={14} /></button>}
         <button onClick={() => onAuth(signedIn ? 'sign-out' : 'sign-in')}><span className="nav-icon"><LockKeyhole size={16} /></span><span>{signedIn ? i18n.app.signOut : i18n.auth.signInAccount}</span><ChevronRight size={14} /></button>
       </nav>
       <footer className="menu-footer"><span>{i18n.app.afterDark.toUpperCase()}</span><span>{i18n.app.version} <i>•</i> ОНЛАЙН ДУУТ ТОГЛООМ</span></footer>

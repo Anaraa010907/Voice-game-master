@@ -9,6 +9,16 @@ import { i18n } from './i18n';
 
 const authRedirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL?.trim();
 
+/** Set just before leaving for Facebook, so the trip back lands on the profile (honoured for 15 minutes). */
+const OAUTH_PENDING_KEY = 'mafia-shadows:oauth-pending';
+export function takeOAuthPending() {
+  try {
+    const startedAt = Number(window.localStorage.getItem(OAUTH_PENDING_KEY));
+    window.localStorage.removeItem(OAUTH_PENDING_KEY);
+    return startedAt > 0 && Date.now() - startedAt < 15 * 60_000;
+  } catch { return false; }
+}
+
 export type AuthView = 'sign-in' | 'create-account' | 'verify-email' | 'verify-phone' | 'forgot-password' | 'verify-recovery-phone' | 'reset-password' | 'sign-out';
 type RegistrationMethod = 'email' | 'phone';
 
@@ -69,6 +79,7 @@ export default function Auth({ initialView = 'sign-in', onBack, onAuthenticated,
     if (!ensureConfigured()) return;
     const native = Capacitor.isNativePlatform();
     setBusy(true);
+    try { window.localStorage.setItem(OAUTH_PENDING_KEY, String(Date.now())); } catch { /* private mode: stays on this screen */ }
     const { data, error: oauthError } = await supabase!.auth.signInWithOAuth({
       provider: 'facebook',
       options: {
@@ -78,7 +89,7 @@ export default function Auth({ initialView = 'sign-in', onBack, onAuthenticated,
       },
     });
     setBusy(false);
-    if (oauthError) { setError('Facebook-ээр нэвтэрч чадсангүй. Дахин оролдоно уу.'); return; }
+    if (oauthError) { takeOAuthPending(); setError('Facebook-ээр нэвтэрч чадсангүй. Дахин оролдоно уу.'); return; }
     // Leaving the app's own origin makes Capacitor hand the URL to the system browser.
     if (native && data.url) window.location.href = data.url;
   };
@@ -104,7 +115,9 @@ export default function Auth({ initialView = 'sign-in', onBack, onAuthenticated,
     );
     if (!result) return;
     if (result.error) {
-      setError(i18n.auth.invalidCredentials);
+      setError(/banned/i.test(result.error.message) || (result.error as { code?: string }).code === 'user_banned'
+        ? 'Энэ бүртгэл хаагдсан байна. Асуудлаа шийдүүлэхийг хүсвэл админтай холбогдоно уу.'
+        : i18n.auth.invalidCredentials);
       return;
     }
     setPassword('');

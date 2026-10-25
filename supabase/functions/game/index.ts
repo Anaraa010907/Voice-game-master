@@ -708,6 +708,96 @@ class GameServer {
   }
 }
 
+/** Ban lengths the admin panel offers, in hours; 0 is permanent. */
+const BAN_HOURS = [0, 24, 72, 168, 720];
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The player's ban, if one is in force right now. */
+async function activeBan(admin: SupabaseClient, userId: string) {
+  const { data, error } = await admin.from('player_bans').select('reason,banned_until').eq('user_id', userId).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  if (data.banned_until && new Date(data.banned_until).getTime() <= Date.now()) return null;
+  return data as { reason: string; banned_until: string | null };
+}
+
+function banMessage(ban: { reason: string; banned_until: string | null }) {
+  const until = ban.banned_until ? ` ${new Date(ban.banned_until).toISOString().slice(0, 16).replace('T', ' ')} (UTC) хүртэл` : ' бүрмөсөн';
+  return `Таны бүртгэл${until} хаагдсан байна.${ban.reason ? ` Шалтгаан: ${ban.reason}` : ''}`;
+}
+
+/** Admin-only actions: ban, unban and closing a room. Each one is written to the audit log. */
+class AdminTools {
+  constructor(private admin: SupabaseClient, private userId: string) {}
+
+  private async requireAdmin() {
+    const { data, error } = await this.admin.from('admin_users').select('user_id').eq('user_id', this.userId).maybeSingle();
+    if (error) throw error;
+    if (!data) throw new GameError(403, 'Зөвхөн админ хийх боломжтой.');
+  }
+
+  private target(body: Body) {
+    const value = typeof body.userId === 'string' ? body.userId : '';
+    if (!UUID_PATTERN.test(value)) throw new GameError(400, 'Тоглогч буруу байна.');
+    return value;
+  }
+
+  private async log(action: string, target: string, detail = '') {
+    await this.admin.from('admin_actions').insert({ admin_id: this.userId, action, target, detail: detail.slice(0, 120) || null });
+  }
+
+  async ban(body: Body) {
+    await this.requireAdmin();
+    const target = this.target(body);
+    if (target === this.userId) throw new GameError(400, 'Өөрийгөө хаах боломжгүй.');
+    const { data: otherAdmin } = await this.admin.from('admin_users').select('user_id').eq('user_id', target).maybeSingle();
+    if (otherAdmin) throw new GameError(400, 'Админыг хаах боломжгүй.');
+    const hours = Number(body.hours);
+    if (!BAN_HOURS.includes(hours)) throw new GameError(400, 'Хаах хугацаа буруу байна.');
+    const reason = (typeof body.reason === 'string' ? body.reason : '').trim().slice(0, 200);
+    const bannedUntil = hours ? new Date(Date.now() + hours * 3600_000).toISOString() : null;
+
+    // Supabase Auth refuses new sign-ins and session refreshes; the table carries the reason for the app.
+    const { error: authError } = await this.admin.auth.admin.updateUserById(target, { ban_duration: hours ? `${hours}h` : '876000h' });
+    if (authError) throw new GameError(404, 'Тоглогч олдсонгүй.');
+    const { error } = await this.admin.from('player_bans').upsert({ user_id: target, reason, banned_until: bannedUntil, banned_by: this.userId, created_at: new Date().toISOString() });
+    if (error) throw error;
+
+    // Take them out of every table they sit at, exactly as if they had left (a live game counts it as a loss).
+    const { data: seats } = await this.admin.from('game_room_players').select('room_code').eq('user_id', target).eq('is_bot', false);
+    for (const seat of seats ?? []) {
+      try { await new GameServer(this.admin, target).leave({ roomCode: seat.room_code }); } catch (cause) { console.error('ban: leave failed', seat.room_code, cause); }
+    }
+    const { data: profile } = await this.admin.from('profiles').select('display_name').eq('id', target).maybeSingle();
+    await this.log('ban', target, `${profile?.display_name ?? 'Тоглогч'} · ${hours ? `${hours / 24} өдөр` : 'бүрмөсөн'}${reason ? ` · ${reason}` : ''}`);
+    return { banned: true, bannedUntil };
+  }
+
+  async unban(body: Body) {
+    await this.requireAdmin();
+    const target = this.target(body);
+    const { error: authError } = await this.admin.auth.admin.updateUserById(target, { ban_duration: 'none' });
+    if (authError) throw new GameError(404, 'Тоглогч олдсонгүй.');
+    await this.admin.from('player_bans').delete().eq('user_id', target);
+    const { data: profile } = await this.admin.from('profiles').select('display_name').eq('id', target).maybeSingle();
+    await this.log('unban', target, profile?.display_name ?? '');
+    return { unbanned: true };
+  }
+
+  async closeRoom(body: Body) {
+    await this.requireAdmin();
+    const roomCodeValue = code(body);
+    // Seats, states and views cascade from game_rooms; voice members cascade from voice_rooms.
+    const { data: room } = await this.admin.from('game_rooms').select('name').eq('room_code', roomCodeValue).maybeSingle();
+    if (!room) throw new GameError(404, 'Өрөө олдсонгүй.');
+    await this.admin.from('voice_rooms').delete().eq('room_code', roomCodeValue);
+    const { error } = await this.admin.from('game_rooms').delete().eq('room_code', roomCodeValue);
+    if (error) throw error;
+    await this.log('room-close', roomCodeValue, `${roomCodeValue} · ${room.name}`);
+    return { closed: true };
+  }
+}
+
 Deno.serve(async (request) => {
   const origin = request.headers.get('Origin');
   if (!isAllowedOrigin(origin, Deno.env.get('ALLOWED_ORIGINS') ?? '')) {
@@ -737,8 +827,17 @@ Deno.serve(async (request) => {
     }
 
     const admin = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false } });
+    // A banned player may still leave a room, nothing else.
+    if (body.action !== 'leave') {
+      const ban = await activeBan(admin, user.id);
+      if (ban) return respond(403, { error: banMessage(ban), banned: true });
+    }
     const server = new GameServer(admin, user.id);
+    const tools = new AdminTools(admin, user.id);
     const actions: Record<string, (body: Body) => Promise<Record<string, unknown>>> = {
+      'admin-ban': (value) => tools.ban(value),
+      'admin-unban': (value) => tools.unban(value),
+      'admin-close-room': (value) => tools.closeRoom(value),
       create: (value) => server.create(value),
       join: (value) => server.join(value),
       leave: (value) => server.leave(value),
