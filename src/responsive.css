@@ -26,7 +26,7 @@
   width: auto;
   max-width: min(360px, 55%);
   padding: 4px;
-  border: 1px solid #9bbadc55;
+  border: 1px solid #b59a6655;
   background: linear-gradient(145deg, #14151cf5, #0d0f15f5);
   box-shadow: 0 8px 26px #0009;
   color: #ded7cb;
@@ -64,7 +64,7 @@
   display: grid;
   place-items: center;
   padding: 0;
-  border: 1px solid #9bbadc44;
+  border: 1px solid #b59a6644;
   border-radius: 2px;
   background: #191a21;
   color: #ddd5c7;
@@ -123,8 +123,8 @@
 
 .voice-status-light.status-connecting,
 .voice-status-light.status-reconnecting {
-  background: #37d8d0;
-  box-shadow: 0 0 7px #9bbadc88;
+  background: #c6a35e;
+  box-shadow: 0 0 7px #c6a35e88;
 }
 
 .voice-status-light.status-connected {
@@ -134,7 +134,7 @@
 
 .voice-speaking-label {
   min-width: 0;
-  color: #37d8d0;
+  color: #e2bd7b;
   font-size: 9px;
   font-weight: 600;
   overflow-wrap: anywhere;
@@ -149,7 +149,7 @@
   justify-content: center;
   gap: 7px;
   padding: 5px 9px;
-  border: 1px solid #9bbadc44;
+  border: 1px solid #b59a6644;
   border-radius: 2px;
   background: #191a21;
   color: #ddd5c7;
@@ -160,13 +160,13 @@
 
 .voice-room-button {
   flex-basis: 100%;
-  border-color: #9bbadc80;
+  border-color: #b59a6680;
   background: #211d19;
   color: #e1c48d;
 }
 
 .voice-control-button:hover:not(:disabled) {
-  border-color: #37d8d0;
+  border-color: #c5a66d;
   background: #242127;
 }
 
@@ -441,7 +441,7 @@
   height: auto;
   max-height: 150px;
   margin: 7px 0;
-  border: 1px solid #9bbadc40;
+  border: 1px solid #b89a6240;
 }
 
 .role-card-ability,

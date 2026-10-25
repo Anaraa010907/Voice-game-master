@@ -6,9 +6,11 @@ import './account.css';
 import './responsive.css';
 import './fullscreen.css';
 import './board.css';
-import './design.css';
+import './theme.css';
+import { installBackgrounds } from './backgrounds';
 import { applyMotionSetting } from './motion';
 
+installBackgrounds();
 applyMotionSetting();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

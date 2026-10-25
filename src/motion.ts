@@ -1,6 +1,6 @@
 /*
  * "Reduce motion" setting. Stored per phone; while on, the root carries data-reduce-motion and
- * design.css stops animations, transitions and the lightning flash of the role reveal.
+ * theme.css stops animations, transitions and the lightning flash of the role reveal.
  * Follows the phone's own accessibility setting until the player chooses.
  */
 const KEY = 'night-table:reduce-motion';

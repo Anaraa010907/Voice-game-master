@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { LockKeyhole, X } from 'lucide-react';
-import RoleCardArtwork, { RoleCardBack } from './RoleCardArtwork';
+import RoleCardArtwork from './RoleCardArtwork';
 import type { Role } from './gameData';
 import { translateTeam } from './i18n';
 import { playSfx } from './sfx';
@@ -25,7 +25,7 @@ export function RoleRevealIntro({ role, onDone }: { role: Role; onDone: () => vo
     <div className="role-intro-glow" aria-hidden="true" />
     <p className="role-intro-kicker">ТАНЫ ДҮР</p>
     <div className="role-intro-card">
-      <div className="role-intro-face role-intro-back" aria-hidden="true"><RoleCardBack /></div>
+      <div className="role-intro-face role-intro-back" aria-hidden="true"><img src="/assets/cards/card-back.jpg" alt="" /></div>
       <div className="role-intro-face role-intro-front"><RoleCardArtwork role={role} /></div>
     </div>
     <div className="role-intro-copy">
