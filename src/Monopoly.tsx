@@ -1,0 +1,439 @@
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  ArrowLeft, ArrowLeftRight, Building2, ChevronRight, Clock3, Coins, Crown, Dices, Gavel, HandCoins, Handshake, KeyRound, Landmark,
+  Lock, Minus, PartyPopper, Plane, Plug, Plus, ScrollText, Sparkles, TrainFront, Trophy, LockOpen, Waves, X,
+} from 'lucide-react';
+import {
+  BOARD, GROUP_TILES, JAIL_FINE, MAX_OFFERS_PER_TURN, MAX_ROUNDS, actingPlayerId, bankSupply, canTradeTile, currentPlayerId, describeSide,
+  minimumBid, mortgageInterest, mortgageValue, netWorth, ownsGroup, rentFor, unmortgageCost,
+  type AuctionState, type ColorGroup, type MonopolyPlayer, type MonopolyState, type Tile, type TradeOffer, type TradeProposal,
+} from './monopolyEngine';
+import Avatar from './Avatar';
+import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
+import { playSfx, startMusic } from './sfx';
+import { callGame, useCountdown, useGame, type NotifyFn, type RoomSeat } from './multiplayer';
+
+const GROUP_LABEL: Record<ColorGroup, string> = {
+  brown: 'Говь', sky: 'Хойд нутаг', pink: 'Баруун нутаг', orange: 'Хангай',
+  red: 'Эртний нийслэл', yellow: 'Нуур, тал', green: 'Аж үйлдвэр', navy: 'Нийслэл',
+};
+
+/** Grid position of each of the 32 tiles on a 9×9 board, START in the bottom-right corner. */
+function gridCell(index: number): CSSProperties {
+  if (index <= 8) return { gridRow: 9, gridColumn: 9 - index };
+  if (index <= 16) return { gridRow: 9 - (index - 8), gridColumn: 1 };
+  if (index <= 24) return { gridRow: 1, gridColumn: 1 + (index - 16) };
+  return { gridRow: 1 + (index - 24), gridColumn: 9 };
+}
+
+function side(index: number) {
+  if (index % 8 === 0) return 'corner';
+  if (index < 8) return 'bottom';
+  if (index < 16) return 'left';
+  if (index < 24) return 'top';
+  return 'right';
+}
+
+function TileIcon({ tile, size = 14 }: { tile: Tile; size?: number }) {
+  if (tile.kind === 'start') return <Sparkles size={size} />;
+  if (tile.kind === 'jail') return <Lock size={size} />;
+  if (tile.kind === 'parking') return <PartyPopper size={size} />;
+  if (tile.kind === 'gotojail') return <Gavel size={size} />;
+  if (tile.kind === 'chance') return <Sparkles size={size} />;
+  if (tile.kind === 'chest') return <Coins size={size} />;
+  if (tile.kind === 'tax') return <Landmark size={size} />;
+  if (tile.kind === 'utility') return tile.id === 23 ? <Waves size={size} /> : <Plug size={size} />;
+  if (tile.kind === 'rail') return tile.id === 13 ? <Plane size={size} /> : <TrainFront size={size} />;
+  return null;
+}
+
+const money = (value: number) => `${value.toLocaleString('en-US')}₮`;
+
+export default function MonopolyScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice }: {
+  roomCode: string; roomName: string; userId: string; isHost: boolean; seats: RoomSeat[];
+  onLeave: () => void; onRematch: () => void; onNotice: NotifyFn;
+}) {
+  const { publicView, deadline, reload } = useGame(roomCode, userId);
+  const game = publicView as unknown as MonopolyState | null;
+  const secondsLeft = useCountdown(deadline);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [trading, setTrading] = useState(false);
+  const tickedFor = useRef<number | null>(null);
+  const mySeat = seats.find((seat) => seat.user_id === userId)?.seat ?? null;
+  // The trade composer only stays open while it is still my free move.
+  const canPropose = Boolean(game && game.kind === 'monopoly' && mySeat !== null && currentPlayerId(game) === mySeat && !game.trade
+    && (game.phase === 'roll' || game.phase === 'end'));
+  useEffect(() => { if (!canPropose) setTrading(false); }, [canPropose]);
+
+  // Any phone nudges the server when the turn timer runs out; the server re-checks the deadline.
+  useEffect(() => {
+    if (secondsLeft !== 0 || deadline === null || tickedFor.current === deadline) return;
+    tickedFor.current = deadline;
+    const timer = window.setTimeout(() => { void callGame('tick', { roomCode }).then(reload).catch(() => undefined); }, 300 + Math.random() * 700);
+    return () => window.clearTimeout(timer);
+  }, [secondsLeft, deadline, roomCode, reload]);
+
+  useEffect(() => {
+    startMusic('monopoly');
+    return () => startMusic('menu');
+  }, []);
+
+  // Sound cues: dice, buying, my turn (or my bid, or an offer for me), finish.
+  const diceKey = game?.dice ? `${game.dice[0]}-${game.dice[1]}-${game.log.length}` : '';
+  const ownedCount = game ? game.tiles.filter((entry) => entry.owner !== null).length : 0;
+  const turnNow = game && game.kind === 'monopoly' ? actingPlayerId(game) : null;
+  const heard = useRef({ dice: diceKey, owned: ownedCount, turn: turnNow, finished: game?.phase === 'finished' });
+  useEffect(() => {
+    const last = heard.current;
+    if (diceKey && diceKey !== last.dice) { playSfx('roll'); window.setTimeout(() => playSfx('step'), 900); }
+    if (ownedCount > last.owned) playSfx('buy');
+    if (turnNow !== last.turn && turnNow === mySeat && game?.phase !== 'finished') playSfx('turn');
+    if (game?.phase === 'finished' && !last.finished) playSfx('win');
+    heard.current = { dice: diceKey, owned: ownedCount, turn: turnNow, finished: game?.phase === 'finished' };
+  }, [diceKey, ownedCount, turnNow, mySeat, game?.phase]);
+
+  const ranking = useMemo(() => game ? [...game.players].sort((left, right) => netWorth(game, right.id) - netWorth(game, left.id)) : [], [game]);
+
+  if (!game || game.kind !== 'monopoly') return <div className="mono-loading">Самбар бэлдэж байна…</div>;
+
+  const turnId = currentPlayerId(game);
+  const current = game.players.find((entry) => entry.id === turnId)!;
+  const me = game.players.find((entry) => entry.id === mySeat) ?? null;
+  const myTurn = me !== null && turnId === me.id && game.phase !== 'finished';
+  const playerById = (id: number | null) => game.players.find((entry) => entry.id === id) ?? null;
+  const trade = game.phase !== 'finished' ? game.trade ?? null : null;
+  const auction = game.phase === 'auction' ? game.auction ?? null : null;
+  /** My own turn with nothing else (an auction, a trade offer) holding it up. */
+  const myMove = myTurn && !trade && !auction;
+  const actor = playerById(actingPlayerId(game)) ?? current;
+
+  const send = async (move: string, extra: Record<string, unknown> = {}) => {
+    setBusy(true);
+    try {
+      await callGame('board', { roomCode, move, ...extra });
+      await reload();
+      return true;
+    } catch (cause) {
+      onNotice(cause instanceof Error ? cause.message : 'Алдаа гарлаа.', 'error');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const landingTile = BOARD[current.position];
+  const detail = selected === null ? null : BOARD[selected];
+  const tradedTiles = trade ? [...trade.give, ...trade.get] : [];
+  const centerStatus = trade
+    ? <><b>{playerById(trade.from)?.name}</b> ⇄ <b>{playerById(trade.to)?.name}</b> арилжаа хэлэлцэж байна</>
+    : auction ? <><b>{actor.name}</b> үнэ хаяж байна</>
+      : <><b>{current.name}</b> {game.phase === 'roll' ? 'шоо хаяна' : 'ээлжээ үргэлжлүүлж байна'}</>;
+
+  return <VoiceChatProvider roomCode={roomCode} userId={userId} seats={seats} phase={game.phase === 'finished' ? 'results' : 'discussion'} alive isHost={isHost}>
+    <div className="mono">
+      <section className="mono-board" aria-label="Монгол Монополь самбар">
+        {BOARD.map((tile) => {
+          const tileState = game.tiles[tile.id];
+          const owner = playerById(tileState.owner);
+          const here = game.players.filter((entry) => !entry.bankrupt && entry.position === tile.id);
+          return <button type="button" key={tile.id} style={gridCell(tile.id)}
+            className={`mono-tile is-${side(tile.id)} kind-${tile.kind} ${tile.group ? `group-${tile.group}` : ''} ${owner ? `owned owner-${owner.color}` : ''} ${tileState.mortgaged ? 'is-mortgaged' : ''} ${selected === tile.id ? 'is-selected' : ''} ${current.position === tile.id ? 'is-active' : ''} ${auction?.tile === tile.id ? 'is-auction' : ''} ${tradedTiles.includes(tile.id) ? 'is-traded' : ''}`}
+            onClick={() => setSelected(selected === tile.id ? null : tile.id)} aria-label={tile.name}>
+            {tile.group && <span className="mono-tile-band" />}
+            <span className="mono-tile-body">
+              {(tile.kind !== 'property') && <span className="mono-tile-icon"><TileIcon tile={tile} size={tile.id % 8 === 0 ? 18 : 12} /></span>}
+              <span className="mono-tile-name">{tile.short}</span>
+              {tile.price !== undefined && <span className="mono-tile-price">{owner ? owner.name : money(tile.price)}</span>}
+              {tile.kind === 'tax' && <span className="mono-tile-price">−{money(tile.rent!)}</span>}
+            </span>
+            {tileState.houses > 0 && <span className="mono-houses" aria-label={`${tileState.houses} барилга`}>{tileState.houses === 5 ? <Building2 size={10} /> : Array.from({ length: tileState.houses }, (_, index) => <i key={index} />)}</span>}
+            {here.length > 0 && <span className="mono-tokens">{here.map((entry) => <span key={entry.id} className={`mono-token avatar-${entry.color} ${entry.id === turnId ? 'is-turn' : ''}`} title={entry.name}>{entry.initials.slice(0, 1)}</span>)}</span>}
+          </button>;
+        })}
+
+        <div className="mono-center">
+          {detail ? <TileDetail tile={detail} game={game} me={me} myTurn={myMove} busy={busy} onClose={() => setSelected(null)} onAction={(move) => void send(move, { tile: detail.id })} /> : <>
+            <div className="mono-brand"><b>МОНГОЛ</b><span>МОНОПОЛЬ</span></div>
+            <div className="mono-dice-tray" aria-label={game.dice ? `${game.dice[0]} ба ${game.dice[1]}` : 'Шоо'}>
+              <div className="mono-dice">
+                {(game.dice ?? [0, 0]).map((value, index) => <Die key={`${game.log.length}-${index}-${value}`} value={value} index={index} />)}
+              </div>
+              {game.dice && <span className="mono-dice-total">{game.dice[0] + game.dice[1]}</span>}
+            </div>
+            {myMove && game.phase === 'roll' && <button type="button" className="mono-roll-button" disabled={busy} onClick={() => void send('roll')}><Dices size={16} /> {me!.inJail ? 'ХОС ХАЯЖ ГАРАХ' : 'ШОО ХАЯХ'}</button>}
+            {!myMove && game.phase !== 'finished' && <p className="mono-center-turn">{centerStatus}</p>}
+            {auction
+              ? <div className="mono-card is-auction"><b><Gavel size={12} /> Дуудлага худалдаа</b><span>{BOARD[auction.tile].name} · {auction.highBid ? `${money(auction.highBid)} — ${playerById(auction.highBidder)?.name ?? ''}` : 'санал алга'}</span></div>
+              : game.card && <div className={`mono-card deck-${game.card.deck ?? 'chance'}`}><b>{game.card.title}</b><span>{game.card.text}</span></div>}
+            <div className="mono-log">{game.log.slice(-3).map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}</div>
+          </>}
+        </div>
+      </section>
+
+      <aside className="mono-side">
+        <header className="mono-side-head">
+          <div><span>{roomName.toUpperCase()}</span><b>ТОЙРОГ {Math.min(game.round, MAX_ROUNDS)}/{MAX_ROUNDS}</b></div>
+          <div className="mono-timer"><Clock3 size={13} />{game.phase === 'finished' ? '—' : secondsLeft ?? '—'}</div>
+          <button type="button" className="icon-button" onClick={() => setLeaveOpen(true)} aria-label="Тоглоомоос гарах"><ArrowLeft size={15} /></button>
+        </header>
+
+        <div className="mono-players">
+          {game.players.map((entry) => <PlayerRow key={entry.id} entry={entry} game={game} isTurn={entry.id === turnId && game.phase !== 'finished'} isMe={entry.id === mySeat} />)}
+        </div>
+
+        <div className="mono-actions">
+          {game.phase === 'finished'
+            ? <Finished game={game} ranking={ranking} isHost={isHost} onReplay={onRematch} onLeave={onLeave} />
+            : trade
+              ? <TradePanel game={game} trade={trade} me={me} busy={busy} onAction={(move) => void send(move)} />
+              : auction
+                ? <AuctionPanel game={game} auction={auction} me={me} busy={busy} onBid={(amount) => void send('bid', { amount })} onPass={() => void send('pass')} />
+                : !myTurn
+                  ? <div className="mono-waiting"><Avatar name={current.name} color={current.color} url={current.avatarUrl} initials={current.initials} /><span><b>{current.name}</b>{game.phase === 'roll' ? ' шоо хаяхыг хүлээж байна' : game.phase === 'buy' ? ` ${landingTile.name}-г авах эсэхээ шийдэж байна` : ' ээлжээ дуусгаж байна'}</span></div>
+                  : <MyTurn game={game} me={me!} busy={busy} onAction={(move) => void send(move)} onTrade={() => setTrading(true)} />}
+        </div>
+      </aside>
+
+      {trading && me && <TradeComposer game={game} me={me} busy={busy} onClose={() => setTrading(false)}
+        onSend={(offer) => void send('propose', { offer }).then((sent) => { if (sent) setTrading(false); })} />}
+
+      {leaveOpen && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true"><h2>Тоглоомоос гарах уу?</h2><p>Гарвал та дампуурсанд тооцогдож, бүх өмч банкинд буцна.</p><div className="modal-actions"><button className="secondary-button" onClick={() => setLeaveOpen(false)}>ҮЛДЭХ</button><button className="primary-button" onClick={onLeave}>ГАРАХ</button></div></section></div>}
+    </div>
+  </VoiceChatProvider>;
+}
+
+function Die({ value, index }: { value: number; index: number }) {
+  const pips: Record<number, number[]> = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
+  return <span className={`mono-die ${value ? 'is-rolled' : 'is-empty'} die-${index}`}>{Array.from({ length: 9 }, (_, cell) => <i key={cell} className={(pips[value] ?? []).includes(cell + 1) ? 'on' : ''} />)}</span>;
+}
+
+function PlayerRow({ entry, game, isTurn, isMe }: { entry: MonopolyPlayer; game: MonopolyState; isTurn: boolean; isMe: boolean }) {
+  const owned = game.tiles.filter((tileState) => tileState.owner === entry.id).length;
+  return <div className={`mono-player ${isTurn ? 'is-turn' : ''} ${entry.bankrupt ? 'is-bankrupt' : ''}`}>
+    <Avatar name={entry.name} color={entry.color} url={entry.avatarUrl} initials={entry.initials}>{entry.host && <i><Crown size={9} /></i>}<VoiceAvatarIndicator name={entry.name} seat={entry.id} /></Avatar>
+    <span className="mono-player-copy"><b>{entry.name}{isMe && <small>ЧИ</small>}</b><span>{entry.bankrupt ? 'ДАМПУУРСАН' : entry.inJail ? `ШОРОНД · ${owned} газар` : `${owned} газар`}{!entry.bankrupt && (entry.jailCards?.length ?? 0) > 0 && <i className="mono-jail-card" title="Шоронгоос гарах карт"><KeyRound size={9} />{entry.jailCards!.length}</i>}</span></span>
+    <span className="mono-player-money">{entry.bankrupt ? '—' : money(entry.money)}</span>
+  </div>;
+}
+
+function MyTurn({ game, me, busy, onAction, onTrade }: { game: MonopolyState; me: MonopolyPlayer; busy: boolean; onAction: (move: string) => void; onTrade: () => void }) {
+  const tile = BOARD[me.position];
+  const offersLeft = MAX_OFFERS_PER_TURN - (game.offersThisTurn ?? 0);
+  const tradeButton = <button className="secondary-button" disabled={busy || offersLeft <= 0} onClick={onTrade} title={offersLeft <= 0 ? 'Энэ ээлжийн саналууд дууссан' : undefined}><ArrowLeftRight size={14} /> АРИЛЖАА</button>;
+  const cards = me.jailCards?.length ?? 0;
+  if (game.phase === 'roll') {
+    return <div className="mono-turn">
+      <p className="mono-turn-title">Таны ээлж{me.inJail ? ' · шоронд байна' : ''}</p>
+      <button className="primary-button mono-big" disabled={busy} onClick={() => onAction('roll')}><Dices size={18} /> {me.inJail ? 'ХОС ХАЯЖ ГАРАХ' : 'ШОО ХАЯХ'}</button>
+      {me.inJail
+        ? <div className="mono-turn-row">
+          {cards > 0 && <button className="secondary-button" disabled={busy} onClick={() => onAction('use-card')}><KeyRound size={14} /> КАРТААР ГАРАХ</button>}
+          <button className="secondary-button" disabled={busy || me.money < JAIL_FINE} onClick={() => onAction('pay-jail')}><LockOpen size={14} /> {money(JAIL_FINE)} ТӨЛӨХ</button>
+          {cards === 0 && tradeButton}
+        </div>
+        : <div className="mono-turn-row">{tradeButton}</div>}
+      <p className="mono-hint">Газар дээр дарж байшин барих, барьцаалах боломжтой.</p>
+    </div>;
+  }
+  if (game.phase === 'buy') {
+    return <div className="mono-turn">
+      <div className={`mono-offer ${tile.group ? `group-${tile.group}` : ''}`}><span className="mono-offer-band" /><b>{tile.name}</b><small>{tile.region}</small><strong>{money(tile.price!)}</strong></div>
+      <button className="primary-button mono-big" disabled={busy || me.money < tile.price!} onClick={() => onAction('buy')}><HandCoins size={16} /> ХУДАЛДАЖ АВАХ</button>
+      <button className="secondary-button" disabled={busy} onClick={() => onAction('decline')}><Gavel size={14} /> ДУУДЛАГА ХУДАЛДААНД</button>
+      <p className="mono-hint">{me.money < tile.price! ? 'Мөнгө хүрэлцэхгүй байна. ' : ''}Авахгүй бол газар дуудлага худалдаанд гарч, хамгийн өндөр үнэ хаясан нь авна.</p>
+    </div>;
+  }
+  return <div className="mono-turn">
+    <p className="mono-turn-title">{tile.name}</p>
+    <button className="primary-button mono-big" disabled={busy} onClick={() => onAction('end')}>{game.rollAgain ? <><Dices size={16} /> ДАХИН ХАЯХ (ХОС)</> : <>ЭЭЛЖ ДУУСГАХ <ChevronRight size={16} /></>}</button>
+    <div className="mono-turn-row">{tradeButton}</div>
+    <p className="mono-hint">Өөрийн газар дээр дарж гэр барина. Нэг өнгийн бүх газрыг эзэмшвэл түрээс 2 дахин өснө.</p>
+  </div>;
+}
+
+/** The auction for a deed nobody bought: whoever's turn it is raises or passes; a pass is final. */
+function AuctionPanel({ game, auction, me, busy, onBid, onPass }: {
+  game: MonopolyState; auction: AuctionState; me: MonopolyPlayer | null; busy: boolean; onBid: (amount: number) => void; onPass: () => void;
+}) {
+  const tile = BOARD[auction.tile];
+  const bidderId = auction.bidders[auction.turn % Math.max(1, auction.bidders.length)];
+  const name = (id: number | null) => game.players.find((entry) => entry.id === id)?.name ?? '';
+  const minimum = minimumBid(auction);
+  const mine = me !== null && bidderId === me.id;
+  const steps = [...new Set([minimum, minimum + 40, minimum + 90])];
+  return <div className="mono-turn mono-auction">
+    <div className={`mono-offer ${tile.group ? `group-${tile.group}` : ''}`}>
+      <span className="mono-offer-band" />
+      <b><Gavel size={13} /> {tile.name}</b>
+      <small>Дуудлага худалдаа · үнэ нь {money(tile.price ?? 0)}</small>
+      <strong>{auction.highBid ? <>{money(auction.highBid)} <em>{name(auction.highBidder)}</em></> : <em>Санал алга</em>}</strong>
+    </div>
+    <div className="mono-bidders">{auction.bidders.map((id) => <span key={id} className={`${id === bidderId ? 'is-bidding' : ''} ${id === auction.highBidder ? 'is-leading' : ''}`}>{name(id)}</span>)}</div>
+    {mine
+      ? <div className="mono-bid-row">
+        {steps.map((amount) => <button key={amount} className="primary-button" disabled={busy || amount > me!.money} onClick={() => onBid(amount)}>{money(amount)}</button>)}
+        <button className="secondary-button" disabled={busy} onClick={onPass}>ӨНЖИХ</button>
+      </div>
+      : <p className="mono-hint"><b>{name(bidderId)}</b> үнэ хаяж байна. {me && !me.bankrupt && !auction.bidders.includes(me.id) ? 'Та энэ дуудлагаас гарсан.' : 'Өнжвөл дахин оролцохгүй.'}</p>}
+  </div>;
+}
+
+/** A trade offer on the table: the partner answers, the proposer may withdraw, everyone else watches. */
+function TradePanel({ game, trade, me, busy, onAction }: { game: MonopolyState; trade: TradeOffer; me: MonopolyPlayer | null; busy: boolean; onAction: (move: string) => void }) {
+  const name = (id: number) => game.players.find((entry) => entry.id === id)?.name ?? '';
+  const interest = (tiles: number[]) => tiles.filter((tileId) => game.tiles[tileId].mortgaged).reduce((total, tileId) => total + mortgageInterest(tileId), 0);
+  const fromSide = describeSide(trade.give, trade.giveCash, trade.giveCards);
+  const toSide = describeSide(trade.get, trade.getCash, trade.getCards);
+  if (me?.id === trade.to) {
+    const owed = interest(trade.give);
+    return <div className="mono-turn mono-trade-card">
+      <p className="mono-turn-title"><Handshake size={15} /> {name(trade.from)} санал тавилаа</p>
+      <dl className="mono-trade-sides"><div><dt>Та авна</dt><dd>{fromSide}</dd></div><div><dt>Та өгнө</dt><dd>{toSide}</dd></div></dl>
+      {owed > 0 && <p className="mono-hint">Барьцаатай газар авбал банкинд {money(owed)} хүү шууд төлнө.</p>}
+      <div className="mono-bid-row">
+        <button className="primary-button" disabled={busy} onClick={() => onAction('accept')}>ЗӨВШӨӨРӨХ</button>
+        <button className="secondary-button" disabled={busy} onClick={() => onAction('reject')}>ТАТГАЛЗАХ</button>
+      </div>
+    </div>;
+  }
+  if (me?.id === trade.from) {
+    return <div className="mono-turn mono-trade-card">
+      <p className="mono-turn-title"><Handshake size={15} /> Таны санал · {name(trade.to)}</p>
+      <dl className="mono-trade-sides"><div><dt>Та өгнө</dt><dd>{fromSide}</dd></div><div><dt>Та авна</dt><dd>{toSide}</dd></div></dl>
+      <p className="mono-hint">{name(trade.to)} хариу өгөхийг хүлээж байна.</p>
+      <button className="secondary-button" disabled={busy} onClick={() => onAction('cancel-trade')}>САНАЛАА БУЦААХ</button>
+    </div>;
+  }
+  return <div className="mono-turn mono-trade-card">
+    <p className="mono-turn-title"><Handshake size={15} /> {name(trade.from)} ⇄ {name(trade.to)}</p>
+    <dl className="mono-trade-sides"><div><dt>{name(trade.from)}</dt><dd>{fromSide}</dd></div><div><dt>{name(trade.to)}</dt><dd>{toSide}</dd></div></dl>
+    <p className="mono-hint">{name(trade.to)} хариу өгөхийг хүлээж байна.</p>
+  </div>;
+}
+
+/** Builds a trade offer: pick a partner, then the deeds, cash and jail cards each side puts up. */
+function TradeComposer({ game, me, busy, onClose, onSend }: {
+  game: MonopolyState; me: MonopolyPlayer; busy: boolean; onClose: () => void; onSend: (offer: TradeProposal) => void;
+}) {
+  const partners = game.players.filter((entry) => !entry.bankrupt && entry.id !== me.id);
+  const [to, setTo] = useState<number | null>(partners[0]?.id ?? null);
+  const [give, setGive] = useState<number[]>([]);
+  const [get, setGet] = useState<number[]>([]);
+  const [giveCash, setGiveCash] = useState(0);
+  const [getCash, setGetCash] = useState(0);
+  const [giveCards, setGiveCards] = useState(0);
+  const [getCards, setGetCards] = useState(0);
+  const partner = partners.find((entry) => entry.id === to) ?? null;
+  const choose = (id: number) => { setTo(id); setGet([]); setGetCash(0); setGetCards(0); };
+  const empty = !give.length && !get.length && !giveCash && !getCash && !giveCards && !getCards;
+  const owed = get.filter((tileId) => game.tiles[tileId].mortgaged).reduce((total, tileId) => total + mortgageInterest(tileId), 0);
+  return <div className="mono-trade-backdrop" role="dialog" aria-modal="true" aria-label="Арилжаа">
+    <section className="mono-trade">
+      <header>
+        <b><ArrowLeftRight size={15} /> АРИЛЖАА</b>
+        <div className="mono-trade-partners">{partners.map((entry) => <button type="button" key={entry.id} className={entry.id === to ? 'is-picked' : ''} onClick={() => choose(entry.id)}>
+          <Avatar name={entry.name} color={entry.color} url={entry.avatarUrl} initials={entry.initials} />{entry.name}
+        </button>)}</div>
+        <button type="button" className="icon-button" onClick={onClose} aria-label="Хаах"><X size={15} /></button>
+      </header>
+      <div className="mono-trade-columns">
+        <TradeSide title="Та өгнө" owner={me} game={game} picked={give} onPick={setGive} cash={giveCash} onCash={setGiveCash} cards={giveCards} onCards={setGiveCards} />
+        <TradeSide title={partner ? `${partner.name} өгнө` : 'Хамтрагч'} owner={partner} game={game} picked={get} onPick={setGet} cash={getCash} onCash={setGetCash} cards={getCards} onCards={setGetCards} />
+      </div>
+      <footer>
+        <p className="mono-hint">{empty ? 'Газар, мөнгө эсвэл карт сонгоно уу. Барилгатай бүлгийн газрыг арилжаалахгүй.' : <>{describeSide(give, giveCash, giveCards)} <b>↔</b> {describeSide(get, getCash, getCards)}{owed ? ` · барьцааны хүү ${money(owed)}` : ''}</>}</p>
+        <button type="button" className="secondary-button" onClick={onClose}>БОЛИХ</button>
+        <button type="button" className="primary-button" disabled={busy || empty || !partner}
+          onClick={() => partner && onSend({ to: partner.id, give, get, giveCash, getCash, giveCards, getCards })}><Handshake size={14} /> САНАЛ ИЛГЭЭХ</button>
+      </footer>
+    </section>
+  </div>;
+}
+
+function TradeSide({ title, owner, game, picked, onPick, cash, onCash, cards, onCards }: {
+  title: string; owner: MonopolyPlayer | null; game: MonopolyState; picked: number[]; onPick: (tiles: number[]) => void;
+  cash: number; onCash: (value: number) => void; cards: number; onCards: (value: number) => void;
+}) {
+  const deeds = owner ? BOARD.filter((tile) => tile.price !== undefined && game.tiles[tile.id].owner === owner.id) : [];
+  const limit = owner?.money ?? 0;
+  const held = owner?.jailCards?.length ?? 0;
+  const setCash = (value: number) => onCash(Math.max(0, Math.min(limit, Math.round(Number.isFinite(value) ? value : 0))));
+  return <div className="mono-trade-side">
+    <h4>{title}<small>{owner ? `${money(owner.money)} бэлэн` : ''}</small></h4>
+    <div className="mono-trade-deeds">
+      {deeds.length ? deeds.map((tile) => {
+        const tradable = canTradeTile(game, tile.id);
+        const chosen = picked.includes(tile.id);
+        return <button type="button" key={tile.id} disabled={!tradable} title={tradable ? tile.name : 'Бүлэгт нь барилга байна'}
+          className={`mono-deed ${tile.group ? `group-${tile.group}` : `kind-${tile.kind}`} ${chosen ? 'is-picked' : ''}`}
+          onClick={() => onPick(chosen ? picked.filter((id) => id !== tile.id) : [...picked, tile.id])}>
+          <span className="mono-deed-band" /><span>{tile.short}</span>{game.tiles[tile.id].mortgaged && <small>барьцаа</small>}
+        </button>;
+      }) : <p className="mono-hint">Газар алга.</p>}
+      {held > 0 && <button type="button" className={`mono-deed is-card ${cards ? 'is-picked' : ''}`} onClick={() => onCards((cards + 1) % (held + 1))}>
+        <KeyRound size={11} /><span>Шоронгийн карт{cards ? ` ×${cards}` : ''}</span>
+      </button>}
+    </div>
+    <div className="mono-trade-cash">
+      <button type="button" onClick={() => setCash(cash - 50)} disabled={cash <= 0} aria-label="50₮ хасах"><Minus size={13} /></button>
+      <label><input type="number" inputMode="numeric" min={0} max={limit} step={10} value={cash} onChange={(event) => setCash(Number(event.target.value))} aria-label={`${title}: мөнгө`} />₮</label>
+      <button type="button" onClick={() => setCash(cash + 50)} disabled={cash >= limit} aria-label="50₮ нэмэх"><Plus size={13} /></button>
+    </div>
+  </div>;
+}
+
+function TileDetail({ tile, game, me, myTurn, busy, onClose, onAction }: {
+  tile: Tile; game: MonopolyState; me: MonopolyPlayer | null; myTurn: boolean; busy: boolean; onClose: () => void; onAction: (move: string) => void;
+}) {
+  const tileState = game.tiles[tile.id];
+  const owner = game.players.find((entry) => entry.id === tileState.owner) ?? null;
+  const mine = me !== null && owner?.id === me.id;
+  const group = tile.group ? GROUP_TILES[tile.group] : [];
+  const groupComplete = mine && tile.group ? ownsGroup(game, me!.id, tile.group) : false;
+  const rows: Array<[string, ReactNode]> = [];
+  if (tile.kind === 'property') {
+    const rents = tile.rents!;
+    rows.push(['Түрээс', money(rents[0])], ['Бүлгээрээ', money(rents[0] * 2)]);
+    for (let houses = 1; houses <= 5; houses += 1) rows.push([houses === 5 ? 'Жуулчны бааз' : `${houses} гэр`, money(rents[houses])]);
+    const supply = bankSupply(game);
+    rows.push(['Гэр барих', money(tile.houseCost!)], ['Банкны гэр/бааз', `${supply.houses} / ${supply.hotels}`]);
+  }
+  if (tile.price !== undefined) rows.push(['Барьцаа', `+${money(mortgageValue(tile.id))} / −${money(unmortgageCost(tile.id))}`]);
+  if (tile.kind === 'rail') rows.push(['1 / 2 / 3 эзэмшвэл', '25₮ / 50₮ / 100₮']);
+  if (tile.kind === 'utility') rows.push(['1 эзэмшвэл', 'шоо × 4'], ['2 эзэмшвэл', 'шоо × 10']);
+  const describe: Partial<Record<Tile['kind'], string>> = {
+    start: 'Эхлэлийг давах бүрт 200₮ авна.', jail: 'Зочлох эсвэл шоронд суух. Хос буулгах, 50₮ төлөх эсвэл «Өршөөл» картаар гарна. Гурав дахь оролдлогын дараа торгуулиа төлж гарна.',
+    parking: 'Наадмын амралт. Юу ч болохгүй.', gotojail: 'Шууд шоронд очно.', chance: 'Хувь тавилангийн карт сугална.',
+    chest: 'Эрдэнэсийн авдрын карт сугална.', tax: `${tile.rent}₮ татвар төлнө.`,
+  };
+  return <div className={`mono-detail ${tile.group ? `group-${tile.group}` : ''}`}>
+    <button type="button" className="mono-detail-close" onClick={onClose} aria-label="Хаах"><X size={15} /></button>
+    {tile.group && <span className="mono-detail-band"><small>{GROUP_LABEL[tile.group]}</small></span>}
+    <h3><TileIcon tile={tile} size={15} /> {tile.name}</h3>
+    {tile.region && <p className="mono-detail-region">{tile.region}{tile.price ? ` · ${money(tile.price)}` : ''}</p>}
+    {describe[tile.kind] && <p className="mono-detail-text">{describe[tile.kind]}</p>}
+    {rows.length > 0 && <dl>{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
+    {owner && <p className="mono-detail-owner"><ScrollText size={12} /> Эзэн: <b>{owner.name}</b>{tileState.mortgaged ? ' · барьцаанд' : ''}{tileState.houses ? ` · ${tileState.houses === 5 ? 'бааз' : `${tileState.houses} гэр`}` : ''}{owner.id !== me?.id && !tileState.mortgaged ? ` · одоогийн түрээс ${money(rentFor(game, tile.id, 7))}` : ''}</p>}
+    {mine && myTurn && <div className="mono-detail-actions">
+      {tile.kind === 'property' && groupComplete && !tileState.mortgaged && tileState.houses < 5 && <button className="primary-button" disabled={busy} onClick={() => onAction('build')}><Building2 size={13} /> ГЭР БАРИХ {money(tile.houseCost!)}</button>}
+      {tileState.houses > 0 && <button className="secondary-button" disabled={busy} onClick={() => onAction('sell')}>ГЭР ЗАРАХ +{money(tile.houseCost! / 2)}</button>}
+      {!tileState.mortgaged && tileState.houses === 0 && !group.some((other) => game.tiles[other].houses > 0) && <button className="secondary-button" disabled={busy} onClick={() => onAction('mortgage')}>БАРЬЦААЛАХ +{money(mortgageValue(tile.id))}</button>}
+      {tileState.mortgaged && <button className="secondary-button" disabled={busy} onClick={() => onAction('unmortgage')}>БАРЬЦААНААС ГАРГАХ −{money(unmortgageCost(tile.id))}</button>}
+    </div>}
+    {mine && !myTurn && <p className="mono-hint">Барилга, барьцааг зөвхөн өөрийн ээлжээр хийнэ.</p>}
+  </div>;
+}
+
+function Finished({ game, ranking, isHost, onReplay, onLeave }: { game: MonopolyState; ranking: MonopolyPlayer[]; isHost: boolean; onReplay: () => void; onLeave: () => void }) {
+  const winner = game.players.find((entry) => entry.id === game.winner);
+  return <div className="mono-finished">
+    <p className="mono-turn-title"><Trophy size={15} /> {winner ? `${winner.name} яллаа!` : 'Тоглоом дууслаа'}</p>
+    <ol>{ranking.map((entry) => <li key={entry.id}><span>{entry.name}</span><b>{entry.bankrupt ? 'дампуурсан' : money(netWorth(game, entry.id))}</b></li>)}</ol>
+    <div className="mono-finished-actions">
+      <button className="secondary-button" onClick={onLeave}><ArrowLeft size={14} /> ГАРАХ</button>
+      {isHost ? <button className="primary-button" onClick={onReplay}>ДАХИН ТОГЛОХ <ChevronRight size={14} /></button> : <span className="mono-hint">Эзэн шинэ тоглолт эхлүүлэхийг хүлээж байна</span>}
+    </div>
+  </div>;
+}

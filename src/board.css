@@ -1,0 +1,2126 @@
+/* Game hub and "Монгол Монополь" board. Uses the app's dark palette with gold accents;
+   colour groups borrow from Mongolian deel and steppe colours. */
+
+:root {
+  --g-brown: #9a6a43;
+  --g-sky: #4aa3d4;
+  --g-pink: #c86b98;
+  --g-orange: #df8a2c;
+  --g-red: #c4423f;
+  --g-yellow: #d9b43b;
+  --g-green: #3f9b5d;
+  --g-navy: #3b5fb8;
+  --mono-gold: #d2b073;
+}
+
+/* ---------- Game hub ---------- */
+
+.hub-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  height: calc(100% - 55px);
+  padding: 14px 16px;
+  overflow-y: auto;
+}
+
+.hub-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px;
+  border: 1px solid #ffffff14;
+  background: linear-gradient(160deg, #15161dee, #0f1117ee);
+}
+
+.hub-section > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hub-section > header b {
+  display: block;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 19px;
+  letter-spacing: .6px;
+}
+
+.hub-section > header small {
+  color: #8f8a8d;
+  font-size: 11px;
+}
+
+.hub-section-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #b59a6655;
+  color: var(--mono-gold);
+  background: #1d1a17;
+}
+
+.hub-board .hub-section-icon {
+  border-color: #4aa3d455;
+  color: #8fc8ea;
+  background: #121c26;
+}
+
+.hub-games {
+  display: grid;
+  gap: 8px;
+}
+
+.hub-game {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 74px;
+  padding: 9px 12px 9px 9px;
+  border: 1px solid #b59a6655;
+  background: #17181f;
+  color: #e9e5df;
+  text-align: left;
+  transition: border-color .16s, transform .16s, background .16s;
+}
+
+.hub-game:not(.is-soon):hover {
+  border-color: var(--mono-gold);
+  background: #1d1c22;
+  transform: translateY(-1px);
+}
+
+.hub-game-art {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  color: #f0d9a8;
+  background: radial-gradient(circle at 30% 25%, #9e333e, #3a141b 75%);
+}
+
+.hub-game-monopoly .hub-game-art {
+  background: radial-gradient(circle at 30% 25%, #2f7fb8, #10263a 75%);
+  color: #f6e2b0;
+}
+
+.hub-game-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.hub-game-copy b {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.hub-game-copy small {
+  color: #aaa3a2;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.hub-game-copy i {
+  color: var(--mono-gold);
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: .6px;
+}
+
+.hub-game.is-soon {
+  grid-template-columns: 56px minmax(0, 1fr);
+  opacity: .55;
+  border-style: dashed;
+}
+
+.hub-game.is-soon .hub-game-art {
+  background: #1d1e25;
+  color: #8f8a8d;
+}
+
+.hub-code-button {
+  font-size: 11px;
+}
+
+.setup-game-name {
+  color: var(--mono-gold);
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .hub-content {
+    height: calc(100% - 43px);
+    padding: 10px 16px;
+    gap: 10px;
+  }
+
+  .hub-game {
+    min-height: 62px;
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+  }
+
+  .hub-game-art {
+    width: 46px;
+    height: 46px;
+  }
+}
+
+@media (max-width: 560px) {
+  .hub-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Board game layout ---------- */
+
+.mono,
+.mono-loading {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  background: radial-gradient(ellipse at 30% 50%, #16202c 0, transparent 60%), linear-gradient(130deg, #0a0c12, #0e121a 55%, #0a0c12);
+  color: #e9e5df;
+}
+
+.mono-loading {
+  display: grid;
+  place-items: center;
+  color: #c8b48c;
+}
+
+.mono {
+  display: grid;
+  grid-template-columns: auto minmax(240px, 1fr);
+  gap: 12px;
+  padding: 8px 12px 10px;
+  overflow: hidden;
+}
+
+/* The voice dock sits on top of the screen in landscape phones; leave room for it. */
+.voice-scope > .mono {
+  flex: 1 1 0;
+}
+
+.mono-board {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.35fr repeat(7, 1fr) 1.35fr;
+  grid-template-rows: 1.35fr repeat(7, 1fr) 1.35fr;
+  gap: 2px;
+  height: 100%;
+  max-height: 100%;
+  aspect-ratio: 1;
+  min-height: 0;
+  padding: 2px;
+  border: 1px solid #b59a6655;
+  background: #0b0e14;
+  box-shadow: 0 16px 40px #0009;
+}
+
+.mono-tile {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid #ffffff12;
+  background: #161a22;
+  color: #e9e5df;
+  text-align: center;
+  transition: box-shadow .16s, border-color .16s;
+}
+
+.mono-tile:hover,
+.mono-tile.is-selected {
+  border-color: var(--mono-gold);
+  box-shadow: inset 0 0 0 1px var(--mono-gold);
+  z-index: 2;
+}
+
+.mono-tile.is-active {
+  box-shadow: inset 0 0 0 2px #f1d79a, 0 0 12px #f1d79a55;
+  z-index: 3;
+}
+
+.mono-tile.is-corner {
+  background: radial-gradient(circle at 50% 40%, #273246, #141a24 75%);
+}
+
+.mono-tile.kind-gotojail,
+.mono-tile.kind-jail {
+  background: radial-gradient(circle at 50% 40%, #3a2128, #161a22 75%);
+}
+
+.mono-tile.kind-start {
+  background: radial-gradient(circle at 50% 40%, #3c3218, #161a22 75%);
+}
+
+.mono-tile.kind-chance,
+.mono-tile.kind-chest {
+  background: linear-gradient(160deg, #221d30, #161a22);
+}
+
+.mono-tile.kind-tax {
+  background: linear-gradient(160deg, #2a1d1d, #161a22);
+}
+
+.mono-tile-band {
+  flex: 0 0 22%;
+  max-height: 12px;
+  min-height: 5px;
+  background: var(--band, #555);
+}
+
+.group-brown { --band: var(--g-brown); }
+.group-sky { --band: var(--g-sky); }
+.group-pink { --band: var(--g-pink); }
+.group-orange { --band: var(--g-orange); }
+.group-red { --band: var(--g-red); }
+.group-yellow { --band: var(--g-yellow); }
+.group-green { --band: var(--g-green); }
+.group-navy { --band: var(--g-navy); }
+
+.mono-tile-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 1px 2px;
+}
+
+.mono-tile-icon {
+  color: var(--mono-gold);
+  line-height: 0;
+}
+
+.mono-tile-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: clamp(7px, 1.9vh, 10px);
+  font-weight: 600;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.is-corner .mono-tile-name {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(8px, 2.3vh, 12px);
+  letter-spacing: .5px;
+  white-space: normal;
+}
+
+.mono-tile-price {
+  max-width: 100%;
+  overflow: hidden;
+  color: #b9b2a8;
+  font-size: clamp(6px, 1.6vh, 9px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Owned tiles: the owner's colour as an inner frame. */
+.mono-tile.owned {
+  box-shadow: inset 0 -3px 0 var(--owner, #d2b073);
+}
+
+.owner-rose { --owner: #c95b6b; }
+.owner-violet { --owner: #9a7bc2; }
+.owner-gold { --owner: #c89a52; }
+.owner-teal { --owner: #4f9e93; }
+.owner-blue { --owner: #5b85bf; }
+.owner-plum { --owner: #b0668a; }
+
+.mono-tile.owned .mono-tile-price {
+  color: var(--owner);
+  font-weight: 700;
+}
+
+.mono-tile.is-mortgaged {
+  opacity: .5;
+}
+
+.mono-houses {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  display: flex;
+  gap: 1px;
+  color: #f1d79a;
+}
+
+.mono-houses i {
+  width: 4px;
+  height: 4px;
+  border-radius: 1px;
+  background: #7ed39b;
+  box-shadow: 0 0 2px #000;
+}
+
+.mono-tokens {
+  position: absolute;
+  inset: auto 1px 2px 1px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1px;
+}
+
+.mono-token {
+  display: grid;
+  place-items: center;
+  width: clamp(10px, 3vh, 15px);
+  height: clamp(10px, 3vh, 15px);
+  border: 1px solid #0b0e14;
+  border-radius: 50%;
+  font-size: clamp(6px, 1.7vh, 9px);
+  font-weight: 800;
+  color: #fff;
+  box-shadow: 0 1px 3px #000a;
+}
+
+.mono-token.is-turn {
+  outline: 2px solid #f1d79a;
+  outline-offset: 0;
+}
+
+/* ---------- Board centre ---------- */
+
+.mono-center {
+  grid-row: 2 / 9;
+  grid-column: 2 / 9;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 0;
+  padding: 6px;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 45%, #1b2a3c 0, #0e131c 70%);
+}
+
+.mono-brand {
+  display: grid;
+  justify-items: center;
+  font-family: 'Barlow Condensed', sans-serif;
+  line-height: .95;
+}
+
+.mono-brand b {
+  color: var(--mono-gold);
+  font-size: clamp(16px, 5.5vh, 30px);
+  letter-spacing: 3px;
+}
+
+.mono-brand span {
+  color: #e9e5df;
+  font-size: clamp(10px, 3vh, 16px);
+  letter-spacing: 5px;
+}
+
+.mono-dice {
+  display: flex;
+  gap: 8px;
+}
+
+.mono-die {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  width: clamp(26px, 8.5vh, 42px);
+  height: clamp(26px, 8.5vh, 42px);
+  padding: 4px;
+  border-radius: 6px;
+  background: linear-gradient(145deg, #fbf8f2, #d9d3c8);
+  box-shadow: 0 4px 10px #0009;
+}
+
+.mono-die.is-empty {
+  opacity: .35;
+}
+
+.mono-die i {
+  border-radius: 50%;
+}
+
+.mono-die i.on {
+  background: #1b1d24;
+}
+
+.mono-card {
+  display: grid;
+  gap: 2px;
+  max-width: 92%;
+  padding: 5px 9px;
+  border: 1px solid #b59a6680;
+  background: #221d16;
+  text-align: center;
+}
+
+.mono-card b {
+  color: var(--mono-gold);
+  font-size: 11px;
+}
+
+.mono-card span {
+  color: #e6dccb;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.mono-log {
+  width: 100%;
+  max-width: 96%;
+  text-align: center;
+}
+
+.mono-log p {
+  margin: 1px 0;
+  overflow: hidden;
+  color: #a9a2a0;
+  font-size: clamp(8px, 2.2vh, 11px);
+  line-height: 1.3;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mono-log p:last-child {
+  color: #e7dfd2;
+}
+
+/* Tile detail card (opens in the board centre). */
+.mono-detail {
+  position: relative;
+  width: 100%;
+  max-width: 300px;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 8px 10px 10px;
+  border: 1px solid #b59a6666;
+  background: #12161f;
+  scrollbar-width: thin;
+}
+
+.mono-detail-band {
+  display: block;
+  margin: -8px -10px 6px;
+  padding: 3px 10px;
+  background: var(--band, #333);
+  color: #fff;
+  font-size: 9px;
+  letter-spacing: 1px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.mono-detail h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px;
+}
+
+.mono-detail-region,
+.mono-detail-text {
+  margin: 2px 0 6px;
+  color: #a9a2a0;
+  font-size: 11px;
+}
+
+.mono-detail dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 10px;
+  margin: 0 0 6px;
+}
+
+.mono-detail dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.mono-detail dt {
+  color: #8f8a8d;
+}
+
+.mono-detail dd {
+  margin: 0;
+  color: #e9e5df;
+  font-weight: 600;
+}
+
+.mono-detail-owner {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin: 4px 0;
+  color: #c8bfb2;
+  font-size: 11px;
+}
+
+.mono-detail-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #ffffff22;
+  background: #0b0e14cc;
+  color: #e9e5df;
+}
+
+.mono-detail-actions {
+  display: grid;
+  gap: 5px;
+}
+
+.viewport .game-frame .mono-detail-actions .primary-button,
+.viewport .game-frame .mono-detail-actions .secondary-button {
+  height: 32px;
+  font-size: 11px;
+  padding: 0 8px;
+}
+
+/* ---------- Side panel ---------- */
+
+.mono-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.mono-side-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mono-side-head > div:first-child {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+
+.mono-side-head span {
+  overflow: hidden;
+  color: #a68f6c;
+  font-size: 10px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mono-side-head b {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  letter-spacing: .8px;
+}
+
+.mono-timer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 46px;
+  padding: 4px 7px;
+  border: 1px solid #ffffff1a;
+  color: #f1d79a;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+}
+
+.mono-players {
+  display: grid;
+  gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.mono-player {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 3px 8px 3px 4px;
+  border: 1px solid #ffffff14;
+  background: #14171e;
+}
+
+.mono-player .avatar {
+  width: 30px;
+  height: 30px;
+  font-size: 11px;
+}
+
+.mono-player.is-turn {
+  border-color: #f1d79a;
+  background: linear-gradient(100deg, #2f2718, #16181f);
+}
+
+.mono-player.is-bankrupt {
+  opacity: .45;
+  filter: grayscale(.8);
+}
+
+.mono-player-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.mono-player-copy b {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mono-player-copy b small {
+  color: #c6a672;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 9px;
+}
+
+.mono-player-copy > span {
+  color: #8f8a8d;
+  font-size: 10px;
+}
+
+.mono-player-money {
+  color: #9fe0b2;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.mono-actions {
+  margin-top: auto;
+}
+
+.mono-turn,
+.mono-finished {
+  display: grid;
+  gap: 6px;
+}
+
+.mono-turn-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: #f1d79a;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 17px;
+}
+
+.viewport .game-frame .mono-turn .primary-button,
+.viewport .game-frame .mono-turn .secondary-button,
+.viewport .game-frame .mono-finished .primary-button,
+.viewport .game-frame .mono-finished .secondary-button {
+  width: 100%;
+  min-height: 38px;
+  height: auto;
+  font-size: 13px;
+}
+
+.viewport .game-frame .mono-turn .mono-big {
+  min-height: 46px;
+  font-size: 15px;
+}
+
+.mono-hint {
+  margin: 0;
+  color: #8f8a8d;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.mono-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px dashed #ffffff22;
+  color: #c8bfb2;
+  font-size: 12px;
+}
+
+.mono-waiting .avatar {
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+
+.mono-offer {
+  display: grid;
+  gap: 1px;
+  padding: 0 10px 8px;
+  border: 1px solid #ffffff22;
+  background: #14171e;
+}
+
+.mono-offer-band {
+  height: 8px;
+  margin: 0 -10px 6px;
+  background: var(--band, #556);
+}
+
+.mono-offer b {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px;
+}
+
+.mono-offer small {
+  color: #8f8a8d;
+  font-size: 11px;
+}
+
+.mono-offer strong {
+  color: #9fe0b2;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 20px;
+}
+
+.mono-finished ol {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0 0 0 18px;
+}
+
+.mono-finished li {
+  font-size: 12px;
+}
+
+.mono-finished li span {
+  display: inline-block;
+  min-width: 90px;
+}
+
+.mono-finished li b {
+  color: #9fe0b2;
+}
+
+.mono-finished-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .mono {
+    gap: 8px;
+    padding: 4px 10px 6px;
+  }
+
+  .mono-player {
+    min-height: 34px;
+  }
+
+  .mono-player .avatar {
+    width: 26px;
+    height: 26px;
+  }
+
+  .viewport .game-frame .mono-turn .mono-big {
+    min-height: 42px;
+  }
+}
+
+@media (orientation: portrait), (max-width: 620px) {
+  .mono {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .mono-board {
+    width: 100%;
+    height: auto;
+  }
+}
+
+/* Long place names wrap onto two lines instead of being cut off. */
+.mono-tile-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+.is-corner .mono-tile-name {
+  -webkit-line-clamp: 2;
+  font-size: clamp(7px, 2vh, 12px);
+}
+
+.mono-die.is-empty {
+  opacity: .25;
+  background: transparent;
+  border: 1px dashed #d2b07388;
+  box-shadow: none;
+}
+
+.mono-tokens {
+  inset: auto 1px 1px auto;
+  justify-content: flex-end;
+  max-width: 100%;
+}
+
+/* Taller screens float the voice dock in the top-right corner; keep the side panel below it. */
+@media (min-height: 501px) and (min-width: 561px) {
+  .mono-side {
+    padding-top: 46px;
+  }
+}
+
+/* ---------- Game type picker: two large illustrated cards ---------- */
+
+.hub-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  height: calc(100% - 55px);
+  padding: 14px 18px 16px;
+}
+
+.hub-card {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 0;
+  padding: 12px 14px 10px;
+  border: 1px solid #b59a6680;
+  /* One artwork layer per card (set through --hub-bg) plus a readability gradient. */
+  background:
+    linear-gradient(180deg, #0b0d13d9 0%, #0b0d1340 24%, #0b0d1326 50%, #0b0d13b3 74%, #0b0d13f5 100%),
+    var(--hub-bg, none) center / cover no-repeat,
+    #0e1016;
+  box-shadow: inset 0 0 0 1px #ffffff08, 0 18px 40px #0008;
+  overflow: hidden;
+}
+
+.hub-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.hub-card::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border: 1px solid #b59a6622;
+  pointer-events: none;
+}
+
+.hub-card h2 {
+  margin: 0;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(22px, 7vh, 40px);
+  font-weight: 700;
+  letter-spacing: 2px;
+  line-height: 1;
+  color: transparent;
+  background: linear-gradient(180deg, #f6e2b0, #c79a52);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 2px 6px #000c);
+}
+
+/* Gold pill call-to-action. */
+.hub-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: min(260px, 80%);
+  min-height: 46px;
+  margin-top: auto;
+  padding: 0 28px;
+  border: 1px solid #f6e2b0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f3d48e, #c99a4b 60%, #a87a32);
+  color: #2a1d0e;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(16px, 5vh, 22px);
+  font-weight: 800;
+  letter-spacing: 2px;
+  box-shadow: 0 10px 22px #0009, inset 0 1px 0 #fff8;
+  position: relative;
+  z-index: 2;
+  transition: transform .15s ease, filter .15s ease;
+}
+
+.hub-play:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.hub-play:active {
+  transform: translateY(1px);
+}
+
+.hub-card-meta {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  margin: 0;
+  color: #c8bfb2;
+  text-shadow: 0 2px 8px #000d;
+  font-size: clamp(11px, 2.9vh, 13px);
+  text-align: center;
+}
+
+.hub-card-meta b {
+  color: #e9e5df;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(14px, 3.8vh, 18px);
+  letter-spacing: .5px;
+}
+
+.hub-card-soon {
+  margin: 0;
+  color: #8f8a8d;
+  font-size: 10px;
+  letter-spacing: .4px;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .hub-cards {
+    height: calc(100% - 43px);
+    gap: 12px;
+    padding: 8px 16px 10px;
+  }
+
+  .hub-card {
+    padding: 8px 10px 6px;
+    gap: 4px;
+  }
+
+  .hub-play {
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 560px), (orientation: portrait) {
+  .hub-cards {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .hub-card {
+    min-height: 320px;
+  }
+}
+
+/* ================= Monopoly: richer board, centre dice, compact voice dock ================= */
+
+.mono-board {
+  padding: 5px;
+  border: 1px solid #d2b073aa;
+  border-radius: 6px;
+  background: linear-gradient(145deg, #1a1710, #0a0c11 60%);
+  box-shadow: 0 0 0 3px #0b0e14, 0 0 0 4px #b59a6655, 0 22px 50px #000c, inset 0 0 30px #000a;
+  gap: 3px;
+}
+
+.mono-tile {
+  border-radius: 3px;
+  border-color: #ffffff1a;
+  background: linear-gradient(170deg, #1d222c, #131720);
+}
+
+.mono-tile-band {
+  flex-basis: 26%;
+  max-height: 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--band, #555) 80%, #fff), var(--band, #555));
+  box-shadow: inset 0 -1px 0 #0006;
+}
+
+.mono-tile.is-corner {
+  background: radial-gradient(circle at 50% 35%, #34415a, #151b27 78%);
+  border-color: #d2b07355;
+}
+
+.mono-tile.is-active {
+  animation: mono-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes mono-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 2px #f1d79a, 0 0 8px #f1d79a44; }
+  50% { box-shadow: inset 0 0 0 2px #fff0c4, 0 0 18px #f1d79a99; }
+}
+
+.mono-token {
+  border: 2px solid #0b0e14;
+  box-shadow: 0 2px 5px #000c, inset 0 -3px 5px #0005, inset 0 2px 3px #fff4;
+}
+
+.mono-token.is-turn {
+  outline: 2px solid #f1d79a;
+  animation: mono-hop .9s ease-in-out infinite;
+}
+
+@keyframes mono-hop {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+/* Centre: a felt-green table with a gold ring, the dice tray and the roll button. */
+.mono-center {
+  gap: 8px;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 0 58%, #d2b07322 58.5% 59.5%, transparent 60%),
+    radial-gradient(ellipse at 50% 45%, #1d3a36 0, #12241f 48%, #0b1512 100%);
+  box-shadow: inset 0 0 40px #000b;
+}
+
+.mono-center::before,
+.mono-center::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 1px solid #d2b07338;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.mono-center::after {
+  inset: 12px;
+  border-color: #d2b07318;
+}
+
+.mono-brand b {
+  text-shadow: 0 2px 10px #000b, 0 0 18px #d2b07344;
+}
+
+.mono-dice-tray {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  border: 1px solid #d2b07355;
+  border-radius: 999px;
+  background: radial-gradient(ellipse at 50% 30%, #0f2a25, #08120f);
+  box-shadow: inset 0 3px 12px #000c, 0 1px 0 #ffffff14;
+}
+
+.mono-dice {
+  gap: 14px;
+}
+
+.mono-die {
+  width: clamp(34px, 11vh, 58px);
+  height: clamp(34px, 11vh, 58px);
+  padding: 6px;
+  gap: 3px;
+  border-radius: 22%;
+  background: linear-gradient(145deg, #fffdf8 0%, #ece5d8 55%, #cfc6b6 100%);
+  box-shadow: 0 6px 12px #000a, inset 0 -3px 5px #0003, inset 0 2px 3px #fff;
+}
+
+.mono-die i {
+  align-self: center;
+  justify-self: center;
+  width: 78%;
+  height: 78%;
+}
+
+.mono-die i.on {
+  background: radial-gradient(circle at 35% 30%, #4a4f5c, #14161c 70%);
+}
+
+/* Pip colour: the single pip on a 1 is red, as on a real die. */
+.mono-die.is-rolled i.on:only-child { background: #c4423f; }
+
+.mono-die.is-rolled {
+  animation: mono-tumble .75s cubic-bezier(.2, .8, .3, 1) both;
+}
+
+.mono-die.die-1.is-rolled { animation-delay: .08s; }
+
+@keyframes mono-tumble {
+  0% { transform: translateY(-34px) rotate(-260deg) scale(.7); opacity: 0; }
+  55% { transform: translateY(4px) rotate(18deg) scale(1.06); opacity: 1; }
+  75% { transform: translateY(-5px) rotate(-8deg); }
+  100% { transform: translateY(0) rotate(0); }
+}
+
+.mono-die.is-empty {
+  border-radius: 22%;
+}
+
+.mono-dice-total {
+  min-width: 1.4em;
+  color: #f1d79a;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(20px, 6vh, 32px);
+  font-weight: 700;
+  text-align: center;
+}
+
+.mono-roll-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 22px;
+  border: 1px solid #f6e2b0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f3d48e, #c99a4b 60%, #a87a32);
+  color: #2a1d0e;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  box-shadow: 0 8px 18px #0009, inset 0 1px 0 #fff8;
+  animation: mono-glow 1.8s ease-in-out infinite;
+}
+
+.mono-roll-button:disabled {
+  opacity: .6;
+  animation: none;
+}
+
+@keyframes mono-glow {
+  0%, 100% { box-shadow: 0 8px 18px #0009, 0 0 0 0 #f1d79a00, inset 0 1px 0 #fff8; }
+  50% { box-shadow: 0 8px 18px #0009, 0 0 0 6px #f1d79a33, inset 0 1px 0 #fff8; }
+}
+
+.mono-center-turn {
+  margin: 0;
+  color: #b9c9c3;
+  font-size: 11px;
+}
+
+.mono-center-turn b {
+  color: #f1d79a;
+}
+
+.mono-log {
+  max-width: 86%;
+  color: #9fb3ac;
+}
+
+/* Side panel polish. */
+.mono-side {
+  background: linear-gradient(180deg, #14171f, #0d1016);
+  border-left: 1px solid #b59a6633;
+}
+
+.mono-player {
+  border-radius: 4px;
+}
+
+.mono-player.is-turn {
+  border-color: #d2b073;
+  background: linear-gradient(90deg, #2a2418, #161a22);
+  box-shadow: 0 0 14px #d2b07333;
+}
+
+/* ================= Compact voice dock (Mafia + Monopoly + lobby) ================= */
+
+.voice-dock {
+  padding: 3px 4px;
+  border-radius: 999px;
+  border-color: #b59a6644;
+  background: #0e1017e6;
+  box-shadow: 0 4px 14px #0009;
+  backdrop-filter: blur(6px);
+}
+
+.voice-dock-summary {
+  min-height: 24px;
+  gap: 4px;
+}
+
+.voice-dock-status {
+  flex: 0 0 auto;
+  padding: 0 4px 0 6px;
+}
+
+/* Only the status light stays; the text moves into the tooltip and the speaking ring on avatars. */
+.voice-dock-status > span:nth-child(2),
+.voice-dock-status .voice-speaking-label {
+  display: none;
+}
+
+.voice-summary-button {
+  width: 24px;
+  height: 24px;
+  flex-basis: 24px;
+  border-radius: 50%;
+}
+
+.voice-summary-button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.voice-dock.is-expanded {
+  border-radius: 14px;
+}
+
+.voice-dock-details {
+  min-width: 190px;
+  max-width: 260px;
+}
+
+@media (min-width: 561px) {
+  .voice-dock-game,
+  .voice-dock-lobby {
+    width: auto;
+    right: 10px;
+    top: 6px;
+  }
+}
+
+.voice-scope > .voice-dock {
+  padding: 3px 5px;
+}
+
+@media (min-height: 501px) and (min-width: 561px) {
+  .mono-side {
+    padding-top: 40px;
+  }
+}
+
+.viewport .game-frame .voice-scope > .voice-dock {
+  padding: 3px 5px;
+}
+
+/* ---------- Bots in the lobby ---------- */
+
+.invite-slot.add-bot-slot {
+  cursor: pointer;
+  border-color: #b59a6666;
+  color: #d2b073;
+  font: inherit;
+}
+
+.invite-slot.add-bot-slot:hover {
+  border-style: solid;
+  background: #1d1a16;
+}
+
+.invite-slot.add-bot-slot small {
+  color: #d2b073;
+  font-weight: 700;
+}
+
+.player-card.is-bot {
+  border-style: dashed;
+}
+
+/* Keep the status text clear of the remove button. */
+.player-card.is-bot .player-status {
+  margin-right: 24px;
+}
+
+.avatar i.bot-badge {
+  left: -5px;
+  right: auto;
+  top: auto;
+  bottom: -4px;
+  background: #3c5466;
+  color: #d8ecf7;
+}
+
+.remove-bot-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #a4444c88;
+  border-radius: 50%;
+  background: #2b171c;
+  color: #f0b4b4;
+}
+
+/* ================= Mafia: role reveal (flash + card flip) and own card ================= */
+
+.role-intro {
+  --team: #d2b073;
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 55%, #1a1820 0, #07080d 70%);
+  cursor: pointer;
+  perspective: 1200px;
+  animation: intro-fade-in .2s ease-out both;
+}
+
+.role-intro.team-mafia { --team: #e05a63; }
+.role-intro.team-wildcard { --team: #b195da; }
+
+/* Two lightning flashes, the second tinted with the team colour. */
+.role-intro-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: #fff;
+  opacity: 0;
+  animation: intro-flash 1s ease-out .05s both;
+}
+
+@keyframes intro-flash {
+  0% { opacity: 0; background: #fff; }
+  4%, 10% { opacity: .95; background: #fff; }
+  16% { opacity: .1; background: #fff; }
+  24%, 30% { opacity: .85; background: var(--team); }
+  50% { opacity: 0; background: var(--team); }
+  100% { opacity: 0; }
+}
+
+.role-intro-glow {
+  position: absolute;
+  width: 70vmin;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--team) 40%, transparent), transparent 65%);
+  filter: blur(10px);
+  opacity: 0;
+  animation: intro-glow 1.2s ease-out 1.05s both;
+}
+
+@keyframes intro-glow {
+  from { opacity: 0; transform: scale(.6); }
+  to { opacity: .9; transform: scale(1); }
+}
+
+.role-intro-kicker {
+  z-index: 1;
+  margin: 0;
+  color: var(--team);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 5px;
+  opacity: 0;
+  animation: intro-rise .5s ease-out .5s both;
+}
+
+.role-intro-card {
+  position: relative;
+  z-index: 1;
+  width: min(64vw, 92vh, 520px);
+  aspect-ratio: 1264 / 848;
+  transform-style: preserve-3d;
+  animation: intro-flip 1.1s cubic-bezier(.2, .8, .25, 1) .45s both;
+}
+
+@keyframes intro-flip {
+  0% { transform: translateY(-40px) scale(.55) rotateY(180deg); opacity: 0; }
+  30% { opacity: 1; }
+  55% { transform: translateY(0) scale(.9) rotateY(180deg); }
+  100% { transform: translateY(0) scale(1) rotateY(0); opacity: 1; }
+}
+
+.role-intro-face {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.role-intro-front {
+  border: 2px solid var(--team);
+  box-shadow: 0 0 0 1px #0008, 0 0 40px color-mix(in srgb, var(--team) 55%, transparent), 0 24px 60px #000c;
+}
+
+.role-intro-front .role-card-artwork,
+.role-intro-front .role-card-artwork img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.role-intro-back {
+  transform: rotateY(180deg);
+  display: grid;
+  place-items: center;
+  border: 2px solid #b59a66;
+  background:
+    repeating-linear-gradient(45deg, #b59a6614 0 10px, transparent 10px 20px),
+    radial-gradient(circle at 50% 50%, #2a1f22, #0e0f15 75%);
+  box-shadow: 0 24px 60px #000c;
+}
+
+.role-intro-back span {
+  display: grid;
+  place-items: center;
+  width: 30%;
+  aspect-ratio: 1;
+  border: 2px solid #b59a66;
+  border-radius: 50%;
+  color: #d2b073;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(32px, 10vh, 70px);
+  font-weight: 700;
+}
+
+.role-intro-copy {
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  text-align: center;
+  opacity: 0;
+  animation: intro-rise .5s ease-out 1.5s both;
+}
+
+.role-intro-copy h2 {
+  margin: 0;
+  color: #f4ece0;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(24px, 7vh, 40px);
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-shadow: 0 0 20px color-mix(in srgb, var(--team) 60%, transparent);
+}
+
+.role-intro-copy p {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  color: #a9a1a0;
+  font-size: 11px;
+}
+
+.role-intro-hint {
+  z-index: 1;
+  color: #8f8a8d;
+  font-size: 10px;
+  letter-spacing: 1px;
+  opacity: 0;
+  transition: opacity .4s;
+}
+
+.role-intro-hint.is-ready {
+  opacity: 1;
+  animation: intro-blink 1.6s ease-in-out infinite;
+}
+
+@keyframes intro-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes intro-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes intro-blink { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .role-intro-flash { display: none; }
+  .role-intro-card, .role-intro-kicker, .role-intro-copy, .role-intro-glow { animation-duration: .01s; animation-delay: 0s; }
+}
+
+/* Short landscape phones: smaller card so the name still fits. */
+@media (max-height: 430px) {
+  .role-intro { gap: 5px; }
+  .role-intro-card { width: min(56vw, 76vh); }
+  .role-intro-kicker { font-size: 11px; }
+  .role-intro-copy h2 { font-size: 22px; }
+}
+
+.role-intro-copy h2 small {
+  color: var(--team);
+  font-size: .6em;
+  font-weight: 600;
+}
+
+/* Own card in the right-hand column during play. */
+.my-role-card {
+  --team: #d2b073;
+  position: relative;
+  flex: none;
+  /* Height-led so the private-info button below always fits in the column. */
+  align-self: center;
+  width: auto;
+  height: min(20vh, 120px);
+  max-width: 100%;
+  aspect-ratio: 1264 / 848;
+  margin-top: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--team);
+  border-radius: 6px;
+  background: #0d0f15;
+  box-shadow: 0 6px 16px #0009, 0 0 12px color-mix(in srgb, var(--team) 25%, transparent);
+  transition: transform .15s ease;
+}
+
+.my-role-card.team-mafia { --team: #e05a63; }
+.my-role-card.team-wildcard { --team: #b195da; }
+
+.my-role-card:hover { transform: translateY(-1px); }
+
+.my-role-card .role-card-artwork,
+.my-role-card .role-card-artwork img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.my-role-card.is-dead {
+  filter: grayscale(.85);
+  opacity: .7;
+}
+
+.my-role-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 2px 4px;
+  background: linear-gradient(0deg, #000c, transparent);
+  color: #f1e6d2;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-align: left;
+}
+
+/* The info button now sits right under the card. */
+.my-role-card + .private-info-button {
+  margin-top: 5px;
+}
+
+.my-role-viewer {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.my-role-viewer-ability {
+  display: grid;
+  gap: 3px;
+  max-width: min(520px, 90%);
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid #b59a6655;
+  background: #11131af0;
+  color: #c9c1b6;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.my-role-viewer-ability b {
+  color: #f1e6d2;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px;
+}
+
+.card-viewer.my-role-viewer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.my-role-viewer .card-viewer-card {
+  width: min(82vw, calc((100dvh - 140px) * 1.5));
+}
+
+/* ---------- Toast tones ---------- */
+
+.toast.is-success {
+  border-color: #6f9d79;
+  background: #142019;
+  color: #cfe7d3;
+}
+
+.toast.is-success svg { color: #8fd09d; }
+
+.toast.is-error {
+  border-color: #b4444e;
+  background: #2a1418;
+  color: #f4cfcf;
+}
+
+.toast.is-error svg { color: #f08a8f; }
+
+.toast.is-info svg { color: #d2b073; }
+
+.toast {
+  max-width: min(92%, 520px);
+  white-space: normal;
+  line-height: 1.35;
+}
+
+/* ---------- First-time name setup ---------- */
+
+.name-setup-backdrop {
+  z-index: 35;
+}
+
+.name-setup .name-setup-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #b59a6666;
+  background: #0c0e14;
+  color: #f1ebe2;
+  font-size: 15px;
+  text-align: center;
+}
+
+.name-setup .name-setup-input:focus {
+  outline: 2px solid #d1ad74;
+  outline-offset: 1px;
+}
+
+.name-setup .form-error {
+  margin: 8px 0 0;
+}
+
+/* ---------- Auctions, trades and jail cards ---------- */
+
+.mono-tile.is-auction {
+  border-color: #f1d79a;
+  box-shadow: inset 0 0 0 2px #f1d79a, 0 0 14px #f1d79a66;
+  animation: mono-pulse 1.2s ease-in-out infinite;
+}
+
+.mono-tile.is-traded {
+  box-shadow: inset 0 0 0 2px #7fd0c2;
+}
+
+.mono-card b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.mono-card.is-auction {
+  border-color: #f1d79a;
+  background: linear-gradient(180deg, #33291a, #1f1a13);
+}
+
+.mono-card.deck-chest {
+  border-color: #7fb39a80;
+  background: #17221d;
+}
+
+.mono-turn-row {
+  display: flex;
+  gap: 6px;
+}
+
+.mono-turn-row > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.mono-jail-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 5px;
+  padding: 0 4px;
+  border: 1px solid #f1d79a66;
+  border-radius: 6px;
+  color: #f1d79a;
+  font-style: normal;
+  font-size: 9px;
+}
+
+.mono-auction .mono-offer b {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.mono-auction .mono-offer strong em,
+.mono-auction .mono-offer strong:only-child em {
+  margin-left: 4px;
+  color: #c8bfb2;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.mono-bidders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.mono-bidders span {
+  padding: 2px 7px;
+  border: 1px solid #ffffff1c;
+  color: #a39a90;
+  font-size: 10px;
+}
+
+.mono-bidders span.is-leading {
+  color: #9fe0b2;
+}
+
+.mono-bidders span.is-bidding {
+  border-color: #f1d79a;
+  background: #2f2718;
+  color: #f1d79a;
+}
+
+.mono-bid-row {
+  display: flex;
+  gap: 6px;
+}
+
+.mono-bid-row > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.viewport .game-frame .mono-turn .mono-bid-row .primary-button,
+.viewport .game-frame .mono-turn .mono-bid-row .secondary-button {
+  padding: 0 6px;
+}
+
+.mono-trade-sides {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+
+.mono-trade-sides div {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid #ffffff16;
+  background: #14110ecc;
+}
+
+.mono-trade-sides dt {
+  color: #a68f6c;
+  font-size: 10px;
+  letter-spacing: .6px;
+}
+
+.mono-trade-sides dd {
+  margin: 0;
+  color: #f0e6d4;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+/* The trade composer covers the whole board-game screen. */
+.mono-trade-backdrop {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+  background: #07050499;
+  backdrop-filter: blur(3px);
+}
+
+.mono-trade {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  width: min(860px, 100%);
+  max-height: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d2b07399;
+  background: linear-gradient(180deg, rgba(28, 21, 16, .97), rgba(12, 9, 8, .98));
+  box-shadow: 0 20px 60px #000c;
+}
+
+.mono-trade > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mono-trade > header > b {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: #f1d79a;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px;
+  letter-spacing: 1px;
+}
+
+.mono-trade-partners {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mono-trade-partners button {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px 0 3px;
+  border: 1px solid #ffffff1f;
+  background: #16120f;
+  color: #d9cfbf;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px;
+}
+
+.mono-trade-partners button .avatar {
+  width: 25px;
+  height: 25px;
+  font-size: 10px;
+}
+
+.mono-trade-partners button.is-picked {
+  border-color: #f1d79a;
+  background: linear-gradient(100deg, #3a2d19, #1d1712);
+  color: #f1d79a;
+}
+
+.mono-trade-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  min-height: 0;
+}
+
+.mono-trade-side {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 6px;
+  min-height: 0;
+  padding: 8px;
+  border: 1px solid #ffffff16;
+  background: #0e0b0acc;
+}
+
+.mono-trade-side h4 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  color: #f0e6d4;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 15px;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+}
+
+.mono-trade-side h4 small {
+  color: #9fe0b2;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.mono-trade-deeds {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 5px;
+  min-height: 34px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.mono-deed {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 8px 0 0;
+  overflow: hidden;
+  border: 1px solid #ffffff1f;
+  background: #1a1511;
+  color: #e3d8c6;
+  font-size: 11px;
+}
+
+.mono-deed-band {
+  align-self: stretch;
+  width: 6px;
+  background: var(--band, #6c6250);
+}
+
+.mono-deed.kind-rail .mono-deed-band { background: #8c8579; }
+.mono-deed.kind-utility .mono-deed-band { background: #6aa0b8; }
+
+.mono-deed small {
+  color: #d88a7d;
+  font-size: 9px;
+}
+
+.mono-deed.is-card {
+  padding-left: 8px;
+  color: #f1d79a;
+}
+
+.mono-deed.is-picked {
+  border-color: #f1d79a;
+  background: #3a2d19;
+  color: #fff4dc;
+  box-shadow: inset 0 0 0 1px #f1d79a;
+}
+
+.mono-deed:disabled {
+  opacity: .35;
+}
+
+.mono-trade-cash {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mono-trade-cash > button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #ffffff22;
+  background: #1a1511;
+  color: #f1d79a;
+}
+
+.mono-trade-cash > button:disabled {
+  opacity: .35;
+}
+
+.mono-trade-cash label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid #ffffff22;
+  background: #0b0908;
+  color: #9fe0b2;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 17px;
+}
+
+.mono-trade-cash input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.mono-trade-cash input::-webkit-outer-spin-button,
+.mono-trade-cash input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.mono-trade > footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mono-trade > footer .mono-hint {
+  flex: 1;
+  min-width: 0;
+  color: #d9cfbf;
+  font-size: 11px;
+}
+
+.mono-trade > footer .mono-hint b {
+  color: #f1d79a;
+}
+
+.viewport .game-frame .mono-trade > footer .primary-button,
+.viewport .game-frame .mono-trade > footer .secondary-button {
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .mono-trade {
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  .mono-deed {
+    height: 26px;
+  }
+
+  .viewport .game-frame .mono-trade > footer .primary-button,
+  .viewport .game-frame .mono-trade > footer .secondary-button {
+    height: 32px;
+  }
+}
+
+@media (orientation: portrait), (max-width: 620px) {
+  .mono-trade-columns {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .mono-trade > footer {
+    flex-wrap: wrap;
+  }
+
+  .mono-trade > footer .mono-hint {
+    flex-basis: 100%;
+  }
+}

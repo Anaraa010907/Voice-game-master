@@ -7,8 +7,8 @@ export const i18n = {
     trustNoOne: 'Хэнд ч бүү итгэ.',
     darkStory: 'Харанхуй гүйх үед үнэнийг ч бас дагуулна.',
     playNow: 'Одоо тоглох',
-    tableCount: '6 тоглогчтой ширээ',
-    duration: '10–20 минут',
+    tableCount: '2–12 тоглогч',
+    duration: 'Мафи ба Монгол Монополь',
     createRoom: 'Өрөө үүсгэх',
     joinRoom: 'Өрөөнд нэгдэх',
     roleGallery: 'Дүрийн цомог',
@@ -248,8 +248,11 @@ export const i18n = {
     },
     roles: {
       Mafia: 'Мафийн гишүүн',
+      Don: 'Дон',
       Doctor: 'Эмч',
       Detective: 'Цагдаа',
+      Bodyguard: 'Бие хамгаалагч',
+      Jester: 'Алиа',
       'Good Informant': 'Сайн мэдээлэгч',
       'Bad Informant': 'Мафийн мэдээлэгч',
       'Old Lady with Shotgun': 'Буутай эмээ',
@@ -271,6 +274,9 @@ export const i18n = {
     },
     roleDescriptions: {
       Mafia: 'Шөнө нэг зорилт сонгоод өдрийн цагаар хоорондоо нууцаар ажиллах.',
+      Don: 'Мафийг удирдана. Довтолгооны эцсийн шийдвэр таных, цагдаад илрэхгүй.',
+      Bodyguard: 'Шөнө нэг хүнийг хамгаалж, халдлагад түүний оронд амиа өгнө.',
+      Jester: 'Өдрийн шүүх хурлаар хасагдвал ганцаараа ялна.',
       Doctor: 'Шөнө нэг тоглогчийг хамгаалж, халдлагаас аварч чадна.',
       Detective: 'Шөнө нэг тоглогчийн нууцыг шалгаж чадна.',
       'Good Informant': 'Чимээгүй хамтрагч бөгөөд үнэ цэнэтэй сэжүүр өгдөг.',
@@ -371,6 +377,7 @@ export const i18n = {
       eliminated: 'Хасагдсан',
       citizensWin: 'Энгийн иргэд ялалт байгууллаа.',
       mafiaWin: 'Мафийн бүлэг ялалт байгууллаа.',
+      jesterWin: 'Алиа бүх хотыг хуурлаа.',
       draw: 'Тэнцээ',
     },
   },
@@ -446,6 +453,10 @@ export const translateMessage = (message: string): string => {
     'Mafia cannot target a Mafia-aligned player.': 'Мафийн гишүүн өөр мафийн гишүүн рүү довтолж чадахгүй.',
     'Choose another living player to investigate.': 'Шалгах өөр амьд тоглогч сонгоно уу.',
     'Voting is closed.': 'Санал хураалт хаагдлаа.',
+    'There is no trial right now.': 'Одоо шүүх хурал явагдаагүй байна.',
+    'Choose guilty or innocent.': 'Гэмтэй эсвэл гэмгүйг сонгоно уу.',
+    'You cannot give a verdict in this trial.': 'Та энэ шүүх хуралд шийдвэр өгөх боломжгүй.',
+    'Your verdict is already locked.': 'Таны шийдвэр аль хэдийн баталгаажсан.',
     'You have already voted this round.': 'Та энэ ээлжинд аль хэдийн санал өгсөн байна.',
     'Votes can only target living players.': 'Санал зөвхөн амьд тоглогчид өгөх боломжтой.',
     'You cannot vote for yourself.': 'Өөрийгөө саналд оруулах боломжгүй.',
@@ -472,10 +483,31 @@ export const translateMessage = (message: string): string => {
     'An attempted attack was stopped at the old house. No one was eliminated.': 'Хуучин байшинд халдлагын оролдлогыг зогсоов. Хэн ч хасагдсангүй.',
     'No eligible trace clues were found.': 'Боломжтой сэжүүрийн мөр олдсонгүй.',
     'The vote was tied or Skip Vote led the count. No one was eliminated.': 'Санал тэнцсэн эсвэл алгасах санал хамгийн олон байв. Хэн ч хасагдсангүй.',
+    'The table is set. Roles have been dealt in secret.': 'Ширээ бэлэн. Дүрүүдийг нууцаар хуваарилсан.',
+    'The runoff was tied again. No one was eliminated.': 'Давтан санал хураалт дахин тэнцлээ. Хэн ч хасагдсангүй.',
+    'You cannot protect the same player two nights in a row.': 'Нэг тоглогчийг хоёр шөнө дараалан хамгаалах боломжгүй.',
+    'Runoff votes can only target the tied players.': 'Давтан санал хураалтад зөвхөн тэнцсэн тоглогчдод санал өгнө.',
+    'Choose another living player to guard.': 'Хамгаалах өөр амьд тоглогч сонгоно уу.',
+    'No attack came for the player you guarded.': 'Таны хамгаалсан хүн рүү энэ шөнө халдлага гараагүй.',
+    'The Jester fooled the town and wins alone.': 'Алиа хотынхныг хуурч, ганцаараа яллаа!',
+    'The Night has already begun.': 'Шөнө аль хэдийн эхэлсэн.',
   };
   if (map[message]) return map[message];
   const investigation = message.match(/^(.+) is (aligned with|not aligned with) the Mafia\.$/);
   if (investigation) return `${investigation[1]} ${investigation[2] === 'aligned with' ? 'мафийн талд байна' : 'мафийн талд байхгүй байна'}.`;
+  const morning = message.match(/^(.*) (\d+) players remain alive\.$/);
+  if (morning) {
+    const body = morning[1];
+    const traceStart = body.lastIndexOf(' Traces associated with ');
+    const noTraceEnd = ' No eligible trace clues were found.';
+    const noTraceStart = body.endsWith(noTraceEnd) ? body.length - noTraceEnd.length : -1;
+    const splitAt = traceStart >= 0 ? traceStart : noTraceStart;
+    const event = splitAt >= 0 ? body.slice(0, splitAt) : body;
+    const clue = splitAt >= 0 ? body.slice(splitAt + 1) : '';
+    return `${translateMessage(event)}${clue ? ` ${translateMessage(clue)}` : ''} ${morning[2]} тоглогч амьд үлдлээ.`;
+  }
+  const eliminated = message.match(/^(.+) was eliminated during the night\.$/);
+  if (eliminated) return `${eliminated[1]} шөнө алагдлаа.`;
   const death = message.match(/^(.+) was found at (.+), killed by (.+)\.$/);
   if (death) {
     const location: Record<string, string> = {
@@ -494,17 +526,20 @@ export const translateMessage = (message: string): string => {
   }
   const traces = message.match(/^Traces associated with (.+) were found\. Traces are clues, not proof\.$/);
   if (traces) return `${traces[1].replace(' and ', ' болон ')}-тэй холбоотой мөр олдлоо. Мөр бол сэжүүр болохоос нотолгоо биш.`;
-  const morning = message.match(/^(.*) (\d+) players remain alive\.$/);
-  if (morning) {
-    const body = morning[1];
-    const traceStart = body.lastIndexOf(' Traces associated with ');
-    const noTraceEnd = ' No eligible trace clues were found.';
-    const noTraceStart = body.endsWith(noTraceEnd) ? body.length - noTraceEnd.length : -1;
-    const splitAt = traceStart >= 0 ? traceStart : noTraceStart;
-    const event = splitAt >= 0 ? body.slice(0, splitAt) : body;
-    const clue = splitAt >= 0 ? body.slice(splitAt + 1) : '';
-    return `${translateMessage(event)}${clue ? ` ${translateMessage(clue)}` : ''} ${morning[2]} тоглогч амьд үлдлээ.`;
-  }
+  const onTrial = message.match(/^(.+) is on trial with (\d+) votes\.$/);
+  if (onTrial) return `${onTrial[1]} ${onTrial[2]} саналаар шүүгдэж байна.`;
+  const guilty = message.match(/^(.+) was found guilty \((\d+)–(\d+)\) and eliminated\.$/);
+  if (guilty) return `${guilty[1]} гэм буруутай гэж тооцогдон (${guilty[2]}–${guilty[3]}) хасагдлаа.`;
+  const acquitted = message.match(/^(.+) was acquitted \((\d+)–(\d+)\)\. No one was eliminated\.$/);
+  if (acquitted) return `${acquitted[1]} цагаатгагдлаа (${acquitted[2]}–${acquitted[3]}). Хэн ч хасагдсангүй.`;
+  const fled = message.match(/^(.+) left before the verdict\. No one was eliminated\.$/);
+  if (fled) return `${fled[1]} шийдвэр гарахаас өмнө ширээг орхисон тул хэн ч хасагдсангүй.`;
+  const left = message.match(/^(.+) left the table\.$/);
+  if (left) return `${left[1]} ширээг орхиж, тоглоомоос хасагдлаа.`;
+  const runoff = message.match(/^The vote was tied between (.+)\. A runoff vote begins\.$/);
+  if (runoff) return `${runoff[1].split(' and ').join(', ')} тэнцлээ. Зөвхөн тэдний дунд давтан санал хураалт эхэллээ.`;
+  const revealed = message.match(/^(.+) was revealed as (.+)\.$/);
+  if (revealed) return `${revealed[1]}-ийн жинхэнэ дүр: ${translateRole(revealed[2])}.`;
   const votedOut = message.match(/^(.+) was voted out with (\d+) votes\.$/);
   if (votedOut) return `${votedOut[1]} ${votedOut[2]} саналаар хасагдлаа.`;
   const detectiveOrDoctor = message;

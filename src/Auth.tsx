@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import {
   ArrowLeft, Check, ChevronRight, Eye, EyeOff, LockKeyhole, Mail,
-  Phone, Shield, Skull, UserRound, X,
+  Phone, Shield, UserRound, X,
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { supabase, supabaseConfigured } from './supabaseClient';
 import { i18n } from './i18n';
 
@@ -18,7 +19,8 @@ export default function Auth({ initialView = 'sign-in', onBack, onAuthenticated,
   onSignedOut: () => void;
 }) {
   const [view, setView] = useState<AuthView>(initialView);
-  const [method, setMethod] = useState<RegistrationMethod>('email');
+  // Phone sign-up is hidden until an SMS provider is configured; e-mail and Facebook remain.
+  const [method] = useState<RegistrationMethod>('email');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -56,6 +58,32 @@ export default function Auth({ initialView = 'sign-in', onBack, onAuthenticated,
       setBusy(false);
     }
   };
+
+  /**
+   * Facebook sign-in through Supabase OAuth. On the Android app Facebook must open in the system
+   * browser (it blocks embedded web views); it then returns to mafia-shadows://auth/callback,
+   * which App.tsx already exchanges for a session.
+   */
+  const signInWithFacebook = async () => {
+    resetFeedback();
+    if (!ensureConfigured()) return;
+    const native = Capacitor.isNativePlatform();
+    setBusy(true);
+    const { data, error: oauthError } = await supabase!.auth.signInWithOAuth({
+      provider: 'facebook',
+      options: {
+        redirectTo: native ? 'mafia-shadows://auth/callback' : authRedirectUrl || window.location.origin,
+        skipBrowserRedirect: native,
+        scopes: 'public_profile email',
+      },
+    });
+    setBusy(false);
+    if (oauthError) { setError('Facebook-ээр нэвтэрч чадсангүй. Дахин оролдоно уу.'); return; }
+    // Leaving the app's own origin makes Capacitor hand the URL to the system browser.
+    if (native && data.url) window.location.href = data.url;
+  };
+
+  const facebookButton = <><button type="button" className="facebook-button" onClick={() => void signInWithFacebook()} disabled={busy || !supabaseConfigured}><span className="facebook-mark" aria-hidden="true">f</span>FACEBOOK-ЭЭР ҮРГЭЛЖЛҮҮЛЭХ</button><div className="auth-divider"><span>эсвэл и-мэйлээр</span></div></>;
 
   const handleSignIn = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -247,14 +275,15 @@ export default function Auth({ initialView = 'sign-in', onBack, onAuthenticated,
   const titleLead = titleWords.slice(0, -1).join(' ');
   const titleEnd = titleWords[titleWords.length - 1];
 
-  return <div className="inner-screen auth-screen"><header className="top-bar"><button className="icon-button" onClick={onBack} aria-label="Буцах"><ArrowLeft size={17} /></button><div className="top-title"><span>{subtitle}</span><strong>{i18n.auth.accountAccess}</strong></div><div className="auth-brand"><Skull size={18} /> MAFIA<span>:</span>SHADOWS</div></header><div className="auth-content"><div className="auth-intro"><div className="eyebrow left-eye">{i18n.auth.seatAtTable.toUpperCase()}</div><h1>{titleLead} <i>{titleEnd}</i></h1><p>{view === 'sign-in' ? 'Блэкуотер хотод таны суудал хүлээж байна.' : view.startsWith('verify') ? 'Баталгаажуулалтыг таны тохируулсан Supabase төсөл гүйцэтгэнэ.' : 'Таны бүртгэлийн мэдээлэл нийтийн профайлд харагдахгүй.'}</p><div className="auth-security-note"><Shield size={14} /> Нууц үгийг зөвхөн Supabase Auth боловсруулна.</div></div>
+  return <div className="inner-screen auth-screen"><header className="top-bar"><button className="icon-button" onClick={onBack} aria-label="Буцах"><ArrowLeft size={17} /></button><div className="top-title"><span>{subtitle}</span><strong>{i18n.auth.accountAccess}</strong></div><div className="auth-brand"><img className="auth-brand-emblem" src="/assets/brand/emblem-192.png" alt="" width={26} height={26} /> MAFIA<span>:</span>SHADOWS</div></header><div className="auth-content"><div className="auth-intro"><div className="eyebrow left-eye">{i18n.auth.seatAtTable.toUpperCase()}</div><h1>{titleLead} <i>{titleEnd}</i></h1><p>{view === 'sign-in' ? 'Блэкуотер хотод таны суудал хүлээж байна.' : view.startsWith('verify') ? 'Баталгаажуулалтыг таны тохируулсан Supabase төсөл гүйцэтгэнэ.' : 'Таны бүртгэлийн мэдээлэл нийтийн профайлд харагдахгүй.'}</p><div className="auth-security-note"><Shield size={14} /> Нууц үгийг зөвхөн Supabase Auth боловсруулна.</div></div>
       <section className="auth-form-column">
         {!supabaseConfigured && <div className="auth-config-warning" role="status"><LockKeyhole size={16} /><span><b>{i18n.auth.configWarning}</b><small>{i18n.auth.configMessage}</small></span></div>}
         {error && <div className="auth-message auth-error" role="alert"><X size={14} />{error}</div>}
         {message && <div className="auth-message auth-success" role="status"><Check size={14} />{message}</div>}
 
         {view === 'sign-in' && <form className="auth-form" onSubmit={handleSignIn}>
-          <label className="auth-field"><span>{i18n.auth.emailOrPhone}</span><input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="email@example.com эсвэл +97699112233" autoComplete="username" /></label>
+          {facebookButton}
+          <label className="auth-field"><span>{i18n.auth.emailAddress}</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="email@example.com" autoComplete="username" /></label>
           <PasswordField label={i18n.auth.password} value={password} onChange={setPassword} visible={showPassword} onToggle={() => setShowPassword((value) => !value)} autoComplete="current-password" />
           <button className="auth-text-link forgot-link" type="button" onClick={() => navigate('forgot-password')}>{i18n.auth.forgotPassword}</button>
           <button className="primary-button auth-submit" type="submit" disabled={busy || !supabaseConfigured}>{busy ? i18n.auth.signingIn : i18n.auth.signIn} <ChevronRight size={16} /></button>
@@ -262,7 +291,7 @@ export default function Auth({ initialView = 'sign-in', onBack, onAuthenticated,
         </form>}
 
         {view === 'create-account' && <>
-          <div className="auth-method-tabs" role="tablist" aria-label="Бүртгүүлэх арга"><button className={method === 'email' ? 'selected' : ''} onClick={() => { setMethod('email'); resetFeedback(); }}><Mail size={14} /> И-МЭЙЛ</button><button className={method === 'phone' ? 'selected' : ''} onClick={() => { setMethod('phone'); resetFeedback(); }}><Phone size={14} /> УТАС</button></div>
+          {facebookButton}
           <form className="auth-form" onSubmit={handleCreateAccount}>
             <label className="auth-field"><span>{i18n.auth.displayName}</span><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={24} autoComplete="nickname" placeholder={i18n.auth.yourCallsign} /></label>
             {method === 'email' ? <label className="auth-field"><span>{i18n.auth.emailAddress}</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" placeholder="email@example.com" /></label> : <label className="auth-field"><span>{i18n.auth.phoneWithCountryCode}</span><input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} autoComplete="tel" placeholder="+97699112233" /></label>}
@@ -277,7 +306,7 @@ export default function Auth({ initialView = 'sign-in', onBack, onAuthenticated,
 
         {(view === 'verify-phone' || view === 'verify-recovery-phone') && <form className="auth-form" onSubmit={view === 'verify-phone' ? verifyPhone : verifyRecoveryPhone}><div className="auth-flow-card compact-flow"><div className="auth-flow-icon"><Phone size={20} /></div><h2>{i18n.auth.smsCodeRequested}</h2><p>{i18n.auth.smsDescription}</p><small>{i18n.auth.destination}: {maskPhone(phone)}</small></div><label className="auth-field"><span>{i18n.auth.verificationCode}</span><input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="Код оруулна уу" /></label><button className="primary-button auth-submit" type="submit" disabled={busy || !supabaseConfigured}>{busy ? 'ШАЛГАЖ БАЙНА…' : i18n.auth.verifyPhoneAction} <Check size={15} /></button>{view === 'verify-phone' && <button className="auth-text-link" type="button" onClick={resendPhoneCode} disabled={busy || !supabaseConfigured}>{i18n.auth.requestNewCode}</button>}</form>}
 
-        {view === 'forgot-password' && <><div className="auth-method-tabs" role="tablist" aria-label="Сэргээх арга"><button className={method === 'email' ? 'selected' : ''} onClick={() => { setMethod('email'); resetFeedback(); }}><Mail size={14} /> И-МЭЙЛ</button><button className={method === 'phone' ? 'selected' : ''} onClick={() => { setMethod('phone'); resetFeedback(); }}><Phone size={14} /> УТАС</button></div><form className="auth-form" onSubmit={requestPasswordReset}><label className="auth-field"><span>{method === 'email' ? i18n.auth.emailAddress : i18n.auth.phoneWithCountryCode}</span><input type={method === 'email' ? 'email' : 'tel'} value={method === 'email' ? email : phone} onChange={(event) => method === 'email' ? setEmail(event.target.value) : setPhone(event.target.value)} placeholder={method === 'email' ? 'email@example.com' : '+97699112233'} /></label><button className="primary-button auth-submit" type="submit" disabled={busy || !supabaseConfigured}>{busy ? 'ХҮСЭЛТ ИЛГЭЭЖ БАЙНА…' : i18n.auth.sendRecovery} <ChevronRight size={16} /></button><small className="auth-privacy-copy">{i18n.auth.privacyNote}</small></form></>}
+        {view === 'forgot-password' && <><form className="auth-form" onSubmit={requestPasswordReset}><label className="auth-field"><span>{method === 'email' ? i18n.auth.emailAddress : i18n.auth.phoneWithCountryCode}</span><input type={method === 'email' ? 'email' : 'tel'} value={method === 'email' ? email : phone} onChange={(event) => method === 'email' ? setEmail(event.target.value) : setPhone(event.target.value)} placeholder={method === 'email' ? 'email@example.com' : '+97699112233'} /></label><button className="primary-button auth-submit" type="submit" disabled={busy || !supabaseConfigured}>{busy ? 'ХҮСЭЛТ ИЛГЭЭЖ БАЙНА…' : i18n.auth.sendRecovery} <ChevronRight size={16} /></button><small className="auth-privacy-copy">{i18n.auth.privacyNote}</small></form></>}
 
         {view === 'reset-password' && <form className="auth-form" onSubmit={updatePassword}><div className="auth-flow-card compact-flow"><div className="auth-flow-icon"><LockKeyhole size={20} /></div><h2>{i18n.auth.verifiedRecoverySession}</h2><p>{i18n.auth.verifiedRecoveryDescription}</p></div><PasswordField label={i18n.auth.newPasswordLabel} value={password} onChange={setPassword} visible={showPassword} onToggle={() => setShowPassword((value) => !value)} autoComplete="new-password" /><PasswordField label="ШИНЭ НУУЦ ҮГИЙГ БАТАЛГААЖУУЛАХ" value={confirmPassword} onChange={setConfirmPassword} visible={showConfirm} onToggle={() => setShowConfirm((value) => !value)} autoComplete="new-password" /><button className="primary-button auth-submit" type="submit" disabled={busy || !supabaseConfigured}>{busy ? 'ШИНЭЧИЛЖ БАЙНА…' : i18n.auth.updatePassword} <Check size={15} /></button></form>}
 
