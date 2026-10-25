@@ -1128,3 +1128,69 @@
   font-size: 13px;
   line-height: 1;
 }
+
+/* ---------- Backgrounds reach under the notch ----------
+ * The frame keeps content out of the camera cut-out with safe-area padding, which used to leave a
+ * plain dark strip down that side. The frame now paints the active screen's background across
+ * its whole box and the screen itself stays transparent, so the picture runs edge to edge. */
+
+.viewport .game-frame.screen-menu {
+  background: var(--bg-shade-sides), var(--bg-menu, none) center / cover no-repeat, var(--fallback-city);
+}
+
+.viewport .game-frame:is(.screen-hub, .screen-browse, .screen-join-room, .screen-roles) {
+  background: linear-gradient(180deg, rgba(5, 6, 10, .35), rgba(5, 6, 10, .55)), var(--bg-menu, none) center / cover no-repeat, var(--fallback-city);
+}
+
+.viewport .game-frame:is(.screen-create-room, .screen-settings, .screen-profile, .screen-auth, .screen-lobby) {
+  background: linear-gradient(90deg, rgba(5, 6, 10, .6), rgba(5, 6, 10, .25) 55%, rgba(5, 6, 10, .45)), var(--bg-office, none) center / cover no-repeat, var(--fallback-office);
+}
+
+.viewport .game-frame:has(.core-game) {
+  background: linear-gradient(90deg, rgba(5, 6, 10, .55), rgba(5, 6, 10, .05) 30%, rgba(5, 6, 10, .05) 70%, rgba(5, 6, 10, .55)),
+    var(--bg-table-day, none) center / cover no-repeat, var(--fallback-table);
+}
+
+.viewport .game-frame:has(.core-game.stage-night) {
+  background: linear-gradient(90deg, rgba(3, 5, 14, .6), rgba(3, 5, 14, .1) 30%, rgba(3, 5, 14, .1) 70%, rgba(3, 5, 14, .6)),
+    var(--bg-table-night, none) center / cover no-repeat,
+    radial-gradient(circle at 50% 18%, rgba(190, 205, 255, .35) 0 3%, rgba(120, 140, 220, .12) 4%, transparent 18%),
+    linear-gradient(180deg, #0b1027 0%, #0c0f22 60%, #07080f 100%);
+}
+
+.viewport .game-frame:has(.core-game.stage-vote) {
+  background: linear-gradient(90deg, rgba(10, 3, 5, .6), rgba(10, 3, 5, .1) 30%, rgba(10, 3, 5, .1) 70%, rgba(10, 3, 5, .6)),
+    var(--bg-table-vote, none) center / cover no-repeat,
+    radial-gradient(ellipse at 50% 20%, rgba(214, 70, 60, .35), transparent 38%),
+    linear-gradient(180deg, #1d0c10 0%, #150a0e 60%, #0a0608 100%);
+}
+
+.viewport .game-frame:has(.role-reveal-screen) {
+  background: linear-gradient(90deg, rgba(4, 5, 9, .82) 0%, rgba(4, 5, 9, .55) 38%, rgba(4, 5, 9, .15) 60%),
+    radial-gradient(ellipse at 70% 50%, rgba(210, 176, 115, .14), transparent 45%),
+    var(--bg-reveal, none) center / cover no-repeat,
+    linear-gradient(180deg, #0a0d18, #07080d);
+}
+
+.viewport .game-frame:has(.game-results-screen) {
+  background: radial-gradient(ellipse at 50% 0%, rgba(200, 40, 55, .45), transparent 55%),
+    var(--bg-victory, none) center / cover no-repeat,
+    linear-gradient(180deg, #160a0e, #08070b);
+}
+
+.viewport .game-frame:has(.voice-scope > .mono) {
+  background: linear-gradient(90deg, rgba(8, 5, 4, .35), rgba(8, 5, 4, .55)),
+    var(--bg-ger, none) center / cover no-repeat,
+    radial-gradient(ellipse at 85% 80%, rgba(230, 140, 60, .28), transparent 35%),
+    radial-gradient(ellipse at 20% 10%, rgba(160, 60, 40, .25), transparent 45%),
+    linear-gradient(180deg, #1c120e 0%, #140d0b 60%, #0b0807 100%);
+}
+
+.viewport .game-frame:is(.screen-menu, .screen-hub, .screen-browse, .screen-join-room, .screen-roles, .screen-create-room, .screen-settings, .screen-profile, .screen-auth, .screen-lobby) > :is(.menu-screen, .inner-screen),
+.viewport .game-frame .voice-scope > .lobby-screen,
+.viewport .game-frame:has(.core-game) .core-game,
+.viewport .game-frame:has(.role-reveal-screen) .role-reveal-screen,
+.viewport .game-frame:has(.game-results-screen) .game-results-screen,
+.viewport .game-frame:has(.voice-scope > .mono) .voice-scope > .mono {
+  background: transparent;
+}
