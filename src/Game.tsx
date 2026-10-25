@@ -182,7 +182,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
     <header className="core-game-topbar">
       <div className="round-label"><span>{i18n.game.round}</span><strong>{String(game.round).padStart(2, '0')}</strong></div>
       <div className={`current-phase phase-${game.phase.toLowerCase().replace(' ', '-')}`}><span>{translatePhase(game.phase)}</span></div>
-      <div className="demo-timer"><Clock3 size={14} /><strong>{time}</strong></div>
+      <div className={`demo-timer ${secondsLeft !== null && secondsLeft <= 10 ? 'is-low' : ''}`}><Clock3 size={14} /><strong>{time}</strong></div>
       <div className="game-top-actions"><button className="game-icon-button" onClick={() => setSettingsOpen(true)} aria-label="Тоглоомын тохиргоо" title="Тоглоомын тохиргоо"><Settings size={16} /></button><button className="game-leave-button" onClick={() => setLeaveDialog(true)}><ArrowLeft size={14} /> {i18n.game.leaveGame.toUpperCase()}</button></div>
     </header>
 

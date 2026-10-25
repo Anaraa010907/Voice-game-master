@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { supabase, supabaseConfigured } from './supabaseClient';
+import Brand from './Logo';
 import { i18n } from './i18n';
 
 const authRedirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL?.trim();
@@ -275,7 +276,7 @@ export default function Auth({ initialView = 'sign-in', onBack, onAuthenticated,
   const titleLead = titleWords.slice(0, -1).join(' ');
   const titleEnd = titleWords[titleWords.length - 1];
 
-  return <div className="inner-screen auth-screen"><header className="top-bar"><button className="icon-button" onClick={onBack} aria-label="Буцах"><ArrowLeft size={17} /></button><div className="top-title"><span>{subtitle}</span><strong>{i18n.auth.accountAccess}</strong></div><div className="auth-brand"><img className="auth-brand-emblem" src="/assets/brand/emblem-192.png" alt="" width={26} height={26} /> MAFIA<span>:</span>SHADOWS</div></header><div className="auth-content"><div className="auth-intro"><div className="eyebrow left-eye">{i18n.auth.seatAtTable.toUpperCase()}</div><h1>{titleLead} <i>{titleEnd}</i></h1><p>{view === 'sign-in' ? 'Блэкуотер хотод таны суудал хүлээж байна.' : view.startsWith('verify') ? 'Баталгаажуулалтыг таны тохируулсан Supabase төсөл гүйцэтгэнэ.' : 'Таны бүртгэлийн мэдээлэл нийтийн профайлд харагдахгүй.'}</p><div className="auth-security-note"><Shield size={14} /> Нууц үгийг зөвхөн Supabase Auth боловсруулна.</div></div>
+  return <div className="inner-screen auth-screen"><header className="top-bar"><button className="icon-button" onClick={onBack} aria-label="Буцах"><ArrowLeft size={17} /></button><div className="top-title"><span>{subtitle}</span><strong>{i18n.auth.accountAccess}</strong></div><Brand compact /></header><div className="auth-content"><div className="auth-intro"><div className="eyebrow left-eye">{i18n.auth.seatAtTable.toUpperCase()}</div><h1>{titleLead} <i>{titleEnd}</i></h1><p>{view === 'sign-in' ? 'Блэкуотер хотод таны суудал хүлээж байна.' : view.startsWith('verify') ? 'Баталгаажуулалтыг таны тохируулсан Supabase төсөл гүйцэтгэнэ.' : 'Таны бүртгэлийн мэдээлэл нийтийн профайлд харагдахгүй.'}</p><div className="auth-security-note"><Shield size={14} /> Нууц үгийг зөвхөн Supabase Auth боловсруулна.</div></div>
       <section className="auth-form-column">
         {!supabaseConfigured && <div className="auth-config-warning" role="status"><LockKeyhole size={16} /><span><b>{i18n.auth.configWarning}</b><small>{i18n.auth.configMessage}</small></span></div>}
         {error && <div className="auth-message auth-error" role="alert"><X size={14} />{error}</div>}

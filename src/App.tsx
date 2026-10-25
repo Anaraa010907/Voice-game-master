@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
-  ArrowLeft, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, LockKeyhole, Moon,
-  Radio, RefreshCw, Settings as SettingsIcon, Shield, UserRound, Users, WandSparkles, Zap,
+  ArrowLeft, Bot, Building2, Check, ChevronRight, CircleAlert, Dices, Info, X, Clipboard, Crown, LockKeyhole, Mic, Moon,
+  Radio, RefreshCw, Settings as SettingsIcon, Shield, Trophy, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles } from './gameData';
 import RoleCardArtwork from './RoleCardArtwork';
@@ -21,6 +21,7 @@ import { motionReduced, setMotionReduced } from './motion';
 import { musicEnabled, setMusicEnabled, setSfxEnabled, sfxEnabled, startMusic, wakeMusic } from './sfx';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { FullscreenToggle, useFullscreen, type FullscreenState } from './fullscreen';
+import Brand from './Logo';
 
 type Screen = 'menu' | 'hub' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth';
 
@@ -257,33 +258,45 @@ export default function App() {
   );
 }
 
-function Brand({ compact = false }: { compact?: boolean }) {
-  return <div className={`brand-mark ${compact ? 'compact' : ''}`}><span className="brand-emblem"><img src="/assets/brand/emblem-192.png" alt="" width={compact ? 30 : 42} height={compact ? 30 : 42} /></span><span>MAFIA<span className="brand-colon">:</span> <b>SHADOWS</b></span></div>;
-}
-
 function Menu({ onNavigate, onPlay, onCreate, onJoin, signedIn, onAuth, fullscreen }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; signedIn: boolean; onAuth: (view?: AuthView) => void; fullscreen: FullscreenState }) {
+  const items: Array<{ icon: ReactNode; label: string; onClick: () => void }> = [
+    { icon: <Users size={17} />, label: i18n.app.createRoom, onClick: onCreate },
+    { icon: <Radio size={17} />, label: i18n.app.joinRoom, onClick: onJoin },
+    { icon: <Shield size={17} />, label: i18n.app.roleGallery, onClick: () => onNavigate('roles') },
+    { icon: <UserRound size={17} />, label: i18n.app.profile, onClick: () => onNavigate('profile') },
+    { icon: <SettingsIcon size={17} />, label: i18n.app.settings, onClick: () => onNavigate('settings') },
+    { icon: <LockKeyhole size={17} />, label: signedIn ? i18n.app.signOut : i18n.auth.signInAccount, onClick: () => onAuth(signedIn ? 'sign-out' : 'sign-in') },
+  ];
   return (
-    <div className="menu-screen">
-      <header className="menu-top"><Brand /><div className="menu-top-actions"><div className="online-note"><span className="status-dot" /> {signedIn ? 'ОНЛАЙН' : 'НЭВТРЭЭГҮЙ'}</div><FullscreenToggle fullscreen={fullscreen} /></div></header>
-      <div className="city-art" aria-hidden="true"><div className="moon-glow" /><div className="cityline" /><div className="rain-lines" /></div>
-      <div className="menu-copy">
-        <div className="eyebrow"><span /> {i18n.app.cityOfSecrets} <span /></div>
-        <h1>Хэнд ч <i>бүү итгэ.</i></h1>
+    <div className="menu-screen ds-menu">
+      <header className="ds-menu-top"><Brand /><div className="ds-menu-actions"><span className={`online-note ${signedIn ? '' : 'is-offline'}`}><span className="status-dot" /> {signedIn ? 'ОНЛАЙН' : 'НЭВТРЭЭГҮЙ'}</span><FullscreenToggle fullscreen={fullscreen} /></div></header>
+      <section className="ds-hero">
+        <span className="ds-kicker">{i18n.app.cityOfSecrets}</span>
+        <h1>Хэнд ч <em>бүү итгэ.</em></h1>
         <p>{i18n.app.darkStory}</p>
-        <button className="primary-button play-button" onClick={onPlay}><span className="play-triangle" /> {i18n.app.playNow.toUpperCase()} <ChevronRight size={17} /></button>
-        <div className="menu-subtext"><Users size={13} /> {i18n.app.tableCount} <span className="sub-divider" /> {i18n.app.duration}</div>
-      </div>
-      <nav className="menu-nav" aria-label="Үндсэн цэс">
-        <button onClick={onCreate}><span className="nav-icon"><Users size={16} /></span><span>{i18n.app.createRoom}</span><ChevronRight size={14} /></button>
-        <button onClick={onJoin}><span className="nav-icon"><Radio size={16} /></span><span>{i18n.app.joinRoom}</span><ChevronRight size={14} /></button>
-        <button onClick={() => onNavigate('roles')}><span className="nav-icon"><Shield size={16} /></span><span>{i18n.app.roleGallery}</span><ChevronRight size={14} /></button>
-        <button onClick={() => onNavigate('profile')}><span className="nav-icon"><UserRound size={16} /></span><span>{i18n.app.profile}</span><ChevronRight size={14} /></button>
-        <button onClick={() => onNavigate('settings')}><span className="nav-icon"><SettingsIcon size={16} /></span><span>{i18n.app.settings}</span><ChevronRight size={14} /></button>
-        <button onClick={() => onAuth(signedIn ? 'sign-out' : 'sign-in')}><span className="nav-icon"><LockKeyhole size={16} /></span><span>{signedIn ? i18n.app.signOut : i18n.auth.signInAccount}</span><ChevronRight size={14} /></button>
-      </nav>
-      <footer className="menu-footer"><span>{i18n.app.afterDark.toUpperCase()}</span><span>{i18n.app.version} <i>•</i> ОНЛАЙН ДУУТ ТОГЛООМ</span></footer>
+        <div className="ds-hero-cta">
+          <button className="primary-button ds-play" onClick={onPlay}>{i18n.app.playNow.toUpperCase()} <ChevronRight size={18} /></button>
+          <span className="ds-hero-meta"><Users size={13} /> {i18n.app.tableCount} <i /> {i18n.app.duration}</span>
+        </div>
+      </section>
+      <section className="ds-menu-side">
+        <MenuOrbit />
+        <nav className="ds-menu-nav" aria-label="Үндсэн цэс">
+          {items.map((item) => <button key={item.label} type="button" onClick={item.onClick}><span className="ds-nav-icon">{item.icon}</span><span className="ds-nav-label">{item.label}</span></button>)}
+        </nav>
+      </section>
+      <footer className="ds-menu-foot"><span>{i18n.app.afterDark.toUpperCase()}</span><span>{i18n.app.version} <i>•</i> ОНЛАЙН ДУУТ ТОГЛООМ</span></footer>
     </div>
   );
+}
+
+/** Crescent moon with two tilted orbits and glowing nodes, drawn with CSS. */
+function MenuOrbit() {
+  return <div className="ds-orbit" aria-hidden="true">
+    <div className="ds-orbit-ring is-a" /><div className="ds-orbit-ring is-b" />
+    <div className="ds-moon" />
+    <i className="ds-node is-cyan" /><i className="ds-node is-coral" /><i className="ds-node is-amber" />
+  </div>;
 }
 
 function CreateRoom({ gameType, onBack, onCreate }: { gameType: GameType; onBack: () => void; onCreate: (room: RoomSettings) => Promise<void> }) {
@@ -345,23 +358,78 @@ function JoinRoom({ onBack, onJoin }: { onBack: () => void; onJoin: (code: strin
   </form></div></div>;
 }
 
-/** Choose a game type: two large cards (board game / voice game) with illustrations. */
+/** Choose a game: two large glass cards with drawn art. */
 function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoose: (type: GameType) => void; onJoinCode: () => void }) {
-  return <div className="inner-screen hub-screen"><TopBar title="ТОГЛООМ СОНГОНО УУ" subtitle="ТОГЛОХ" onBack={onBack} trailing={<button className="text-button hub-code-button" onClick={onJoinCode}><Radio size={14} /> КОДООР НЭГДЭХ</button>} />
-    <div className="hub-cards">
-      <article className="hub-card hub-card-board" style={{ '--hub-bg': "url('/assets/hub/board-bg.jpg')" } as CSSProperties}>
-        <h2>BOARD GAME</h2>
-        <button type="button" className="hub-play" onClick={() => onChoose('monopoly')}>ТОГЛОХ <ChevronRight size={18} /></button>
-        <p className="hub-card-meta"><b>{GAMES.monopoly.title}</b>{GAMES.monopoly.players} · Монгол газрууд, гэр бааз</p>
-      </article>
-
-      <article className="hub-card hub-card-voice" style={{ '--hub-bg': "url('/assets/hub/voice-bg.jpg')" } as CSSProperties}>
-        <h2>VOICE GAME</h2>
-        <button type="button" className="hub-play" onClick={() => onChoose('mafia')}>ТОГЛОХ <ChevronRight size={18} /></button>
-        <p className="hub-card-meta"><b>{GAMES.mafia.title}</b>{GAMES.mafia.players} · Дуут чат, нууц дүр</p>
-      </article>
+  return <div className="inner-screen ds-hub"><TopBar title="ТОГЛООМ СОНГОНО УУ" subtitle="ТОГЛОХ" onBack={onBack} trailing={<button className="secondary-button hub-code-button" onClick={onJoinCode}><Radio size={14} /> КОДООР НЭГДЭХ</button>} />
+    <div className="ds-hub-body">
+      <span className="ds-kicker">ХОЁР ӨӨР ЕРТӨНЦ · НЭГ НУУЦ</span>
+      <div className="ds-game-grid">
+        <article className="ds-game-card is-mono">
+          <BoardArt />
+          <div className="ds-card-copy">
+            <span className="ds-card-badge">BOARD GAME</span>
+            <h2>{GAMES.monopoly.title}</h2>
+            <p>{GAMES.monopoly.players} · Монгол газрууд, гэр бааз</p>
+            <button type="button" className="ds-card-play hub-play" onClick={() => onChoose('monopoly')}>ТОГЛОХ <ChevronRight size={16} /></button>
+          </div>
+        </article>
+        <article className="ds-game-card is-mafia">
+          <MafiaArt />
+          <div className="ds-card-copy">
+            <span className="ds-card-badge">VOICE GAME</span>
+            <h2>{GAMES.mafia.title}</h2>
+            <p>{GAMES.mafia.players} · Дуут чат, нууц дүр</p>
+            <button type="button" className="ds-card-play hub-play" onClick={() => onChoose('mafia')}>ТОГЛОХ <ChevronRight size={16} /></button>
+          </div>
+        </article>
+      </div>
     </div>
   </div>;
+}
+
+/** Board game card art: a tilted board outline with two dice. */
+function BoardArt() {
+  const pip = (cx: number, cy: number) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="3.4" />;
+  return <svg className="ds-card-art" viewBox="0 0 320 220" aria-hidden="true" preserveAspectRatio="xMaxYMid slice">
+    <defs>
+      <linearGradient id="die-face" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ffe2ad" /><stop offset="1" stopColor="#e2923a" /></linearGradient>
+      <radialGradient id="amber-glow"><stop offset="0" stopColor="rgba(242,172,72,.45)" /><stop offset="1" stopColor="rgba(242,172,72,0)" /></radialGradient>
+    </defs>
+    <circle cx="228" cy="96" r="110" fill="url(#amber-glow)" />
+    <g className="ds-art-lines" transform="rotate(-18 230 110)">
+      <rect x="140" y="20" width="180" height="180" rx="10" />
+      <rect x="168" y="48" width="124" height="124" rx="6" />
+      {[0, 1, 2, 3, 4].map((i) => <line key={`t${i}`} x1={168 + i * 31} y1="20" x2={168 + i * 31} y2="48" />)}
+      {[0, 1, 2, 3, 4].map((i) => <line key={`b${i}`} x1={168 + i * 31} y1="172" x2={168 + i * 31} y2="200" />)}
+      {[0, 1, 2, 3, 4].map((i) => <line key={`l${i}`} x1="140" y1={48 + i * 31} x2="168" y2={48 + i * 31} />)}
+    </g>
+    <g transform="translate(196 58) rotate(-14)">
+      <rect width="62" height="62" rx="14" fill="url(#die-face)" />
+      <g fill="#5b2f08">{[pip(16, 16), pip(46, 16), pip(31, 31), pip(16, 46), pip(46, 46)]}</g>
+    </g>
+    <g transform="translate(250 112) rotate(12)">
+      <rect width="50" height="50" rx="12" fill="url(#die-face)" opacity=".92" />
+      <g fill="#5b2f08">{[pip(14, 14), pip(36, 36)]}</g>
+    </g>
+  </svg>;
+}
+
+/** Voice game card art: crescent moon, mask and sound waves. */
+function MafiaArt() {
+  return <svg className="ds-card-art" viewBox="0 0 320 220" aria-hidden="true" preserveAspectRatio="xMaxYMid slice">
+    <defs>
+      <radialGradient id="coral-glow"><stop offset="0" stopColor="rgba(240,92,103,.42)" /><stop offset="1" stopColor="rgba(240,92,103,0)" /></radialGradient>
+      <linearGradient id="moon-fill" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ff9aa1" /><stop offset="1" stopColor="#c8303f" /></linearGradient>
+    </defs>
+    <circle cx="226" cy="100" r="112" fill="url(#coral-glow)" />
+    <g className="ds-art-waves">
+      <path d="M262 40a80 80 0 0 1 0 120" /><path d="M280 22a106 106 0 0 1 0 156" /><path d="M298 6a130 130 0 0 1 0 188" />
+    </g>
+    <path d="M214 34a66 66 0 1 0 52 106 54 54 0 1 1-52-106Z" fill="url(#moon-fill)" />
+    <g className="ds-art-mask" transform="translate(186 70) scale(1.55)">
+      <path d="M8 19c4-10 22-14 28-2-1 11-6 17-14 18C14 34 9 28 8 19Z" /><path d="M13 21c5-5 12-5 17 0-5 5-12 5-17 0Z" /><path d="M21 18v7M12 8l3 5M30 8l-3 5" />
+    </g>
+  </svg>;
 }
 
 /** Open public lobbies, refreshed automatically, plus quick join. */
@@ -493,27 +561,30 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
     <VoiceChatProvider roomCode={roomCode} userId={userId} phase="lobby" alive isHost={isHost}>
       <div className="inner-screen lobby-screen">
         <TopBar title={room.name.toUpperCase()} subtitle={`${GAMES[room.game_type ?? 'mafia'].title.toUpperCase()} · ЛОББИ`} onBack={leave} />
-        <div className={`lobby-content capacity-${room.max_players}`}>
-          <div className="lobby-heading">
-            <div><div className="eyebrow left-eye">ХОТ СЭРЭХЭЭСЭЭ ӨМНӨ</div><h1>Бүлгээ <i>цуглуулаарай.</i></h1></div>
+        <div className={`ds-lobby capacity-${room.max_players}`}>
+          <section className="ds-lobby-main">
+            <div className="ds-lobby-head">
+              <div><div className="eyebrow">ХОТ СЭРЭХЭЭСЭЭ ӨМНӨ</div><h1>Бүлгээ <i>цуглуулаарай.</i></h1></div>
+              <div className="lobby-toolbar"><span><Users size={14} /> ТОГЛОГЧИД <b>{String(seats.length).padStart(2, '0')}</b> <span className="muted">/ {room.max_players}</span></span><span className="room-visibility">{room.is_private ? 'ХУВИЙН' : 'НИЙТЭД НЭЭЛТТЭЙ'}</span></div>
+            </div>
+            <div className="player-grid">
+              {seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={seat.user_id === userId}
+                onRemoveBot={isHost && seat.is_bot ? () => run('bot-remove', { seat: seat.seat }) : undefined} busy={busy} />)}
+              {Array.from({ length: emptySlots }, (_, index) => isHost && botsAllowed
+                ? <button type="button" className="invite-slot add-bot-slot" key={`slot-${index}`} disabled={busy} onClick={() => run('bot-add')}><Bot size={18} /><small>БОТ НЭМЭХ</small></button>
+                : <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>СУЛ СУУДАЛ</small></div>)}
+            </div>
+          </section>
+          <aside className="ds-lobby-side">
             <div className="room-code"><span>{i18n.app.roomCode.toUpperCase()}</span><strong>{roomCode}</strong><button aria-label="Өрөөний код хуулах" title="Өрөөний код хуулах" onClick={onCopy}>{copied ? <Check size={16} /> : <Clipboard size={16} />}</button></div>
-          </div>
-          <div className="lobby-toolbar"><span><Users size={14} /> ТОГЛОГЧИД <b>{String(seats.length).padStart(2, '0')}</b> <span className="muted">/ {room.max_players}</span></span><span className="room-visibility">{room.is_private ? 'ХУВИЙН · ЗӨВХӨН КОДООР' : 'НИЙТЭД НЭЭЛТТЭЙ'}</span></div>
-          <div className="player-grid">
-            {seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={seat.user_id === userId}
-              onRemoveBot={isHost && seat.is_bot ? () => run('bot-remove', { seat: seat.seat }) : undefined} busy={busy} />)}
-            {Array.from({ length: emptySlots }, (_, index) => isHost && botsAllowed
-              ? <button type="button" className="invite-slot add-bot-slot" key={`slot-${index}`} disabled={busy} onClick={() => run('bot-add')}><Bot size={20} /><small>БОТ НЭМЭХ</small></button>
-              : <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>СУЛ СУУДАЛ</small></div>)}
-          </div>
-          <div className="lobby-bottom">
+            <GameRules type={room.game_type ?? 'mafia'} />
             <div className="lobby-hint"><LockKeyhole size={14} /><span>{isHost ? 'ТА ӨРӨӨНИЙ ЭЗЭН' : 'ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА'} <b>•</b> {hint}</span></div>
             <div className="lobby-actions">
               {!isHost && <button className={`secondary-button ready-button ${mine.ready ? 'is-ready' : ''}`} disabled={busy} onClick={() => run('ready', { ready: !mine.ready })}>{mine.ready ? <Check size={15} /> : <Shield size={15} />}{mine.ready ? 'БЭЛЭН' : 'БИ БЭЛЭН'}</button>}
-              <button className="text-button" onClick={leave}><ArrowLeft size={15} /> {isHost ? 'ӨРӨӨГ ХААХ' : i18n.common.leave.toUpperCase()}</button>
-              {isHost && <button className="primary-button start-button" disabled={busy || !canStart} onClick={() => run('start')}><Moon size={15} /> {i18n.app.startGame.toUpperCase()} <ChevronRight size={16} /></button>}
+              <button className="secondary-button leave-room-button" onClick={leave}><ArrowLeft size={15} /> {isHost ? 'ӨРӨӨГ ХААХ' : i18n.common.leave.toUpperCase()}</button>
+              {isHost && <button className="primary-button start-button" disabled={busy || !canStart} onClick={() => run('start')}><Moon size={15} /> {i18n.app.startGame.toUpperCase()}</button>}
             </div>
-          </div>
+          </aside>
         </div>
       </div>
     </VoiceChatProvider>
@@ -526,6 +597,17 @@ function SeatCard({ seat, isHost, isMe, onRemoveBot, busy }: { seat: RoomSeat; i
     <div className="player-name">{seat.display_name}{isMe && <small>ЧИ</small>}</div>
     <div className={`player-status ${seat.ready || isHost ? 'online' : ''}`}>{isHost ? 'ЭЗЭН' : seat.is_bot ? 'БОТ' : seat.ready ? 'БЭЛЭН' : 'ХҮЛЭЭЖ БАЙНА'}</div>
     {onRemoveBot && <button type="button" className="remove-bot-button" disabled={busy} onClick={onRemoveBot} aria-label={`${seat.display_name} хасах`} title="Ботыг хасах"><X size={13} /></button>}
+  </div>;
+}
+
+/** Three-line "how it works" card in the lobby. */
+function GameRules({ type }: { type: GameType }) {
+  const lines: Array<[ReactNode, string, string]> = type === 'monopoly'
+    ? [[<Dices size={15} key="d" />, 'Нүүдэл', 'Шоо хаяж нүүгээд газар худалдаж ав.'], [<Building2 size={15} key="b" />, 'Гэр', 'Нэг өнгийн газраа бүрдүүлж гэр бариарай.'], [<Trophy size={15} key="t" />, 'Ялалт', '20 тойргийн дараа хамгийн баян нь ялна.']]
+    : [[<Moon size={15} key="m" />, 'Шөнө', 'Мафи онилж, эмч хамгаалж, цагдаа шалгана.'], [<Mic size={15} key="v" />, 'Өдөр', 'Хэлэлцээд сэжигтнээ шүүх хуралд оруулна.'], [<Trophy size={15} key="t" />, 'Ялалт', 'Иргэд бүх мафийг илрүүлбэл ялна.']];
+  return <div className={`ds-rules is-${type}`}>
+    <div className="ds-rules-art" aria-hidden="true">{type === 'monopoly' ? <BoardArt /> : <MafiaArt />}</div>
+    {lines.map(([icon, title, text]) => <div className="ds-rule" key={title}><span className="ds-rule-icon">{icon}</span><span><b>{title}</b>{text}</span></div>)}
   </div>;
 }
 
