@@ -1194,3 +1194,85 @@
 .viewport .game-frame:has(.voice-scope > .mono) .voice-scope > .mono {
   background: transparent;
 }
+
+/* ---------- Gold card frame ----------
+ * Every role card (corner card, viewer, gallery, reveal, intro, private panel) wears the same
+ * gold frame. The art is clipped to the middle of the frame's band so its own thin border never
+ * shows, and the space outside the frame stays transparent. */
+
+.viewport .game-frame .role-card-artwork {
+  position: relative;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+}
+
+.viewport .game-frame .role-card-artwork > .role-card-art,
+.viewport .game-frame .role-intro-back > .role-card-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Shrunk a little so the art's own title and text clear the frame; the clip is the frame band's
+     middle (6.6% / 3.4% / 8.4%) expressed before the scale. */
+  transform: scale(.95);
+  clip-path: inset(4.3% .95% 6.2% .95%);
+}
+
+.viewport .game-frame .role-card-frame,
+.viewport .game-frame .role-card-artwork > img.role-card-frame {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 0 6px rgba(255, 186, 82, .35)) drop-shadow(0 6px 14px rgba(0, 0, 0, .55));
+}
+
+.viewport .game-frame .role-card-image-fallback {
+  position: absolute;
+  inset: 6.6% 3.4% 8.4%;
+}
+
+/* The frame is the card's edge now: containers lose their own borders and fills. */
+.viewport .game-frame .my-role-card,
+.viewport .game-frame .card-gallery-item,
+.viewport .game-frame .card-viewer-card,
+.viewport .game-frame .role-intro-front,
+.viewport .game-frame .role-intro-back,
+.viewport .game-frame .role-card-artwork.is-compact {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.viewport .game-frame .my-role-card {
+  overflow: visible;
+}
+
+.viewport .game-frame .my-role-card:hover {
+  transform: translateY(-2px);
+}
+
+.viewport .game-frame .card-gallery-item:hover,
+.viewport .game-frame .card-gallery-item:focus-visible {
+  border: 0;
+  transform: translateY(-3px);
+}
+
+.viewport .game-frame .card-gallery-item .role-card-artwork > .role-card-art,
+.viewport .game-frame .card-viewer-card .role-card-artwork > .role-card-art {
+  object-fit: cover;
+}
+
+/* The intro keeps its team glow, now around the frame. */
+.viewport .game-frame .role-intro-front .role-card-frame {
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--team) 60%, transparent)) drop-shadow(0 18px 36px rgba(0, 0, 0, .7));
+}
+
+.viewport .game-frame .role-intro-back {
+  overflow: visible;
+}
