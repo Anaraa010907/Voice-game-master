@@ -212,6 +212,17 @@ export default function App() {
     }
   };
 
+  /** Picks one of the built-in portraits; a previously uploaded photo is deleted from storage. */
+  const saveProfilePortrait = async (url: string) => {
+    if (!supabase || !userId) return translateMessage('Sign in again before editing your profile.');
+    const previous = profile?.avatar_url ?? null;
+    const { data, error } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', userId).select('*').single();
+    if (error) return 'Профайл зургийг хадгалж чадсангүй.';
+    setProfile(data as PublicProfile);
+    if (previous && previous !== url) await removeProfilePhoto(userId, previous);
+    return '';
+  };
+
   const saveProfile = async (displayName: string, avatarKey: string) => {
     if (!supabase || !userId) return translateMessage('Sign in again before editing your profile.');
     const { data, error } = await supabase.from('profiles').update({ display_name: displayName, avatar_key: avatarKey }).eq('id', userId).select('*').single();
@@ -242,7 +253,7 @@ export default function App() {
         )}
         {screen === 'lobby' && (!roomCode || !userId) && <JoinRoom onBack={goBack} onJoin={joinRoom} />}
         {screen === 'roles' && <RoleGallery onBack={goBack} />}
-        {screen === 'profile' && <ProfileScreen profile={profile} loading={accountLoading} loadError={profileError} onBack={goBack} onSignIn={() => openAuth('sign-in')} onSignOut={() => openAuth('sign-out')} onSave={saveProfile} onPhoto={saveProfilePhoto} />}
+        {screen === 'profile' && <ProfileScreen profile={profile} loading={accountLoading} loadError={profileError} onBack={goBack} onSignIn={() => openAuth('sign-in')} onSignOut={() => openAuth('sign-out')} onSave={saveProfile} onPhoto={saveProfilePhoto} onPortrait={saveProfilePortrait} />}
         {screen === 'auth' && <Auth key={authView} initialView={authView} onBack={goBack} onAuthenticated={() => setScreen('profile')} onSignedOut={() => { setUserId(null); setProfile(null); setScreen('menu'); }} />}
         {screen === 'settings' && <Settings onBack={goBack} onProfile={() => setScreen('profile')} onAuth={() => openAuth(userId ? 'sign-out' : 'sign-in')} signedIn={Boolean(userId)} />}
         {userId && profile && needsName(profile.display_name) && !namePromptDismissed && screen !== 'auth' && screen !== 'profile'
