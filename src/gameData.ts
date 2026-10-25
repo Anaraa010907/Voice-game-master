@@ -13,6 +13,8 @@ export type Role = {
   description: string;
   ability: string;
   team: 'town' | 'mafia' | 'wildcard';
+  /** Optional painted portrait shown on the role card; without one the card shows the icon emblem. */
+  portrait?: string;
   icon: typeof Shield;
 };
 
@@ -27,7 +29,7 @@ export type Player = {
 };
 
 export const roles: Role[] = [
-  { id: 'mafia-member', name: 'Mafia', displayName: 'Мафийн гишүүн', faction: 'mafia', description: 'Мафийн бүлгийн нууц гишүүн.', ability: 'Шөнө нэг тоглогчийг онилж, багийн довтолгоог сонгоно.', team: 'mafia', icon: Skull },
+  { id: 'mafia-member', name: 'Mafia', displayName: 'Мафийн гишүүн', faction: 'mafia', description: 'Мафийн бүлгийн нууц гишүүн.', ability: 'Шөнө нэг тоглогчийг онилж, багийн довтолгоог сонгоно.', team: 'mafia', icon: Skull, portrait: '/assets/roles/role-mafia.webp' },
   { id: 'police-officer', name: 'Detective', displayName: 'Цагдаа', faction: 'citizens', description: 'Иргэдийн багийн мөрдөгч.', ability: 'Шөнө бүр амьд байгаа нэг тоглогчийг шалгаж, тухайн тоглогч Мафийн бүлэгт хамаарах эсэхийг олж мэднэ. Бүх шалгалтын үр дүн таны нууц тэмдэглэлд хадгалагдана.', team: 'town', icon: Eye },
   { id: 'doctor', name: 'Doctor', displayName: 'Эмч', faction: 'citizens', description: 'Иргэдийн багийн эмч.', ability: 'Шөнө бүр нэг амьд тоглогчийг сонгон хамгаална. Мафийн халдлагад өртсөн бол хамгаалсан тоглогч амьд үлдэнэ. Өөрийгөө ч хамгаалж болно, гэхдээ нэг хүнийг хоёр шөнө дараалан хамгаалж болохгүй.', team: 'town', icon: HeartPulse },
   { id: 'good-informant', name: 'Good Informant', displayName: 'Сайн мэдээлэгч', faction: 'citizens', description: 'Мафийн тухай нууц мэдээлэл цуглуулдаг иргэн.', ability: 'Мафийн гишүүдийн хэн болохыг нууцаар мэдэж авна. Олж авсан мэдээлэл зөвхөн танд харагдана.', team: 'town', icon: Fingerprint },

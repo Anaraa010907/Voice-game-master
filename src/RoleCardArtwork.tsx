@@ -10,9 +10,11 @@ const TEAM_LABEL: Record<Role['team'], string> = { mafia: 'Мафийн баг',
 
 export default function RoleCardArtwork({ role, compact = false }: { role: Role; compact?: boolean }) {
   const RoleIcon = role.icon;
-  return <div className={`role-card-artwork ds-role-card team-${role.team} ${compact ? 'is-compact' : ''}`} role="img" aria-label={`${role.displayName} — ${TEAM_LABEL[role.team]}`}>
+  return <div className={`role-card-artwork ds-role-card team-${role.team} ${compact ? 'is-compact' : ''} ${role.portrait ? 'has-portrait' : ''}`} role="img" aria-label={`${role.displayName} — ${TEAM_LABEL[role.team]}`}>
     <span className="ds-role-pattern" aria-hidden="true" />
-    <span className="ds-role-emblem" aria-hidden="true"><i /><i /><RoleIcon strokeWidth={1.4} /></span>
+    {role.portrait
+      ? <span className="ds-role-portrait" aria-hidden="true"><img src={role.portrait} alt="" decoding="async" /><i><RoleIcon strokeWidth={1.6} /></i></span>
+      : <span className="ds-role-emblem" aria-hidden="true"><i /><i /><RoleIcon strokeWidth={1.4} /></span>}
     <span className="ds-role-copy">
       <span className="ds-role-team">{TEAM_LABEL[role.team]}</span>
       <b className="ds-role-name">{role.displayName}</b>
