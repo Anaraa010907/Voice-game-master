@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { boardBotToMove, mafiaBotsAct, monopolyBotStep, nextBotName } from '../supabase/functions/_shared/bots.ts';
+import { botAcceptsTrade, botBid, boardBotToMove, mafiaBotsAct, monopolyBotStep, nextBotName } from '../supabase/functions/_shared/bots.ts';
 import {
   allNightActionsSubmitted, allVerdictsSubmitted, allVotesSubmitted, createInitialGame, finishDay, openDiscussion, recordVote, removePlayer,
   publicView, resolveNight, resolveTrial, resolveVoting, startNight, startVoting, type GameEngineState,
 } from '../supabase/functions/_shared/gameEngine.ts';
-import { autoPlay, createMonopolyGame, currentPlayerId } from '../supabase/functions/_shared/monopolyEngine.ts';
+import { actingPlayerId, applyMonopolyAction, autoPlay, createMonopolyGame, currentPlayerId, type MonopolyState } from '../supabase/functions/_shared/monopolyEngine.ts';
 
 // A small seeded random source so every run plays the same games.
 function seeded(seed: number) {
@@ -59,27 +59,59 @@ for (const seed of [1, 7, 42, 99, 1234]) {
   }
 }
 
-// Board game: three bots play to the end; they buy property along the way.
-for (const seed of [5, 11, 2024]) {
-  const random = seeded(seed);
-  let state = createMonopolyGame([
-    { id: 1, name: 'Болд (бот)', initials: 'БО', color: 'rose', bot: true },
-    { id: 2, name: 'Сарнай (бот)', initials: 'СА', color: 'teal', bot: true },
-    { id: 3, name: 'Номин (бот)', initials: 'НО', color: 'gold', bot: true },
-  ], random);
-  let steps = 0;
-  let bought = 0;
-  while (state.phase !== 'finished' && steps < 5000) {
-    assert.ok(boardBotToMove(state), 'A bot is always to move.');
-    const next = monopolyBotStep(state, random);
-    assert.notEqual(next, state, 'Every bot step changes the game.');
-    bought = Math.max(bought, next.tiles.filter((tile) => tile.owner !== null).length);
-    state = next;
-    steps += 1;
+// Board game: bots play to the end; they buy, bid at auctions, trade and build along the way.
+{
+  let auctions = 0;
+  let trades = 0;
+  let buildings = 0;
+  for (const [seed, count] of [[5, 3], [11, 3], [2024, 4], [77, 6]]) {
+    const random = seeded(seed);
+    let state = createMonopolyGame(Array.from({ length: count }, (_, index) => ({ id: index + 1, name: `Бот ${index + 1}`, initials: 'БО', color: 'rose', bot: true })), random);
+    let steps = 0;
+    let bought = 0;
+    while (state.phase !== 'finished' && steps < 5000) {
+      assert.ok(boardBotToMove(state), 'A bot is always to move.');
+      const next = monopolyBotStep(state, random);
+      assert.notEqual(next, state, 'Every bot step changes the game.');
+      if (next.phase === 'auction' && state.phase !== 'auction') auctions += 1;
+      if (state.trade && !next.trade && next.log[next.log.length - 1].includes('⇄')) trades += 1;
+      buildings = Math.max(buildings, next.tiles.reduce((total, tile) => total + tile.houses, 0));
+      bought = Math.max(bought, next.tiles.filter((tile) => tile.owner !== null).length);
+      assert.ok(next.players.every((player) => player.money >= 0), 'No negative money.');
+      state = next;
+      steps += 1;
+    }
+    assert.equal(state.phase, 'finished', `Bot-only board game ${seed} finishes.`);
+    assert.ok(bought > 3, 'Bots buy property.');
   }
-  assert.equal(state.phase, 'finished', `Bot-only board game ${seed} finishes.`);
-  assert.ok(bought > 3, 'Bots buy property.');
-  assert.ok(state.players.every((player) => player.money >= 0), 'No negative money.');
+  assert.ok(auctions > 0, 'Bots hold auctions for deeds they turn down.');
+  assert.ok(trades > 0, 'Bots trade with each other.');
+  assert.ok(buildings > 0, 'Bots build houses.');
+}
+
+// Board game: a bot answers a person's offer on its own merits, and bids only to its ceiling.
+{
+  const people = [
+    { id: 1, name: 'Хүн', initials: 'ХҮ', color: 'rose' },
+    { id: 2, name: 'Бот', initials: 'БО', color: 'teal', bot: true },
+  ];
+  let base: MonopolyState = createMonopolyGame(people, () => 0.99);
+  base = { ...base, tiles: base.tiles.map((tile, index) => index === 1 ? { ...tile, owner: 1 } : index === 3 || index === 6 ? { ...tile, owner: 2 } : tile) };
+  const offer = (give: number[], get: number[], giveCash: number) => ({ from: 1, to: 2, give, get, giveCash, getCash: 0, giveCards: 0, getCards: 0 });
+  assert.equal(botAcceptsTrade(base, 2, offer([], [3], 100)), false, 'A bot will not sell a rival the deed that completes their set at its price.');
+  assert.equal(botAcceptsTrade(base, 2, offer([], [3], 400)), true, 'A large enough premium buys it.');
+  assert.equal(botAcceptsTrade(base, 2, offer([1], [6], 0)), false, 'A bot values what it gives up by its own plans.');
+  assert.equal(botAcceptsTrade(base, 2, offer([1], [6], 100)), true, 'Its own set-completer plus cash is a yes.');
+  const proposed = applyMonopolyAction(base, 1, { type: 'propose', offer: { to: 2, give: [], get: [3], giveCash: 50, getCash: 0, giveCards: 0, getCards: 0 } });
+  assert.ok(!proposed.error && boardBotToMove(proposed.state), 'The bot has to answer the offer.');
+  const answered = monopolyBotStep(proposed.state, seeded(1));
+  assert.ok(!answered.trade && answered.tiles[3].owner === 2, 'The bot turns down a lowball offer.');
+
+  const auction: MonopolyState = { ...base, phase: 'auction', auction: { tile: 31, bidders: [2, 1], turn: 0, highBid: 0, highBidder: null } };
+  const bot = auction.players.find((player) => player.id === 2)!;
+  assert.equal(botBid(auction, bot), 40, 'A bot opens at a tenth of the price.');
+  assert.equal(botBid({ ...auction, auction: { ...auction.auction!, highBid: 480, highBidder: 1 } }, bot), null, 'A bot passes above its ceiling.');
+  assert.equal(actingPlayerId(monopolyBotStep(auction, seeded(1))), 1, 'After its bid the auction moves to the person.');
 }
 
 // Regression: a game frozen on a bankrupt player's turn moves on at the next tick.

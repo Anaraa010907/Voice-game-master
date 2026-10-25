@@ -30,7 +30,11 @@ const ROOM_SIZES: Record<GameType, number[]> = { mafia: [6, 8, 10, 12], monopoly
 const MIN_SEATS: Record<GameType, number> = { mafia: MIN_PLAYERS, monopoly: MIN_MONOPOLY_PLAYERS };
 /** Seconds each board-game player has for every step (roll, buy, finish turn). */
 const BOARD_STEP_SECONDS = 40;
-const BOARD_ACTIONS = ['roll', 'buy', 'decline', 'end', 'pay-jail', 'build', 'sell', 'mortgage', 'unmortgage'];
+/** Seconds a bidder has at an auction before passing, and a player has to answer a trade offer. */
+const BOARD_BID_SECONDS = 15;
+const BOARD_TRADE_SECONDS = 30;
+const BOARD_ACTIONS = ['roll', 'buy', 'decline', 'end', 'pay-jail', 'use-card', 'build', 'sell', 'mortgage', 'unmortgage', 'bid', 'pass', 'propose', 'accept', 'reject', 'cancel-trade'];
+const TILE_ACTIONS = ['build', 'sell', 'mortgage', 'unmortgage'];
 const LISTED_LOBBY_HOURS = 6;
 /** Which games let the host fill seats with bots. Mafia bots are a testing aid: set mafia to false to remove them. */
 const BOTS_ALLOWED: Record<GameType, boolean> = { mafia: true, monopoly: true };
@@ -105,11 +109,46 @@ function code(body: Body) {
   return value;
 }
 
+const whole = (value: unknown, max: number) => {
+  const number = typeof value === 'number' || typeof value === 'string' ? Number(value) : NaN;
+  return Number.isInteger(number) && number >= 0 && number <= max ? number : null;
+};
+
+/** Turns a validated board move into an engine action; the engine then checks it against the rules. */
+function boardAction(move: string, body: Body): MonopolyAction {
+  if (TILE_ACTIONS.includes(move)) {
+    const tile = whole(body.tile, 31);
+    if (tile === null) throw new GameError(400, 'Нүд буруу байна.');
+    return { type: move, tile } as MonopolyAction;
+  }
+  if (move === 'bid') {
+    const amount = whole(body.amount, 1_000_000);
+    if (!amount) throw new GameError(400, 'Үнийн санал буруу байна.');
+    return { type: 'bid', amount };
+  }
+  if (move === 'propose') {
+    const offer = (body.offer ?? {}) as Body;
+    const tiles = (value: unknown) => Array.isArray(value) && value.length <= 32 && value.every((tile) => whole(tile, 31) !== null) ? value.map(Number) : null;
+    const to = whole(offer.to, 99);
+    const give = tiles(offer.give ?? []);
+    const get = tiles(offer.get ?? []);
+    const giveCash = whole(offer.giveCash ?? 0, 1_000_000);
+    const getCash = whole(offer.getCash ?? 0, 1_000_000);
+    const giveCards = whole(offer.giveCards ?? 0, 2);
+    const getCards = whole(offer.getCards ?? 0, 2);
+    if (to === null || !give || !get || giveCash === null || getCash === null || giveCards === null || getCards === null) throw new GameError(400, 'Арилжааны санал буруу байна.');
+    return { type: 'propose', offer: { to, give, get, giveCash, getCash, giveCards, getCards } };
+  }
+  return { type: move } as MonopolyAction;
+}
+
 function deadlineFor(state: AnyGame): string | null {
   if (isBoard(state)) {
     if (state.phase === 'finished') return null;
     // A bot "thinks" for a moment; whoever's phone sees the timer run out asks the server to move it.
-    return new Date(Date.now() + (boardBotToMove(state) ? BOT_STEP_SECONDS : BOARD_STEP_SECONDS) * 1000).toISOString();
+    const seconds = boardBotToMove(state) ? BOT_STEP_SECONDS
+      : state.trade ? BOARD_TRADE_SECONDS : state.phase === 'auction' ? BOARD_BID_SECONDS : BOARD_STEP_SECONDS;
+    return new Date(Date.now() + seconds * 1000).toISOString();
   }
   if (state.phase === 'Results') return null;
   const key = state.phase === 'Voting'
@@ -491,15 +530,13 @@ class GameServer {
     return this.join({ roomCode: pick.roomCode });
   }
 
-  /** One board-game move from the current player. */
+  /** One board-game move: the current player's turn, a bid at an auction, or an answer to a trade offer. */
   async board(body: Body) {
     const roomCodeValue = code(body);
     const { mine } = await this.requireSeat(roomCodeValue);
     const move = typeof body.move === 'string' && BOARD_ACTIONS.includes(body.move) ? body.move : null;
     if (!move) throw new GameError(400, 'Үйлдэл буруу байна.');
-    const tile = Number(body.tile);
-    if (['build', 'sell', 'mortgage', 'unmortgage'].includes(move) && !(Number.isInteger(tile) && tile >= 0 && tile < 32)) throw new GameError(400, 'Нүд буруу байна.');
-    const action = (['build', 'sell', 'mortgage', 'unmortgage'].includes(move) ? { type: move, tile } : { type: move }) as MonopolyAction;
+    const action = boardAction(move, body);
     let failure = '';
     await this.mutate(roomCodeValue, (state) => {
       if (!isBoard(state)) { failure = 'Энэ өрөөнд board game явагдаагүй байна.'; return state; }

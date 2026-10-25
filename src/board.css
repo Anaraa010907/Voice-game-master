@@ -1714,3 +1714,413 @@
 .name-setup .form-error {
   margin: 8px 0 0;
 }
+
+/* ---------- Auctions, trades and jail cards ---------- */
+
+.mono-tile.is-auction {
+  border-color: #f1d79a;
+  box-shadow: inset 0 0 0 2px #f1d79a, 0 0 14px #f1d79a66;
+  animation: mono-pulse 1.2s ease-in-out infinite;
+}
+
+.mono-tile.is-traded {
+  box-shadow: inset 0 0 0 2px #7fd0c2;
+}
+
+.mono-card b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.mono-card.is-auction {
+  border-color: #f1d79a;
+  background: linear-gradient(180deg, #33291a, #1f1a13);
+}
+
+.mono-card.deck-chest {
+  border-color: #7fb39a80;
+  background: #17221d;
+}
+
+.mono-turn-row {
+  display: flex;
+  gap: 6px;
+}
+
+.mono-turn-row > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.mono-jail-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 5px;
+  padding: 0 4px;
+  border: 1px solid #f1d79a66;
+  border-radius: 6px;
+  color: #f1d79a;
+  font-style: normal;
+  font-size: 9px;
+}
+
+.mono-auction .mono-offer b {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.mono-auction .mono-offer strong em,
+.mono-auction .mono-offer strong:only-child em {
+  margin-left: 4px;
+  color: #c8bfb2;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.mono-bidders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.mono-bidders span {
+  padding: 2px 7px;
+  border: 1px solid #ffffff1c;
+  color: #a39a90;
+  font-size: 10px;
+}
+
+.mono-bidders span.is-leading {
+  color: #9fe0b2;
+}
+
+.mono-bidders span.is-bidding {
+  border-color: #f1d79a;
+  background: #2f2718;
+  color: #f1d79a;
+}
+
+.mono-bid-row {
+  display: flex;
+  gap: 6px;
+}
+
+.mono-bid-row > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.viewport .game-frame .mono-turn .mono-bid-row .primary-button,
+.viewport .game-frame .mono-turn .mono-bid-row .secondary-button {
+  padding: 0 6px;
+}
+
+.mono-trade-sides {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+
+.mono-trade-sides div {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid #ffffff16;
+  background: #14110ecc;
+}
+
+.mono-trade-sides dt {
+  color: #a68f6c;
+  font-size: 10px;
+  letter-spacing: .6px;
+}
+
+.mono-trade-sides dd {
+  margin: 0;
+  color: #f0e6d4;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+/* The trade composer covers the whole board-game screen. */
+.mono-trade-backdrop {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+  background: #07050499;
+  backdrop-filter: blur(3px);
+}
+
+.mono-trade {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  width: min(860px, 100%);
+  max-height: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d2b07399;
+  background: linear-gradient(180deg, rgba(28, 21, 16, .97), rgba(12, 9, 8, .98));
+  box-shadow: 0 20px 60px #000c;
+}
+
+.mono-trade > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mono-trade > header > b {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: #f1d79a;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px;
+  letter-spacing: 1px;
+}
+
+.mono-trade-partners {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mono-trade-partners button {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px 0 3px;
+  border: 1px solid #ffffff1f;
+  background: #16120f;
+  color: #d9cfbf;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px;
+}
+
+.mono-trade-partners button .avatar {
+  width: 25px;
+  height: 25px;
+  font-size: 10px;
+}
+
+.mono-trade-partners button.is-picked {
+  border-color: #f1d79a;
+  background: linear-gradient(100deg, #3a2d19, #1d1712);
+  color: #f1d79a;
+}
+
+.mono-trade-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  min-height: 0;
+}
+
+.mono-trade-side {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 6px;
+  min-height: 0;
+  padding: 8px;
+  border: 1px solid #ffffff16;
+  background: #0e0b0acc;
+}
+
+.mono-trade-side h4 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  color: #f0e6d4;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 15px;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+}
+
+.mono-trade-side h4 small {
+  color: #9fe0b2;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.mono-trade-deeds {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 5px;
+  min-height: 34px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.mono-deed {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 8px 0 0;
+  overflow: hidden;
+  border: 1px solid #ffffff1f;
+  background: #1a1511;
+  color: #e3d8c6;
+  font-size: 11px;
+}
+
+.mono-deed-band {
+  align-self: stretch;
+  width: 6px;
+  background: var(--band, #6c6250);
+}
+
+.mono-deed.kind-rail .mono-deed-band { background: #8c8579; }
+.mono-deed.kind-utility .mono-deed-band { background: #6aa0b8; }
+
+.mono-deed small {
+  color: #d88a7d;
+  font-size: 9px;
+}
+
+.mono-deed.is-card {
+  padding-left: 8px;
+  color: #f1d79a;
+}
+
+.mono-deed.is-picked {
+  border-color: #f1d79a;
+  background: #3a2d19;
+  color: #fff4dc;
+  box-shadow: inset 0 0 0 1px #f1d79a;
+}
+
+.mono-deed:disabled {
+  opacity: .35;
+}
+
+.mono-trade-cash {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mono-trade-cash > button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #ffffff22;
+  background: #1a1511;
+  color: #f1d79a;
+}
+
+.mono-trade-cash > button:disabled {
+  opacity: .35;
+}
+
+.mono-trade-cash label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid #ffffff22;
+  background: #0b0908;
+  color: #9fe0b2;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 17px;
+}
+
+.mono-trade-cash input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.mono-trade-cash input::-webkit-outer-spin-button,
+.mono-trade-cash input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.mono-trade > footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mono-trade > footer .mono-hint {
+  flex: 1;
+  min-width: 0;
+  color: #d9cfbf;
+  font-size: 11px;
+}
+
+.mono-trade > footer .mono-hint b {
+  color: #f1d79a;
+}
+
+.viewport .game-frame .mono-trade > footer .primary-button,
+.viewport .game-frame .mono-trade > footer .secondary-button {
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .mono-trade {
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  .mono-deed {
+    height: 26px;
+  }
+
+  .viewport .game-frame .mono-trade > footer .primary-button,
+  .viewport .game-frame .mono-trade > footer .secondary-button {
+    height: 32px;
+  }
+}
+
+@media (orientation: portrait), (max-width: 620px) {
+  .mono-trade-columns {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .mono-trade > footer {
+    flex-wrap: wrap;
+  }
+
+  .mono-trade > footer .mono-hint {
+    flex-basis: 100%;
+  }
+}
