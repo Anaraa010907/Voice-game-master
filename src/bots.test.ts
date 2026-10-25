@@ -103,6 +103,15 @@ for (const [seed, count, settings] of [[21, 12, undefined], [8, 10, undefined], 
   assert.ok(buildings > 0, 'Bots build houses.');
 }
 
+// Board game: with no round limit, bots play on until only one is left.
+for (const seed of [5, 2024]) {
+  const random = seeded(seed);
+  let state = createMonopolyGame(Array.from({ length: 3 }, (_, index) => ({ id: index + 1, name: `Бот ${index + 1}`, initials: 'БО', color: 'rose', bot: true })), random, { rounds: null });
+  for (let steps = 0; steps < 20000 && state.phase !== 'finished'; steps += 1) state = monopolyBotStep(state, random);
+  assert.equal(state.phase, 'finished', `A game without a round limit ends by bankruptcy (seed ${seed}).`);
+  assert.equal(state.players.filter((player) => !player.bankrupt).length, 1, 'Exactly one player is left.');
+}
+
 // Board game: a bot answers a person's offer on its own merits, and bids only to its ceiling.
 {
   const people = [

@@ -4,8 +4,8 @@ import {
   Lock, Minus, PartyPopper, Plane, Plug, Plus, ScrollText, Sparkles, TrainFront, Trophy, LockOpen, Waves, X,
 } from 'lucide-react';
 import {
-  BOARD, GROUP_TILES, JAIL_FINE, MAX_OFFERS_PER_TURN, MAX_ROUNDS, actingPlayerId, bankSupply, canTradeTile, currentPlayerId, describeSide,
-  minimumBid, mortgageInterest, mortgageValue, netWorth, ownsGroup, rentFor, unmortgageCost,
+  BOARD, GROUP_TILES, JAIL_FINE, MAX_OFFERS_PER_TURN, actingPlayerId, bankSupply, canTradeTile, currentPlayerId, describeSide,
+  minimumBid, mortgageInterest, mortgageValue, netWorth, ownsGroup, rentFor, roundLimit, unmortgageCost,
   type AuctionState, type ColorGroup, type MonopolyPlayer, type MonopolyState, type Tile, type TradeOffer, type TradeProposal,
 } from './monopolyEngine';
 import Avatar from './Avatar';
@@ -48,6 +48,18 @@ function TileIcon({ tile, size = 14 }: { tile: Tile; size?: number }) {
 }
 
 const money = (value: number) => `${value.toLocaleString('en-US')}₮`;
+
+/** One clearly different colour per player for their deeds, piece and row: your own is always pink, the others follow seat order. */
+const OWNER_COLORS = ['#ff5ca8', '#ff5252', '#ffd23f', '#3ddc84', '#3fa7ff', '#b07cff'];
+function ownerColor(game: MonopolyState, id: number | null | undefined, mySeat: number | null | undefined) {
+  const order = [...game.players.filter((entry) => entry.id === mySeat), ...game.players.filter((entry) => entry.id !== mySeat)];
+  const index = order.findIndex((entry) => entry.id === id);
+  return index < 0 ? undefined : OWNER_COLORS[index % OWNER_COLORS.length];
+}
+const ownerStyle = (color: string | undefined) => (color ? { '--owner': color } : {}) as CSSProperties;
+
+/** Digits only, so a typed amount never starts with a stuck "0". */
+const digits = (value: string) => value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 7);
 
 export default function MonopolyScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice }: {
   roomCode: string; roomName: string; userId: string; isHost: boolean; seats: RoomSeat[];
@@ -107,6 +119,7 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
   const auction = game.phase === 'auction' ? game.auction ?? null : null;
   /** My own turn with nothing else (an auction, a trade offer) holding it up. */
   const myMove = myTurn && !trade && !auction;
+  const limit = roundLimit(game);
   const actor = playerById(actingPlayerId(game)) ?? current;
 
   const send = async (move: string, extra: Record<string, unknown> = {}) => {
@@ -137,9 +150,10 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
         {BOARD.map((tile) => {
           const tileState = game.tiles[tile.id];
           const owner = playerById(tileState.owner);
-          const here = game.players.filter((entry) => !entry.bankrupt && entry.position === tile.id);
-          return <button type="button" key={tile.id} style={gridCell(tile.id)}
-            className={`mono-tile is-${side(tile.id)} kind-${tile.kind} ${tile.group ? `group-${tile.group}` : ''} ${owner ? `owned owner-${owner.color}` : ''} ${tileState.mortgaged ? 'is-mortgaged' : ''} ${selected === tile.id ? 'is-selected' : ''} ${current.position === tile.id ? 'is-active' : ''} ${auction?.tile === tile.id ? 'is-auction' : ''} ${tradedTiles.includes(tile.id) ? 'is-traded' : ''}`}
+          // Whoever's turn it is sits on top of the stack.
+          const here = game.players.filter((entry) => !entry.bankrupt && entry.position === tile.id).sort((left, right) => Number(left.id === turnId) - Number(right.id === turnId));
+          return <button type="button" key={tile.id} style={{ ...gridCell(tile.id), ...ownerStyle(owner ? ownerColor(game, owner.id, mySeat) : undefined) }}
+            className={`mono-tile is-${side(tile.id)} kind-${tile.kind} ${tile.group ? `group-${tile.group}` : ''} ${owner ? `owned owner-${owner.color}` : ''} ${tileState.mortgaged ? 'is-mortgaged' : ''} ${selected === tile.id ? 'is-selected' : ''} ${current.position === tile.id ? 'is-active' : ''} ${auction?.tile === tile.id ? 'is-auction' : ''} ${tradedTiles.includes(tile.id) ? 'is-traded' : ''} ${here.length ? 'has-tokens' : ''}`}
             onClick={() => setSelected(selected === tile.id ? null : tile.id)} aria-label={tile.name}>
             {tile.group && <span className="mono-tile-band" />}
             <span className="mono-tile-body">
@@ -149,38 +163,40 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
               {tile.kind === 'tax' && <span className="mono-tile-price">−{money(tile.rent!)}</span>}
             </span>
             {tileState.houses > 0 && <span className="mono-houses" aria-label={`${tileState.houses} барилга`}>{tileState.houses === 5 ? <Building2 size={10} /> : Array.from({ length: tileState.houses }, (_, index) => <i key={index} />)}</span>}
-            {here.length > 0 && <span className="mono-tokens">{here.map((entry) => <span key={entry.id} className={`mono-token avatar-${entry.color} ${entry.id === turnId ? 'is-turn' : ''}`} title={entry.name}>{entry.initials.slice(0, 1)}</span>)}</span>}
+            {here.length > 0 && <span className={`mono-tokens count-${Math.min(here.length, 4)}`}>{here.map((entry) => <Token key={entry.id} player={entry} color={ownerColor(game, entry.id, mySeat)} isTurn={entry.id === turnId && game.phase !== 'finished'} isMe={entry.id === mySeat} />)}</span>}
           </button>;
         })}
 
         <div className="mono-center">
           {detail ? <TileDetail tile={detail} game={game} me={me} myTurn={myMove} busy={busy} onClose={() => setSelected(null)} onAction={(move) => void send(move, { tile: detail.id })} /> : <>
-            <div className="mono-brand"><b>МОНГОЛ</b><span>МОНОПОЛЬ</span></div>
-            <div className="mono-dice-tray" aria-label={game.dice ? `${game.dice[0]} ба ${game.dice[1]}` : 'Шоо'}>
-              <div className="mono-dice">
-                {(game.dice ?? [0, 0]).map((value, index) => <Die key={`${game.log.length}-${index}-${value}`} value={value} index={index} />)}
+            <div className="mono-brand is-watermark" aria-hidden="true"><b>МОНГОЛ</b><span>МОНОПОЛЬ</span></div>
+            <div className="mono-center-top">
+              <div className="mono-dice-tray" aria-label={game.dice ? `${game.dice[0]} ба ${game.dice[1]}` : 'Шоо'}>
+                <div className="mono-dice">
+                  {(game.dice ?? [0, 0]).map((value, index) => <Die key={`${game.log.length}-${index}-${value}`} value={value} index={index} />)}
+                </div>
+                {game.dice && <span className="mono-dice-total">{game.dice[0] + game.dice[1]}</span>}
               </div>
-              {game.dice && <span className="mono-dice-total">{game.dice[0] + game.dice[1]}</span>}
+              {myMove && game.phase === 'roll' && <button type="button" className="mono-roll-button" disabled={busy} onClick={() => void send('roll')}><Dices size={16} /> {me!.inJail ? 'ХОС ХАЯЖ ГАРАХ' : 'ШОО ХАЯХ'}</button>}
+              {!myMove && game.phase !== 'finished' && <p className="mono-center-turn">{centerStatus}</p>}
             </div>
-            {myMove && game.phase === 'roll' && <button type="button" className="mono-roll-button" disabled={busy} onClick={() => void send('roll')}><Dices size={16} /> {me!.inJail ? 'ХОС ХАЯЖ ГАРАХ' : 'ШОО ХАЯХ'}</button>}
-            {!myMove && game.phase !== 'finished' && <p className="mono-center-turn">{centerStatus}</p>}
             {auction
               ? <div className="mono-card is-auction"><b><Gavel size={12} /> Дуудлага худалдаа</b><span>{BOARD[auction.tile].name} · {auction.highBid ? `${money(auction.highBid)} — ${playerById(auction.highBidder)?.name ?? ''}` : 'санал алга'}</span></div>
               : game.card && <div className={`mono-card deck-${game.card.deck ?? 'chance'}`}><b>{game.card.title}</b><span>{game.card.text}</span></div>}
-            <div className="mono-log">{game.log.slice(-3).map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}</div>
+            <MonoFeed game={game} mySeat={mySeat} />
           </>}
         </div>
       </section>
 
       <aside className="mono-side">
         <header className="mono-side-head">
-          <div><span>{roomName.toUpperCase()}</span><b>ТОЙРОГ {Math.min(game.round, MAX_ROUNDS)}/{MAX_ROUNDS}</b></div>
+          <div><span>{roomName.toUpperCase()}</span><b>{limit === null ? <>ТОЙРОГ {game.round} <small>· ДАМПУУРТАЛ</small></> : <>ТОЙРОГ {Math.min(game.round, limit)}/{limit}</>}</b></div>
           <div className="mono-timer"><Clock3 size={13} />{game.phase === 'finished' ? '—' : secondsLeft ?? '—'}</div>
           <button type="button" className="icon-button" onClick={() => setLeaveOpen(true)} aria-label="Тоглоомоос гарах"><ArrowLeft size={15} /></button>
         </header>
 
         <div className="mono-players">
-          {game.players.map((entry) => <PlayerRow key={entry.id} entry={entry} game={game} isTurn={entry.id === turnId && game.phase !== 'finished'} isMe={entry.id === mySeat} />)}
+          {game.players.map((entry) => <PlayerRow key={entry.id} entry={entry} game={game} color={ownerColor(game, entry.id, mySeat)} isTurn={entry.id === turnId && game.phase !== 'finished'} isMe={entry.id === mySeat} />)}
         </div>
 
         <div className="mono-actions">
@@ -204,16 +220,46 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
   </VoiceChatProvider>;
 }
 
+/** A player's piece on the board: their profile picture, or coloured initials, ringed in their colour. */
+function Token({ player, color, isTurn, isMe }: { player: MonopolyPlayer; color?: string; isTurn: boolean; isMe: boolean }) {
+  return <span className={`mono-token avatar-${player.color} ${player.avatarUrl ? 'has-photo' : ''} ${isTurn ? 'is-turn' : ''} ${isMe ? 'is-me' : ''}`}
+    style={{ ...ownerStyle(color), ...(player.avatarUrl ? { backgroundImage: `url("${player.avatarUrl}")` } : {}) }} title={player.name} aria-label={player.name}>
+    {!player.avatarUrl && player.initials.slice(0, 1)}
+  </span>;
+}
+
+/** Everything that happened, as a chat: each line beside the player who did it, newest at the bottom. */
+function MonoFeed({ game, mySeat }: { game: MonopolyState; mySeat: number | null }) {
+  const list = useRef<HTMLOListElement>(null);
+  const byLongestName = useMemo(() => [...game.players].sort((left, right) => right.name.length - left.name.length), [game.players]);
+  const latest = game.log[game.log.length - 1];
+  useEffect(() => {
+    const element = list.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [game.log.length, latest]);
+  return <ol className="mono-feed" ref={list} aria-label="Тоглолтын явц" aria-live="polite">
+    {game.log.map((line, index) => {
+      const who = byLongestName.find((entry) => line.startsWith(entry.name));
+      const turnLine = Boolean(who) && /-ийн ээлж\.$/.test(line);
+      const kind = turnLine ? 'is-turn-line' : who ? (who.id === mySeat ? 'is-mine' : 'from-player') : 'is-system';
+      return <li key={`${index}-${line}`} className={`${kind} ${index === game.log.length - 1 ? 'is-latest' : ''}`}>
+        {who && !turnLine && <Avatar name={who.name} color={who.color} url={who.avatarUrl} initials={who.initials} />}
+        <span className="mono-feed-text">{who ? <><b>{who.name}</b>{line.slice(who.name.length)}</> : line}</span>
+      </li>;
+    })}
+  </ol>;
+}
+
 function Die({ value, index }: { value: number; index: number }) {
   const pips: Record<number, number[]> = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
   return <span className={`mono-die ${value ? 'is-rolled' : 'is-empty'} die-${index}`}>{Array.from({ length: 9 }, (_, cell) => <i key={cell} className={(pips[value] ?? []).includes(cell + 1) ? 'on' : ''} />)}</span>;
 }
 
-function PlayerRow({ entry, game, isTurn, isMe }: { entry: MonopolyPlayer; game: MonopolyState; isTurn: boolean; isMe: boolean }) {
+function PlayerRow({ entry, game, color, isTurn, isMe }: { entry: MonopolyPlayer; game: MonopolyState; color?: string; isTurn: boolean; isMe: boolean }) {
   const owned = game.tiles.filter((tileState) => tileState.owner === entry.id).length;
-  return <div className={`mono-player ${isTurn ? 'is-turn' : ''} ${entry.bankrupt ? 'is-bankrupt' : ''}`}>
+  return <div className={`mono-player ${isTurn ? 'is-turn' : ''} ${entry.bankrupt ? 'is-bankrupt' : ''}`} style={ownerStyle(color)}>
     <Avatar name={entry.name} color={entry.color} url={entry.avatarUrl} initials={entry.initials}>{entry.host && <i><Crown size={9} /></i>}<VoiceAvatarIndicator name={entry.name} seat={entry.id} /></Avatar>
-    <span className="mono-player-copy"><b>{entry.name}{isMe && <small>ЧИ</small>}</b><span>{entry.bankrupt ? 'ДАМПУУРСАН' : entry.inJail ? `ШОРОНД · ${owned} газар` : `${owned} газар`}{!entry.bankrupt && (entry.jailCards?.length ?? 0) > 0 && <i className="mono-jail-card" title="Шоронгоос гарах карт"><KeyRound size={9} />{entry.jailCards!.length}</i>}</span></span>
+    <span className="mono-player-copy"><b>{entry.name}{isMe && <small>ЧИ</small>}</b><span>{entry.bankrupt ? 'ДАМПУУРСАН' : `${entry.inJail ? 'ШОРОНД' : BOARD[entry.position].short} · ${owned} газар`}{!entry.bankrupt && (entry.jailCards?.length ?? 0) > 0 && <i className="mono-jail-card" title="Шоронгоос гарах карт"><KeyRound size={9} />{entry.jailCards!.length}</i>}</span></span>
     <span className="mono-player-money">{entry.bankrupt ? '—' : money(entry.money)}</span>
   </div>;
 }
@@ -245,6 +291,18 @@ function MyTurn({ game, me, busy, onAction, onTrade }: { game: MonopolyState; me
       <p className="mono-hint">{me.money < tile.price! ? 'Мөнгө хүрэлцэхгүй байна. ' : ''}Авахгүй бол газар дуудлага худалдаанд гарч, хамгийн өндөр үнэ хаясан нь авна.</p>
     </div>;
   }
+  if (me.inJail) {
+    // Just sent to jail: get out now with the card or the fine, or wait and try for doubles next turn.
+    return <div className="mono-turn">
+      <p className="mono-turn-title"><Lock size={15} /> Шоронд орлоо</p>
+      <div className="mono-turn-row">
+        {cards > 0 && <button className="primary-button" disabled={busy} onClick={() => onAction('use-card')}><KeyRound size={14} /> КАРТААР ГАРАХ</button>}
+        <button className="secondary-button" disabled={busy || me.money < JAIL_FINE} onClick={() => onAction('pay-jail')}><LockOpen size={14} /> {money(JAIL_FINE)} ТӨЛЖ ГАРАХ</button>
+      </div>
+      <button className="secondary-button" disabled={busy} onClick={() => onAction('end')}>ЭЭЛЖ ДУУСГАХ <ChevronRight size={15} /></button>
+      <p className="mono-hint">Одоо гарахгүй бол дараагийн ээлжиндээ хос хаяж үзнэ. Гурав дахь оролдлогын дараа торгуулиа төлж гарна.</p>
+    </div>;
+  }
   return <div className="mono-turn">
     <p className="mono-turn-title">{tile.name}</p>
     <button className="primary-button mono-big" disabled={busy} onClick={() => onAction('end')}>{game.rollAgain ? <><Dices size={16} /> ДАХИН ХАЯХ (ХОС)</> : <>ЭЭЛЖ ДУУСГАХ <ChevronRight size={16} /></>}</button>
@@ -263,6 +321,9 @@ function AuctionPanel({ game, auction, me, busy, onBid, onPass }: {
   const minimum = minimumBid(auction);
   const mine = me !== null && bidderId === me.id;
   const steps = [...new Set([minimum, minimum + 40, minimum + 90])];
+  const [typed, setTyped] = useState('');
+  const typedAmount = Number(typed || 0);
+  const typedProblem = !typed ? '' : typedAmount < minimum ? `Хамгийн багадаа ${money(minimum)}` : me && typedAmount > me.money ? 'Мөнгө хүрэлцэхгүй' : '';
   return <div className="mono-turn mono-auction">
     <div className={`mono-offer ${tile.group ? `group-${tile.group}` : ''}`}>
       <span className="mono-offer-band" />
@@ -271,12 +332,17 @@ function AuctionPanel({ game, auction, me, busy, onBid, onPass }: {
       <strong>{auction.highBid ? <>{money(auction.highBid)} <em>{name(auction.highBidder)}</em></> : <em>Санал алга</em>}</strong>
     </div>
     <div className="mono-bidders">{auction.bidders.map((id) => <span key={id} className={`${id === bidderId ? 'is-bidding' : ''} ${id === auction.highBidder ? 'is-leading' : ''}`}>{name(id)}</span>)}</div>
-    {mine
-      ? <div className="mono-bid-row">
+    {mine ? <>
+      <div className="mono-bid-row">
         {steps.map((amount) => <button key={amount} className="primary-button" disabled={busy || amount > me!.money} onClick={() => onBid(amount)}>{money(amount)}</button>)}
         <button className="secondary-button" disabled={busy} onClick={onPass}>ӨНЖИХ</button>
       </div>
-      : <p className="mono-hint"><b>{name(bidderId)}</b> үнэ хаяж байна. {me && !me.bankrupt && !auction.bidders.includes(me.id) ? 'Та энэ дуудлагаас гарсан.' : 'Өнжвөл дахин оролцохгүй.'}</p>}
+      <form className="mono-amount-row" onSubmit={(event) => { event.preventDefault(); if (typed && !typedProblem) { onBid(typedAmount); setTyped(''); } }}>
+        <label><input type="text" inputMode="numeric" pattern="[0-9]*" value={typed} placeholder={`Дүн бичих (${minimum}₮+)`} onChange={(event) => setTyped(digits(event.target.value))} aria-label="Үнийн санал" /><span>₮</span></label>
+        <button type="submit" className="primary-button" disabled={busy || !typed || Boolean(typedProblem)}><Gavel size={13} /> ХАЯХ</button>
+      </form>
+      {typedProblem && <p className="mono-hint mono-amount-problem">{typedProblem}</p>}
+    </> : <p className="mono-hint"><b>{name(bidderId)}</b> үнэ хаяж байна. {me && !me.bankrupt && !auction.bidders.includes(me.id) ? 'Та энэ дуудлагаас гарсан.' : 'Өнжвөл дахин оролцохгүй.'}</p>}
   </div>;
 }
 
@@ -360,6 +426,9 @@ function TradeSide({ title, owner, game, picked, onPick, cash, onCash, cards, on
   const limit = owner?.money ?? 0;
   const held = owner?.jailCards?.length ?? 0;
   const setCash = (value: number) => onCash(Math.max(0, Math.min(limit, Math.round(Number.isFinite(value) ? value : 0))));
+  // What is typed is kept as text, so the field can be emptied and retyped without a stuck "0".
+  const [typed, setTyped] = useState(cash ? String(cash) : '');
+  useEffect(() => { setTyped((current) => Number(current || 0) === cash ? current : cash ? String(cash) : ''); }, [cash]);
   return <div className="mono-trade-side">
     <h4>{title}<small>{owner ? `${money(owner.money)} бэлэн` : ''}</small></h4>
     <div className="mono-trade-deeds">
@@ -378,7 +447,7 @@ function TradeSide({ title, owner, game, picked, onPick, cash, onCash, cards, on
     </div>
     <div className="mono-trade-cash">
       <button type="button" onClick={() => setCash(cash - 50)} disabled={cash <= 0} aria-label="50₮ хасах"><Minus size={13} /></button>
-      <label><input type="number" inputMode="numeric" min={0} max={limit} step={10} value={cash} onChange={(event) => setCash(Number(event.target.value))} aria-label={`${title}: мөнгө`} />₮</label>
+      <label><input type="text" inputMode="numeric" pattern="[0-9]*" value={typed} placeholder="0" onChange={(event) => { const value = digits(event.target.value); setTyped(value); setCash(Number(value || 0)); }} aria-label={`${title}: мөнгө`} />₮</label>
       <button type="button" onClick={() => setCash(cash + 50)} disabled={cash >= limit} aria-label="50₮ нэмэх"><Plus size={13} /></button>
     </div>
   </div>;

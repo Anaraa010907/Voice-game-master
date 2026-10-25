@@ -75,7 +75,17 @@ export const JAIL_FINE = 50;
 export const JAIL_TILE = 8;
 /** Rolls a jailed player gets to throw doubles; after the last miss the fine is paid automatically. */
 export const JAIL_TERM = 3;
+/** Default round limit; the host can pick another, or play until one player is left. */
 export const MAX_ROUNDS = 20;
+export const ROUND_CHOICES = [10, 15, 20, 30] as const;
+/** Room rules for the board game. `rounds: null` plays on until everyone else is bankrupt. */
+export type MonopolySettings = { rounds: number | null };
+export const DEFAULT_MONOPOLY_SETTINGS: MonopolySettings = { rounds: MAX_ROUNDS };
+export function sanitizeMonopolySettings(input: unknown): MonopolySettings {
+  const rounds = (input && typeof input === 'object' ? (input as { rounds?: unknown }).rounds : undefined);
+  if (rounds === null) return { rounds: null };
+  return { rounds: (ROUND_CHOICES as readonly number[]).includes(Number(rounds)) ? Number(rounds) : MAX_ROUNDS };
+}
 export const MIN_MONOPOLY_PLAYERS = 2;
 /** The bank's building supply. A ger camp hands its four houses back to the bank. */
 export const MAX_HOUSES = 32;
@@ -215,7 +225,14 @@ export type MonopolyState = {
   offersThisTurn?: number;
   /** Draw piles (card indexes). A drawn card goes to the bottom; a jail card stays with its holder. */
   decks?: Record<DeckName, number[]>;
+  /** Round limit for this match; null = until one player is left. Older saves: MAX_ROUNDS. */
+  maxRounds?: number | null;
 };
+
+/** The round limit in force, or null when the game only ends by bankruptcy. */
+export function roundLimit(state: Pick<MonopolyState, 'maxRounds'>): number | null {
+  return state.maxRounds === undefined ? MAX_ROUNDS : state.maxRounds;
+}
 
 export type MonopolyAction =
   | { type: 'roll' }
@@ -286,7 +303,7 @@ function freshDecks(players: MonopolyPlayer[], random: RandomSource): Record<Dec
   return { chance: pile('chance'), chest: pile('chest') };
 }
 
-export function createMonopolyGame(players: Array<Pick<MonopolyPlayer, 'id' | 'name' | 'initials' | 'color' | 'avatarUrl' | 'host' | 'bot'>>, random: RandomSource = Math.random): MonopolyState {
+export function createMonopolyGame(players: Array<Pick<MonopolyPlayer, 'id' | 'name' | 'initials' | 'color' | 'avatarUrl' | 'host' | 'bot'>>, random: RandomSource = Math.random, settings: MonopolySettings = DEFAULT_MONOPOLY_SETTINGS): MonopolyState {
   const order = shuffle(players.map((entry) => entry.id), random);
   const first = players.find((entry) => entry.id === order[0])!;
   const seated = players.map((entry) => ({ ...entry, avatarUrl: entry.avatarUrl ?? null, money: START_MONEY, position: 0, inJail: false, jailTries: 0, bankrupt: false, jailCards: [] as DeckName[] }));
@@ -308,6 +325,7 @@ export function createMonopolyGame(players: Array<Pick<MonopolyPlayer, 'id' | 'n
     trade: null,
     offersThisTurn: 0,
     decks: freshDecks(seated, random),
+    maxRounds: sanitizeMonopolySettings(settings).rounds,
   };
 }
 
@@ -445,7 +463,7 @@ function checkWinner(state: MonopolyState): MonopolyState {
 function finishByRounds(state: MonopolyState): MonopolyState {
   const ranked = state.players.filter((entry) => !entry.bankrupt).sort((left, right) => netWorth(state, right.id) - netWorth(state, left.id));
   const champion = ranked[0];
-  return finish(state, champion?.id ?? null, `${MAX_ROUNDS} тойрог дууслаа. Хамгийн их хөрөнгөтэй ${champion?.name ?? ''} яллаа!`);
+  return finish(state, champion?.id ?? null, `${state.round} тойрог дууслаа. Хамгийн их хөрөнгөтэй ${champion?.name ?? ''} яллаа!`);
 }
 
 function sendToJail(state: MonopolyState, id: number): MonopolyState {
@@ -550,7 +568,8 @@ function nextTurn(state: MonopolyState): MonopolyState {
     if (!player(state, state.order[turn]).bankrupt) break;
   }
   const reset = { auction: null, trade: null, offersThisTurn: 0 };
-  if (round > MAX_ROUNDS) return finishByRounds({ ...state, ...reset, round: MAX_ROUNDS });
+  const limit = roundLimit(state);
+  if (limit !== null && round > limit) return finishByRounds({ ...state, ...reset, round: limit });
   const next = player(state, state.order[turn]);
   return log({ ...state, ...reset, turn, round, phase: 'roll', dice: null, doublesInRow: 0, rollAgain: false, card: null }, `${next.name}-ийн ээлж.`);
 }
@@ -813,14 +832,15 @@ function applyAction(state: MonopolyState, actorId: number, action: MonopolyActi
       return { state: nextTurn(state) };
     }
     case 'pay-jail': {
-      if (!actor.inJail || state.phase !== 'roll') return { state, error: 'Одоо торгууль төлөх шаардлагагүй.' };
+      // Before rolling, or straight away at the end of the turn that put you in jail.
+      if (!actor.inJail || (state.phase !== 'roll' && state.phase !== 'end')) return { state, error: 'Одоо торгууль төлөх шаардлагагүй.' };
       if (actor.money < JAIL_FINE) return { state, error: 'Мөнгө хүрэлцэхгүй байна.' };
       const next = withPlayer(state, actorId, (value) => ({ ...value, money: value.money - JAIL_FINE, inJail: false, jailTries: 0 }));
       return { state: log(next, `${actor.name} ${money(JAIL_FINE)} төлж шоронгоос гарлаа.`) };
     }
     case 'use-card': {
       const cards = actor.jailCards ?? [];
-      if (!actor.inJail || state.phase !== 'roll') return { state, error: 'Одоо шоронгийн карт хэрэглэх шаардлагагүй.' };
+      if (!actor.inJail || (state.phase !== 'roll' && state.phase !== 'end')) return { state, error: 'Одоо шоронгийн карт хэрэглэх шаардлагагүй.' };
       if (!cards.length) return { state, error: 'Танд шоронгоос гарах карт алга.' };
       const spent = cards[cards.length - 1];
       let next = withPlayer(state, actorId, (value) => ({ ...value, inJail: false, jailTries: 0, jailCards: cards.slice(0, -1) }));
@@ -1024,7 +1044,7 @@ export function runMonopolySelfTests() {
   state = { ...state, decks: { ...state.decks!, chance: [JAIL_FREE_CARD.chance, ...state.decks!.chance.filter((index) => index !== JAIL_FREE_CARD.chance)] } };
   state = act(state, lucky, { type: 'roll' }, sequence([dieValue(1), dieValue(1)]));
   require(player(state, lucky).jailCards?.length === 1 && state.decks!.chance.length === 15, 'Drawing the jail card keeps it in hand.');
-  state = withPlayer({ ...state, phase: 'roll', rollAgain: false }, lucky, (value) => ({ ...value, inJail: true, position: JAIL_TILE }));
+  state = withPlayer({ ...state, phase: 'end', rollAgain: false }, lucky, (value) => ({ ...value, inJail: true, position: JAIL_TILE }));
   state = act(state, lucky, { type: 'use-card' });
   require(!player(state, lucky).inJail && player(state, lucky).jailCards?.length === 0 && state.decks!.chance[state.decks!.chance.length - 1] === JAIL_FREE_CARD.chance, 'Using the card frees the player and returns it to the deck.');
 
@@ -1064,10 +1084,17 @@ export function runMonopolySelfTests() {
   require(state.tiles[6].owner === b && state.tiles[6].mortgaged, 'Bankrupt assets (already mortgaged) go to the creditor.');
   require(player(state, b).money === START_MONEY + 60, 'The creditor receives all remaining cash.');
 
-  // Timeouts never leave the game stuck.
+  // Timeouts never leave the game stuck, and the host's round limit ends the game.
   state = createMonopolyGame(people, () => 0.99);
   for (let step = 0; step < 600 && state.phase !== 'finished'; step += 1) state = autoPlay(state, Math.random);
   require(state.round <= MAX_ROUNDS, 'Automatic play keeps the round counter within the limit.');
+  state = createMonopolyGame(people, () => 0.99, sanitizeMonopolySettings({ rounds: 10 }));
+  for (let step = 0; step < 600 && state.phase !== 'finished'; step += 1) state = autoPlay(state, Math.random);
+  require(state.phase === 'finished' && state.round === 10 && /^10 тойрог/.test(state.log[state.log.length - 1]), 'A 10-round game ends after round 10.');
+  state = createMonopolyGame(people, () => 0.99, sanitizeMonopolySettings({ rounds: null }));
+  for (let step = 0; step < 300; step += 1) state = autoPlay(state, Math.random);
+  require(state.phase !== 'finished' && roundLimit(state) === null, 'Without a round limit the game goes on until someone wins.');
+  require(sanitizeMonopolySettings({ rounds: 7 }).rounds === MAX_ROUNDS && roundLimit({}) === MAX_ROUNDS, 'Unknown limits and old games use the default.');
 
   // Leaving players are removed cleanly, also in the middle of an auction or a trade.
   state = createMonopolyGame(people, () => 0.99);
