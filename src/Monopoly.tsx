@@ -137,9 +137,10 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
         {BOARD.map((tile) => {
           const tileState = game.tiles[tile.id];
           const owner = playerById(tileState.owner);
-          const here = game.players.filter((entry) => !entry.bankrupt && entry.position === tile.id);
+          // Whoever's turn it is sits on top of the stack.
+          const here = game.players.filter((entry) => !entry.bankrupt && entry.position === tile.id).sort((left, right) => Number(left.id === turnId) - Number(right.id === turnId));
           return <button type="button" key={tile.id} style={gridCell(tile.id)}
-            className={`mono-tile is-${side(tile.id)} kind-${tile.kind} ${tile.group ? `group-${tile.group}` : ''} ${owner ? `owned owner-${owner.color}` : ''} ${tileState.mortgaged ? 'is-mortgaged' : ''} ${selected === tile.id ? 'is-selected' : ''} ${current.position === tile.id ? 'is-active' : ''} ${auction?.tile === tile.id ? 'is-auction' : ''} ${tradedTiles.includes(tile.id) ? 'is-traded' : ''}`}
+            className={`mono-tile is-${side(tile.id)} kind-${tile.kind} ${tile.group ? `group-${tile.group}` : ''} ${owner ? `owned owner-${owner.color}` : ''} ${tileState.mortgaged ? 'is-mortgaged' : ''} ${selected === tile.id ? 'is-selected' : ''} ${current.position === tile.id ? 'is-active' : ''} ${auction?.tile === tile.id ? 'is-auction' : ''} ${tradedTiles.includes(tile.id) ? 'is-traded' : ''} ${here.length ? 'has-tokens' : ''}`}
             onClick={() => setSelected(selected === tile.id ? null : tile.id)} aria-label={tile.name}>
             {tile.group && <span className="mono-tile-band" />}
             <span className="mono-tile-body">
@@ -149,25 +150,27 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
               {tile.kind === 'tax' && <span className="mono-tile-price">−{money(tile.rent!)}</span>}
             </span>
             {tileState.houses > 0 && <span className="mono-houses" aria-label={`${tileState.houses} барилга`}>{tileState.houses === 5 ? <Building2 size={10} /> : Array.from({ length: tileState.houses }, (_, index) => <i key={index} />)}</span>}
-            {here.length > 0 && <span className="mono-tokens">{here.map((entry) => <span key={entry.id} className={`mono-token avatar-${entry.color} ${entry.id === turnId ? 'is-turn' : ''}`} title={entry.name}>{entry.initials.slice(0, 1)}</span>)}</span>}
+            {here.length > 0 && <span className={`mono-tokens count-${Math.min(here.length, 4)}`}>{here.map((entry) => <Token key={entry.id} player={entry} isTurn={entry.id === turnId && game.phase !== 'finished'} isMe={entry.id === mySeat} />)}</span>}
           </button>;
         })}
 
         <div className="mono-center">
           {detail ? <TileDetail tile={detail} game={game} me={me} myTurn={myMove} busy={busy} onClose={() => setSelected(null)} onAction={(move) => void send(move, { tile: detail.id })} /> : <>
-            <div className="mono-brand"><b>МОНГОЛ</b><span>МОНОПОЛЬ</span></div>
-            <div className="mono-dice-tray" aria-label={game.dice ? `${game.dice[0]} ба ${game.dice[1]}` : 'Шоо'}>
-              <div className="mono-dice">
-                {(game.dice ?? [0, 0]).map((value, index) => <Die key={`${game.log.length}-${index}-${value}`} value={value} index={index} />)}
+            <div className="mono-brand is-watermark" aria-hidden="true"><b>МОНГОЛ</b><span>МОНОПОЛЬ</span></div>
+            <div className="mono-center-top">
+              <div className="mono-dice-tray" aria-label={game.dice ? `${game.dice[0]} ба ${game.dice[1]}` : 'Шоо'}>
+                <div className="mono-dice">
+                  {(game.dice ?? [0, 0]).map((value, index) => <Die key={`${game.log.length}-${index}-${value}`} value={value} index={index} />)}
+                </div>
+                {game.dice && <span className="mono-dice-total">{game.dice[0] + game.dice[1]}</span>}
               </div>
-              {game.dice && <span className="mono-dice-total">{game.dice[0] + game.dice[1]}</span>}
+              {myMove && game.phase === 'roll' && <button type="button" className="mono-roll-button" disabled={busy} onClick={() => void send('roll')}><Dices size={16} /> {me!.inJail ? 'ХОС ХАЯЖ ГАРАХ' : 'ШОО ХАЯХ'}</button>}
+              {!myMove && game.phase !== 'finished' && <p className="mono-center-turn">{centerStatus}</p>}
             </div>
-            {myMove && game.phase === 'roll' && <button type="button" className="mono-roll-button" disabled={busy} onClick={() => void send('roll')}><Dices size={16} /> {me!.inJail ? 'ХОС ХАЯЖ ГАРАХ' : 'ШОО ХАЯХ'}</button>}
-            {!myMove && game.phase !== 'finished' && <p className="mono-center-turn">{centerStatus}</p>}
             {auction
               ? <div className="mono-card is-auction"><b><Gavel size={12} /> Дуудлага худалдаа</b><span>{BOARD[auction.tile].name} · {auction.highBid ? `${money(auction.highBid)} — ${playerById(auction.highBidder)?.name ?? ''}` : 'санал алга'}</span></div>
               : game.card && <div className={`mono-card deck-${game.card.deck ?? 'chance'}`}><b>{game.card.title}</b><span>{game.card.text}</span></div>}
-            <div className="mono-log">{game.log.slice(-3).map((line, index) => <p key={`${index}-${line}`}>{line}</p>)}</div>
+            <MonoFeed game={game} mySeat={mySeat} />
           </>}
         </div>
       </section>
@@ -204,6 +207,36 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
   </VoiceChatProvider>;
 }
 
+/** A player's piece on the board: their profile picture, or coloured initials, ringed in their colour. */
+function Token({ player, isTurn, isMe }: { player: MonopolyPlayer; isTurn: boolean; isMe: boolean }) {
+  return <span className={`mono-token avatar-${player.color} owner-${player.color} ${player.avatarUrl ? 'has-photo' : ''} ${isTurn ? 'is-turn' : ''} ${isMe ? 'is-me' : ''}`}
+    style={player.avatarUrl ? { backgroundImage: `url("${player.avatarUrl}")` } : undefined} title={player.name} aria-label={player.name}>
+    {!player.avatarUrl && player.initials.slice(0, 1)}
+  </span>;
+}
+
+/** Everything that happened, as a chat: each line beside the player who did it, newest at the bottom. */
+function MonoFeed({ game, mySeat }: { game: MonopolyState; mySeat: number | null }) {
+  const list = useRef<HTMLOListElement>(null);
+  const byLongestName = useMemo(() => [...game.players].sort((left, right) => right.name.length - left.name.length), [game.players]);
+  const latest = game.log[game.log.length - 1];
+  useEffect(() => {
+    const element = list.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [game.log.length, latest]);
+  return <ol className="mono-feed" ref={list} aria-label="Тоглолтын явц" aria-live="polite">
+    {game.log.map((line, index) => {
+      const who = byLongestName.find((entry) => line.startsWith(entry.name));
+      const turnLine = Boolean(who) && /-ийн ээлж\.$/.test(line);
+      const kind = turnLine ? 'is-turn-line' : who ? (who.id === mySeat ? 'is-mine' : 'from-player') : 'is-system';
+      return <li key={`${index}-${line}`} className={`${kind} ${index === game.log.length - 1 ? 'is-latest' : ''}`}>
+        {who && !turnLine && <Avatar name={who.name} color={who.color} url={who.avatarUrl} initials={who.initials} />}
+        <span className="mono-feed-text">{who ? <><b>{who.name}</b>{line.slice(who.name.length)}</> : line}</span>
+      </li>;
+    })}
+  </ol>;
+}
+
 function Die({ value, index }: { value: number; index: number }) {
   const pips: Record<number, number[]> = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
   return <span className={`mono-die ${value ? 'is-rolled' : 'is-empty'} die-${index}`}>{Array.from({ length: 9 }, (_, cell) => <i key={cell} className={(pips[value] ?? []).includes(cell + 1) ? 'on' : ''} />)}</span>;
@@ -213,7 +246,7 @@ function PlayerRow({ entry, game, isTurn, isMe }: { entry: MonopolyPlayer; game:
   const owned = game.tiles.filter((tileState) => tileState.owner === entry.id).length;
   return <div className={`mono-player ${isTurn ? 'is-turn' : ''} ${entry.bankrupt ? 'is-bankrupt' : ''}`}>
     <Avatar name={entry.name} color={entry.color} url={entry.avatarUrl} initials={entry.initials}>{entry.host && <i><Crown size={9} /></i>}<VoiceAvatarIndicator name={entry.name} seat={entry.id} /></Avatar>
-    <span className="mono-player-copy"><b>{entry.name}{isMe && <small>ЧИ</small>}</b><span>{entry.bankrupt ? 'ДАМПУУРСАН' : entry.inJail ? `ШОРОНД · ${owned} газар` : `${owned} газар`}{!entry.bankrupt && (entry.jailCards?.length ?? 0) > 0 && <i className="mono-jail-card" title="Шоронгоос гарах карт"><KeyRound size={9} />{entry.jailCards!.length}</i>}</span></span>
+    <span className="mono-player-copy"><b>{entry.name}{isMe && <small>ЧИ</small>}</b><span>{entry.bankrupt ? 'ДАМПУУРСАН' : `${entry.inJail ? 'ШОРОНД' : BOARD[entry.position].short} · ${owned} газар`}{!entry.bankrupt && (entry.jailCards?.length ?? 0) > 0 && <i className="mono-jail-card" title="Шоронгоос гарах карт"><KeyRound size={9} />{entry.jailCards!.length}</i>}</span></span>
     <span className="mono-player-money">{entry.bankrupt ? '—' : money(entry.money)}</span>
   </div>;
 }
