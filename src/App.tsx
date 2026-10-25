@@ -17,6 +17,7 @@ import Avatar from './Avatar';
 import { callGame, useRoom, type ListedRoom, type NoticeTone, type NotifyFn, type RoomSeat } from './multiplayer';
 import { GAMES, type GameType } from './games';
 import MonopolyScreen from './Monopoly';
+import { MafiaRulesCard, MafiaRulesEditor } from './MafiaRules';
 import { motionReduced, setMotionReduced } from './motion';
 import { musicEnabled, setMusicEnabled, setSfxEnabled, sfxEnabled, startMusic, wakeMusic } from './sfx';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
@@ -441,6 +442,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
 }) {
   const { room, seats, loaded, missing, error, reload } = useRoom(roomCode);
   const [busy, setBusy] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const mine = seats.find((seat) => seat.user_id === userId);
 
   useEffect(() => {
@@ -456,8 +458,10 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
     try {
       await callGame(action, { roomCode, ...body });
       await reload();
+      return true;
     } catch (cause) {
       onNotice(cause instanceof Error ? cause.message : 'Алдаа гарлаа.', 'error');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -506,6 +510,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
               ? <button type="button" className="invite-slot add-bot-slot" key={`slot-${index}`} disabled={busy} onClick={() => run('bot-add')}><Bot size={20} /><small>БОТ НЭМЭХ</small></button>
               : <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>СУЛ СУУДАЛ</small></div>)}
           </div>
+          {(room.game_type ?? 'mafia') === 'mafia' && <MafiaRulesCard settings={room.settings} players={seats.length} isHost={isHost} busy={busy} onEdit={() => setRulesOpen(true)} />}
           <div className="lobby-bottom">
             <div className="lobby-hint"><LockKeyhole size={14} /><span>{isHost ? 'ТА ӨРӨӨНИЙ ЭЗЭН' : 'ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА'} <b>•</b> {hint}</span></div>
             <div className="lobby-actions">
@@ -515,6 +520,8 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
             </div>
           </div>
         </div>
+        {rulesOpen && isHost && <MafiaRulesEditor initial={room.settings} players={seats.length} busy={busy}
+          onClose={() => setRulesOpen(false)} onSave={(settings) => { void run('settings', { settings }).then((saved) => { if (saved) setRulesOpen(false); }); }} />}
       </div>
     </VoiceChatProvider>
   );

@@ -4,23 +4,33 @@
  * Pure TypeScript with no imports, so the same file runs in the browser (Vite), in Node tests
  * and in Supabase Edge Functions (Deno). The server is the only place that mutates a real game;
  * clients only ever see the public projection and their own private slice.
+ *
+ * The Don, Bodyguard and Jester roles, the room modes (classic / hard / custom) and the
+ * "everyone has seen their role" ready check follow MAFIA by Sattorov Alixon (MIT licence),
+ * fitted to this game's trial, informants and Old Lady rules.
  */
 
 export type RoleName =
   | 'Mafia'
+  | 'Don'
   | 'Doctor'
   | 'Detective'
+  | 'Bodyguard'
   | 'Good Informant'
   | 'Bad Informant'
   | 'Old Lady with Shotgun'
+  | 'Jester'
   | 'Citizen';
 
 export type Team = 'town' | 'mafia' | 'wildcard';
 
 export const roleTeams: Record<RoleName, Team> = {
   Mafia: 'mafia',
+  Don: 'mafia',
   Doctor: 'town',
   Detective: 'town',
+  Bodyguard: 'town',
+  Jester: 'wildcard',
   'Good Informant': 'town',
   'Bad Informant': 'mafia',
   'Old Lady with Shotgun': 'town',
@@ -34,13 +44,42 @@ export type VoteChoice = number | 'skip' | null;
 export type Verdict = 'guilty' | 'innocent';
 /** What happened each Night and Day, shown to everyone once the game is over. */
 export type HistoryEntry =
-  | { kind: 'night'; round: number; mafiaTargetId: number | null; outcome: 'killed' | 'protected' | 'shotgun' | 'none'; eliminatedId: number | null;
-      protectedIds: number[]; investigations: Array<{ detectiveId: number; targetId: number; mafia: boolean }> }
-  | { kind: 'day'; round: number; accusedId: number | null; guilty: number | null; innocent: number | null; eliminatedId: number | null };
+  | { kind: 'night'; round: number; mafiaTargetId: number | null; outcome: 'killed' | 'protected' | 'guarded' | 'shotgun' | 'none'; eliminatedId: number | null;
+      protectedIds: number[]; guardIds?: number[]; investigations: Array<{ detectiveId: number; targetId: number; mafia: boolean }> }
+  | { kind: 'day'; round: number; accusedId: number | null; guilty: number | null; innocent: number | null; eliminatedId: number | null; jester?: boolean };
 /** A nominated player defends themselves, then the table decides: guilty eliminates, innocent spares. */
 export type Trial = { accusedId: number; nominationVotes: number; verdicts: Record<number, Verdict> };
-export type WinningTeam = 'Citizens' | 'Mafia' | null;
-export type NightRole = 'Mafia' | 'Doctor' | 'Detective';
+export type WinningTeam = 'Citizens' | 'Mafia' | 'Jester' | null;
+export type NightRole = 'Mafia' | 'Doctor' | 'Detective' | 'Bodyguard';
+
+/** Room rules the host picks in the lobby. Classic and Hard are presets; Custom unlocks every switch. */
+export type GameMode = 'classic' | 'hard' | 'custom';
+export type OptionalRole = 'don' | 'bodyguard' | 'jester' | 'oldLady' | 'informants';
+export type DiscussionLength = 'short' | 'normal' | 'long';
+export type MafiaSettings = {
+  mode: GameMode;
+  /** Optional roles that may be dealt (each still needs a big enough table). */
+  roles: Record<OptionalRole, boolean>;
+  /** A convicted player's role is shown to the table. */
+  revealOnConviction: boolean;
+  /** Vote counts are shown, but not who voted for whom. */
+  anonymousVotes: boolean;
+  discussion: DiscussionLength;
+};
+export const OPTIONAL_ROLES: OptionalRole[] = ['don', 'bodyguard', 'jester', 'oldLady', 'informants'];
+const ALL_ROLES_ON: Record<OptionalRole, boolean> = { don: true, bodyguard: true, jester: true, oldLady: true, informants: true };
+export const DEFAULT_MAFIA_SETTINGS: MafiaSettings = { mode: 'classic', roles: ALL_ROLES_ON, revealOnConviction: true, anonymousVotes: false, discussion: 'normal' };
+
+/** Cleans settings from the client or an older room. Classic and Hard fix every rule except the discussion length. */
+export function sanitizeMafiaSettings(input: unknown): MafiaSettings {
+  const raw = (input && typeof input === 'object' ? input : {}) as Partial<MafiaSettings>;
+  const mode: GameMode = raw.mode === 'hard' || raw.mode === 'custom' ? raw.mode : 'classic';
+  const discussion: DiscussionLength = raw.discussion === 'short' || raw.discussion === 'long' ? raw.discussion : 'normal';
+  if (mode === 'classic') return { ...DEFAULT_MAFIA_SETTINGS, discussion };
+  if (mode === 'hard') return { mode, roles: ALL_ROLES_ON, revealOnConviction: false, anonymousVotes: true, discussion };
+  const roles = Object.fromEntries(OPTIONAL_ROLES.map((role) => [role, raw.roles?.[role] !== false])) as Record<OptionalRole, boolean>;
+  return { mode, roles, revealOnConviction: raw.revealOnConviction !== false, anonymousVotes: raw.anonymousVotes === true, discussion };
+}
 
 export type PublicGamePlayer = Pick<EnginePlayer, 'id' | 'name' | 'initials' | 'color' | 'host' | 'avatarUrl' | 'bot'> & {
   alive: boolean;
@@ -91,6 +130,10 @@ export type GameEngineState = {
   trial: Trial | null;
   /** Older saved games may not have it yet. */
   history?: HistoryEntry[];
+  /** Room rules for this match (older saved games: classic). */
+  settings?: MafiaSettings;
+  /** Role Reveal: players who tapped "ready". The Night starts once every living person has. */
+  readyIds?: number[];
   winner: WinningTeam;
 };
 
@@ -115,6 +158,16 @@ export function isMafiaAligned(role: RoleName): boolean {
   return roleTeams[role] === 'mafia';
 }
 
+/** The Mafia proper: the members (and their Don) who know each other and attack together. */
+export function isMafiaMember(role: RoleName): boolean {
+  return role === 'Mafia' || role === 'Don';
+}
+
+/** What the Detective is told. The Don passes as innocent. */
+function appearsMafia(role: RoleName) {
+  return isMafiaAligned(role) && role !== 'Don';
+}
+
 function alignmentSentence(name: string, mafiaAligned: boolean) {
   return `${name} is ${mafiaAligned ? 'aligned with the Mafia' : 'not aligned with the Mafia'}.`;
 }
@@ -127,54 +180,66 @@ export function nightRoleOf(state: Pick<GameEngineState, 'publicPlayers' | 'priv
   const player = state.publicPlayers.find((candidate) => candidate.id === playerId);
   const secret = state.privatePlayers[playerId];
   if (!player?.alive || !secret) return null;
-  if (secret.role === 'Mafia' || secret.role === 'Doctor' || secret.role === 'Detective') return secret.role;
+  if (isMafiaMember(secret.role)) return 'Mafia';
+  if (secret.role === 'Doctor' || secret.role === 'Detective' || secret.role === 'Bodyguard') return secret.role;
   if (secret.role === 'Bad Informant') {
-    const mafiaLeft = state.publicPlayers.some((candidate) => candidate.alive && state.privatePlayers[candidate.id].role === 'Mafia');
+    const mafiaLeft = state.publicPlayers.some((candidate) => candidate.alive && isMafiaMember(state.privatePlayers[candidate.id].role));
     if (!mafiaLeft) return 'Mafia';
   }
   return null;
 }
 
-/** The roles dealt for a table of this size, before shuffling. */
-export function roleComposition(playerCount: number): RoleName[] {
-  const pool: RoleName[] = ['Mafia', 'Doctor', 'Detective'];
+/**
+ * The roles dealt for a table of this size, before shuffling. About a third of the table is on the
+ * Mafia side. Optional roles join once the table is big enough for them not to decide the game:
+ * Classic and Hard add the Don and the Jester at 10 players and the Bodyguard at 12; Custom lets
+ * the host switch each one on or off and brings them in earlier.
+ */
+export function roleComposition(playerCount: number, settings: MafiaSettings = DEFAULT_MAFIA_SETTINGS): RoleName[] {
+  const custom = settings.mode === 'custom';
+  const allowed = settings.roles;
   const mafiaQuota = Math.max(1, Math.floor((playerCount - 1) / 3));
-  let mafiaCount = 1;
-  if (playerCount >= 6) pool.push('Old Lady with Shotgun');
-  if (playerCount >= 7) {
-    pool.push('Bad Informant');
-    mafiaCount += 1;
-  }
-  // The Good Informant knows every Mafia-aligned player. At small tables (one or two Mafia) that
-  // decides the game on day one, so the role only joins tables of eight or more.
-  if (playerCount >= 8) pool.push('Good Informant');
-  while (mafiaCount < mafiaQuota) {
-    pool.push('Mafia');
-    mafiaCount += 1;
-  }
+  const mafiaSide: RoleName[] = ['Mafia'];
+  if (allowed.informants && playerCount >= 7) mafiaSide.push('Bad Informant');
+  while (mafiaSide.length < mafiaQuota) mafiaSide.push('Mafia');
+  // The Don leads other Mafia members; he never plays alone.
+  if (allowed.don && playerCount >= (custom ? 6 : 10) && mafiaSide.filter((role) => role === 'Mafia').length >= 2) mafiaSide[0] = 'Don';
+
+  const special: RoleName[] = ['Doctor', 'Detective'];
+  if (allowed.oldLady && playerCount >= 6) special.push('Old Lady with Shotgun');
+  // The Good Informant knows every Mafia member. At small tables (one or two Mafia) that decides
+  // the game on day one, so the role only joins tables of eight or more.
+  if (allowed.informants && playerCount >= 8) special.push('Good Informant');
+  if (allowed.jester && playerCount >= (custom ? 7 : 10)) special.push('Jester');
+  if (allowed.bodyguard && playerCount >= (custom ? 8 : 12)) special.push('Bodyguard');
+  while (mafiaSide.length + special.length > playerCount && special.length > 2) special.pop();
+
+  const pool: RoleName[] = [mafiaSide[0], ...special.slice(0, 2), ...special.slice(2, 3), ...mafiaSide.slice(1), ...special.slice(3)];
   while (pool.length < playerCount) pool.push('Citizen');
-  return pool.slice(0, Math.max(playerCount, pool.length));
+  return pool;
 }
 
 export function createInitialGame(
   players: EnginePlayer[],
   assignments?: Partial<Record<number, RoleName>>,
   random: RandomSource = defaultRandom,
+  settings: MafiaSettings = DEFAULT_MAFIA_SETTINGS,
 ): GameEngineState {
   if (new Set(players.map((player) => player.id)).size !== players.length) throw new Error('Player IDs must be unique.');
-  const shuffled = shuffle(roleComposition(players.length), random);
+  const rules = sanitizeMafiaSettings(settings);
+  const shuffled = shuffle(roleComposition(players.length, rules), random);
   const roleById = Object.fromEntries(players.map((player, index) => [player.id, assignments?.[player.id] ?? shuffled[index]])) as Record<number, RoleName>;
-  const mafiaIds = players.filter((other) => isMafiaAligned(roleById[other.id])).map((other) => other.id);
+  const mafiaIds = players.filter((other) => isMafiaMember(roleById[other.id])).map((other) => other.id);
   const privatePlayers = Object.fromEntries(players.map((player) => {
     const role = roleById[player.id];
     return [player.id, {
       role,
       team: roleTeams[role],
       info: {
-        mafiaTeammateIds: role === 'Mafia' ? mafiaIds.filter((id) => id !== player.id && roleById[id] === 'Mafia') : [],
-        // "Мафийн гишүүд" on the card: the Mafia themselves. The Bad Informant stays hidden so the
+        mafiaTeammateIds: isMafiaMember(role) ? mafiaIds.filter((id) => id !== player.id) : [],
+        // "Мафийн гишүүд" on the card: the Mafia and their Don. The Bad Informant stays hidden so the
         // Mafia side keeps one unknown piece even after the Informant speaks up.
-        informantMafiaIds: role === 'Good Informant' ? mafiaIds.filter((id) => roleById[id] === 'Mafia') : [],
+        informantMafiaIds: role === 'Good Informant' ? mafiaIds : [],
         badInformantObjective: role === 'Bad Informant' ? 'Help the Mafia survive and mislead the citizens.' : '',
         investigationResult: '',
         protectionResult: '',
@@ -203,8 +268,24 @@ export function createInitialGame(
     runoffUsed: false,
     trial: null,
     history: [],
+    settings: rules,
+    readyIds: [],
     winner: null,
   };
+}
+
+/** Role Reveal: a player has read their card. Bots are always ready. */
+export function markRevealReady(state: GameEngineState, playerId: number): EngineResult {
+  if (state.phase !== 'Role Reveal') return { state, error: 'The Night has already begun.' };
+  if (!state.publicPlayers.some((player) => player.id === playerId && player.alive)) return { state, error: 'Eliminated players cannot act.' };
+  const ready = state.readyIds ?? [];
+  if (ready.includes(playerId)) return { state };
+  return { state: { ...state, readyIds: [...ready, playerId] } };
+}
+
+export function allRevealReady(state: GameEngineState): boolean {
+  const ready = state.readyIds ?? [];
+  return state.phase === 'Role Reveal' && state.publicPlayers.every((player) => !player.alive || player.bot || ready.includes(player.id));
 }
 
 export function getWinner(state: Pick<GameEngineState, 'publicPlayers' | 'privatePlayers'>): WinningTeam {
@@ -287,8 +368,9 @@ export function submitNightAction(state: GameEngineState, actorId: number, targe
   if (!nightRole) return { state, error: 'This role has no targeted night action.' };
   if (nightRole === 'Mafia' && isMafiaAligned(state.privatePlayers[targetId].role)) return { state, error: 'Mafia cannot target a Mafia-aligned player.' };
   if (nightRole === 'Detective' && actorId === targetId) return { state, error: 'Choose another living player to investigate.' };
+  if (nightRole === 'Bodyguard' && actorId === targetId) return { state, error: 'Choose another living player to guard.' };
   if (nightRole === 'Doctor' && secret.lastProtectedId === targetId) return { state, error: 'You cannot protect the same player two nights in a row.' };
-  const mafiaAligned = isMafiaAligned(state.privatePlayers[targetId].role);
+  const mafiaAligned = appearsMafia(state.privatePlayers[targetId].role);
   return {
     state: {
       ...state,
@@ -324,7 +406,13 @@ function selectedMafiaTarget(state: GameEngineState) {
       tally.set(action.targetId, (tally.get(action.targetId) ?? 0) + 1);
     }
   }
-  // Most Mafia votes wins; ties break toward the lowest seat. No votes (timeout) means no attack.
+  // The Don's word is final. Otherwise most Mafia votes wins; ties break toward the lowest seat.
+  // No votes (timeout) means no attack.
+  const don = livingMafia.find((player) => state.privatePlayers[player.id].role === 'Don');
+  const donPick = don ? state.privatePlayers[don.id].nightAction : null;
+  if (don && donPick?.submitted && donPick.targetId !== null && candidates.some((player) => player.id === donPick.targetId)) {
+    return { targetId: donPick.targetId, attackerId: don.id };
+  }
   const ranked = [...tally.entries()].sort((left, right) => right[1] - left[1] || left[0] - right[0]);
   const targetId = ranked[0]?.[0] ?? null;
   const voters = livingMafia.filter((player) => state.privatePlayers[player.id].nightAction.targetId === targetId);
@@ -347,10 +435,15 @@ export function resolveNight(state: GameEngineState, _random: RandomSource = def
     return action.submitted && action.targetId === target?.id;
   });
   const protectedTarget = Boolean(target && protectingDoctor);
+  const bodyguards = state.publicPlayers.filter((player) => nightRoleOf(state, player.id) === 'Bodyguard');
+  const guardingBodyguard = bodyguards.find((guard) => {
+    const action = state.privatePlayers[guard.id].nightAction;
+    return action.submitted && action.targetId === target?.id;
+  });
   let publicPlayers = state.publicPlayers;
   let report = 'No Mafia attack reached the neighborhood tonight.';
   let retaliationResolved = false;
-  let outcome: 'killed' | 'protected' | 'shotgun' | 'none' = 'none';
+  let outcome: 'killed' | 'protected' | 'guarded' | 'shotgun' | 'none' = 'none';
   let eliminatedId: number | null = null;
   const privatePlayers: Record<number, PrivateGamePlayer> = { ...state.privatePlayers };
 
@@ -359,6 +452,13 @@ export function resolveNight(state: GameEngineState, _random: RandomSource = def
     if (protectedTarget) {
       outcome = 'protected';
       report = 'A failed attack was reported before dawn. No one was eliminated.';
+    } else if (guardingBodyguard) {
+      // The Bodyguard steps in front of the attack and dies in the target's place. Like any night
+      // victim, their role stays secret.
+      outcome = 'guarded';
+      eliminatedId = guardingBodyguard.id;
+      publicPlayers = publicPlayers.map((player) => player.id === guardingBodyguard.id ? { ...player, alive: false } : player);
+      report = `${guardingBodyguard.name} was eliminated during the night.`;
     } else if (targetSecret.role === 'Old Lady with Shotgun' && !targetSecret.shotgunSpent) {
       // The shotgun fires once. She survives the first attack, but the Mafia now knows where she lives.
       const retaliator = state.publicPlayers
@@ -396,6 +496,11 @@ export function resolveNight(state: GameEngineState, _random: RandomSource = def
         : 'No attack required your protection tonight.';
     privatePlayers[doctor.id] = { ...doctorSecret, lastProtectedId: action.targetId, info: { ...doctorSecret.info, protectionResult: result } };
   }
+  for (const guard of bodyguards) {
+    const guardSecret = privatePlayers[guard.id];
+    if (!guardSecret.nightAction.submitted || guard.id === guardingBodyguard?.id) continue;
+    privatePlayers[guard.id] = { ...guardSecret, info: { ...guardSecret.info, protectionResult: 'No attack came for the player you guarded.' } };
+  }
 
   const livingCount = publicPlayers.filter((player) => player.alive).length;
   const morningReport = `${report} ${livingCount} players remain alive.`;
@@ -406,11 +511,13 @@ export function resolveNight(state: GameEngineState, _random: RandomSource = def
     outcome,
     eliminatedId,
     protectedIds: doctors.map((doctor) => state.privatePlayers[doctor.id].nightAction).filter((action) => action.submitted && action.targetId !== null).map((action) => action.targetId!),
+    guardIds: bodyguards.map((guard) => state.privatePlayers[guard.id].nightAction).filter((action) => action.submitted && action.targetId !== null).map((action) => action.targetId!),
+    // What each Detective was told (the Don shows as innocent).
     investigations: state.publicPlayers
       .filter((player) => nightRoleOf(state, player.id) === 'Detective' && state.privatePlayers[player.id].nightAction.submitted && state.privatePlayers[player.id].nightAction.targetId !== null)
       .map((player) => {
         const targetId = state.privatePlayers[player.id].nightAction.targetId!;
-        return { detectiveId: player.id, targetId, mafia: isMafiaAligned(state.privatePlayers[targetId].role) };
+        return { detectiveId: player.id, targetId, mafia: appearsMafia(state.privatePlayers[targetId].role) };
       }),
   };
   return {
@@ -579,8 +686,12 @@ export function resolveTrial(state: GameEngineState): EngineResult {
   const innocent = voters.filter((player) => trial.verdicts[player.id] === 'innocent').length;
   const accused = state.publicPlayers.find((player) => player.id === trial.accusedId);
   const convicted = Boolean(accused?.alive) && guilty > innocent;
+  const accusedRole = state.privatePlayers[trial.accusedId]?.role;
+  // The Jester wants exactly this: being voted out wins the game for them alone.
+  const jesterWins = convicted && accusedRole === 'Jester';
+  const reveal = jesterWins || (state.settings?.revealOnConviction ?? true);
   const publicPlayers = state.publicPlayers.map((player) => player.id === trial.accusedId && convicted
-    ? { ...player, alive: false, revealedRole: state.privatePlayers[player.id].role }
+    ? { ...player, alive: false, revealedRole: reveal ? state.privatePlayers[player.id].role : null }
     : player);
   const name = accused?.name ?? '?';
   const voteSummary = !accused?.alive
@@ -588,16 +699,17 @@ export function resolveTrial(state: GameEngineState): EngineResult {
     : convicted
       ? `${name} was found guilty (${guilty}–${innocent}) and eliminated.`
       : `${name} was acquitted (${guilty}–${innocent}). No one was eliminated.`;
-  const roleReveal = convicted ? `${name} was revealed as ${state.privatePlayers[trial.accusedId].role}.` : '';
+  const roleReveal = convicted && reveal ? `${name} was revealed as ${accusedRole}.` : '';
+  const jesterLine = jesterWins ? 'The Jester fooled the town and wins alone.' : '';
   return {
     state: {
       ...state,
       publicPlayers,
       voteSummary,
       votesRevealed: true,
-      history: [...(state.history ?? []), { kind: 'day', round: state.round, accusedId: trial.accusedId, guilty, innocent, eliminatedId: convicted ? trial.accusedId : null }],
-      winner: getWinner({ publicPlayers, privatePlayers: state.privatePlayers }),
-      publicEventLog: [...state.publicEventLog.slice(-3), voteSummary, ...(roleReveal ? [roleReveal] : [])],
+      history: [...(state.history ?? []), { kind: 'day', round: state.round, accusedId: trial.accusedId, guilty, innocent, eliminatedId: convicted ? trial.accusedId : null, ...(jesterWins ? { jester: true } : {}) }],
+      winner: jesterWins ? 'Jester' : getWinner({ publicPlayers, privatePlayers: state.privatePlayers }),
+      publicEventLog: [...state.publicEventLog.slice(-3), voteSummary, ...(roleReveal ? [roleReveal] : []), ...(jesterLine ? [jesterLine] : [])],
     },
   };
 }
@@ -615,10 +727,16 @@ export function removePlayer(state: GameEngineState, playerId: number): GameEngi
 /** What every player at the table may see. Roles stay hidden until the game ends. */
 export function publicView(state: GameEngineState) {
   const finished = state.phase === 'Results';
+  // Anonymous voting: the counts are public, who voted for whom is not (until the game ends).
+  const hideBallots = Boolean(state.settings?.anonymousVotes) && !finished;
   return {
     phase: state.phase,
     round: state.round,
-    players: state.publicPlayers,
+    players: hideBallots
+      ? state.publicPlayers.map((player) => ({ ...player, voteStatus: player.voteStatus === 'revealed' ? 'hidden' as const : player.voteStatus, voteTargetId: null }))
+      : state.publicPlayers,
+    settings: state.settings ?? DEFAULT_MAFIA_SETTINGS,
+    readyIds: state.phase === 'Role Reveal' ? state.readyIds ?? [] : [],
     morningReport: state.morningReport,
     publicEventLog: state.publicEventLog,
     voteCounts: state.votesRevealed || state.trial ? state.voteCounts : {},
@@ -661,6 +779,7 @@ export function privateView(state: GameEngineState, playerId: number) {
     lastProtectedId: secret.lastProtectedId,
     knownAlignment: secret.knownAlignment,
     shotgunSpent: secret.shotgunSpent,
+    readyForNight: (state.readyIds ?? []).includes(playerId),
     /** Night only, for the Mafia: which target each known teammate has locked (null = not yet). */
     teamTargets: state.phase === 'Night' && nightRoleOf(state, playerId) === 'Mafia'
       ? Object.fromEntries(secret.info.mafiaTeammateIds
@@ -832,6 +951,59 @@ export function runGameEngineSelfTests() {
   require(nightRoleOf(state, 3) === null, 'The Bad Informant has no attack while a Mafia member lives.');
   state = removePlayer(state, 2);
   require(nightRoleOf(state, 3) === 'Mafia' && state.publicEventLog[state.publicEventLog.length - 1].includes('left the table'), 'A leaving Mafia member hands the attack to the Bad Informant.');
+
+  // Optional roles join at the table sizes each mode allows; Custom can switch every one off.
+  for (let count = MIN_PLAYERS; count <= 12; count += 1) {
+    const classic = roleComposition(count);
+    require(classic.includes('Don') === count >= 10 && classic.includes('Jester') === count >= 10 && classic.includes('Bodyguard') === count >= 12, `Classic optional roles at ${count}.`);
+    require(roleComposition(count, sanitizeMafiaSettings({ mode: 'custom' })).length === count, `Custom composition fills ${count} seats.`);
+    const plain = roleComposition(count, sanitizeMafiaSettings({ mode: 'custom', roles: { don: false, bodyguard: false, jester: false, oldLady: false, informants: false } }));
+    require(plain.length === count && plain.every((role) => role === 'Mafia' || role === 'Doctor' || role === 'Detective' || role === 'Citizen'), `Custom can switch every optional role off (${count}).`);
+  }
+  require(sanitizeMafiaSettings({ mode: 'hard', anonymousVotes: false }).anonymousVotes && !sanitizeMafiaSettings({ mode: 'hard' }).revealOnConviction, 'Hard mode fixes its own rules.');
+  require(sanitizeMafiaSettings('nonsense').mode === 'classic', 'Bad settings fall back to Classic.');
+
+  // The Don leads the attack and passes the Detective's check.
+  state = startNight(createInitialGame(seven, { 1: 'Don', 2: 'Mafia', 3: 'Detective', 4: 'Citizen', 5: 'Citizen', 6: 'Doctor', 7: 'Citizen' }, () => 0));
+  require(state.privatePlayers[1].info.mafiaTeammateIds.includes(2) && state.privatePlayers[2].info.mafiaTeammateIds.includes(1), 'The Don and the Mafia know each other.');
+  state = submitNightAction(state, 3, 1).state;
+  require(state.privatePlayers[3].knownAlignment[1] === 'town', 'The Detective sees the Don as innocent.');
+  state = submitNightAction(state, 2, 4).state;
+  state = submitNightAction(state, 1, 5).state;
+  require(resolveMafiaTarget(state).targetId === 5, "The Don's pick decides the Mafia attack.");
+
+  // The Bodyguard dies in place of the player they guard.
+  state = startNight(createInitialGame(seven, { 1: 'Bodyguard', 2: 'Mafia', 3: 'Citizen', 4: 'Citizen', 5: 'Citizen', 6: 'Doctor', 7: 'Detective' }, () => 0));
+  require(Boolean(submitNightAction(state, 1, 1).error), 'The Bodyguard cannot guard themselves.');
+  state = submitNightAction(state, 1, 3).state;
+  state = submitNightAction(state, 2, 3).state;
+  resolved = resolveNight(state, () => 0);
+  const guardedNight = resolved.state.history?.[resolved.state.history.length - 1];
+  require(resolved.state.publicPlayers.find((player) => player.id === 1)?.alive === false && resolved.state.publicPlayers.find((player) => player.id === 3)?.alive === true
+    && guardedNight?.kind === 'night' && guardedNight.outcome === 'guarded', 'The Bodyguard dies in place of the guarded player.');
+
+  // A convicted Jester wins alone.
+  state = startVoting(fixed({ 1: 'Citizen', 2: 'Mafia', 3: 'Jester', 4: 'Citizen' }));
+  for (const [voter, choice] of [[1, 3], [2, 3], [3, 1], [4, 3]] as const) state = recordVote(state, voter, choice).state;
+  state = resolveVoting(state).state;
+  for (const voter of [1, 2, 4]) state = recordVerdict(state, voter, 'guilty').state;
+  resolved = resolveTrial(state);
+  require(resolved.state.winner === 'Jester' && finishDay(resolved.state).phase === 'Results', 'A convicted Jester wins the game alone.');
+
+  // Hard mode: ballots are anonymous and a convicted player's role stays hidden.
+  state = startVoting(createInitialGame(players, { 1: 'Citizen', 2: 'Mafia', 3: 'Doctor', 4: 'Detective' }, () => 0, sanitizeMafiaSettings({ mode: 'hard' })));
+  for (const [voter, choice] of [[1, 2], [2, 1], [3, 2], [4, 2]] as const) state = recordVote(state, voter, choice).state;
+  state = resolveVoting(state).state;
+  require(publicView(state).players.every((player) => player.voteTargetId === null) && publicView(state).voteCounts['2'] === 3, 'Anonymous ballots show counts but not voters.');
+  for (const voter of [1, 3, 4]) state = recordVerdict(state, voter, 'guilty').state;
+  resolved = resolveTrial(state);
+  require(resolved.state.publicPlayers.find((player) => player.id === 2)?.alive === false && resolved.state.publicPlayers.find((player) => player.id === 2)?.revealedRole === null, 'Hard mode keeps the convicted role hidden.');
+
+  // Role Reveal ends early once every person has read their card; bots are always ready.
+  state = createInitialGame([...players.slice(0, 3), { ...players[3], bot: true }], undefined, () => 0);
+  require(!allRevealReady(state), 'The Night waits for people who have not read their card.');
+  for (const id of [1, 2, 3]) state = markRevealReady(state, id).state;
+  require(allRevealReady(state) && privateView(state, 1)?.readyForNight === true, 'Everyone ready lets the Night start.');
 
   return 'Game engine self-tests passed.';
 }

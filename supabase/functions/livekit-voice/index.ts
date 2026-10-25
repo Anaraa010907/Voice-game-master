@@ -144,10 +144,10 @@ Deno.serve(async (request) => {
         }
         return respond(200, { left: true });
       }
-      // Only a living player whose secret role is Mafia, and only while it is Night.
+      // Only a living Mafia member (or their Don), and only while it is Night.
       const { data: secret } = await admin.from('game_private').select('view').eq('room_code', roomCode).eq('user_id', user.id).maybeSingle();
       const role = (secret?.view as { role?: string } | null)?.role;
-      if (role !== 'Mafia' || !membership.is_alive || voiceRoom.game_phase !== 'night') {
+      if ((role !== 'Mafia' && role !== 'Don') || !membership.is_alive || voiceRoom.game_phase !== 'night') {
         return respond(403, { error: 'Мафийн шивнээ зөвхөн шөнө амьд мафиудад нээлттэй.' });
       }
       const whisperToken = new AccessToken(livekitApiKey, livekitApiSecret, {

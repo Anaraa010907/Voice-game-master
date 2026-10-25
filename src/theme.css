@@ -1276,3 +1276,322 @@
 .viewport .game-frame .role-intro-back {
   overflow: visible;
 }
+
+/* A role whose card art is not in yet: its sign and name sit on a plaque over the card back. */
+.viewport .game-frame .role-card-artwork .role-card-image-fallback {
+  position: absolute;
+  left: 50%;
+  bottom: 14%;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: max-content;
+  max-width: 80%;
+  padding: 4px 12px;
+  border: 1px solid rgba(241, 215, 154, .7);
+  border-radius: 4px;
+  background: rgba(10, 8, 6, .88);
+  box-shadow: 0 0 14px rgba(241, 215, 154, .25);
+  color: #f1d79a;
+  font-family: var(--display, 'Barlow Condensed', sans-serif);
+  font-size: clamp(11px, 2.4vh, 17px);
+  letter-spacing: 1px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.viewport .game-frame .role-card-artwork.is-compact .role-card-image-fallback {
+  bottom: 10%;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+/* ---------- Mafia room rules (lobby card + host editor) ---------- */
+
+.viewport .game-frame .lobby-rules {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--gold-line, rgba(210, 176, 115, .3));
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(20, 15, 12, .86), rgba(10, 8, 7, .9));
+}
+
+.viewport .game-frame .lobby-rules header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.viewport .game-frame .lobby-rules header span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #a68f6c;
+  font-size: 10px;
+  letter-spacing: 1.2px;
+}
+
+.viewport .game-frame .lobby-rules header b {
+  color: #f1d79a;
+}
+
+.viewport .game-frame .lobby-rules-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid #d2b07366;
+  border-radius: 13px;
+  background: #1d1712;
+  color: #f1d79a;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+.viewport .game-frame .lobby-rules > p {
+  overflow: hidden;
+  margin: 0;
+  color: #9d9389;
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.viewport .game-frame .rules-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.viewport .game-frame .rules-roles span {
+  padding: 2px 7px;
+  border: 1px solid #ffffff1f;
+  border-radius: 9px;
+  color: #ddd2c0;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.viewport .game-frame .rules-roles span.team-mafia {
+  border-color: #c2485266;
+  color: #f0b4b4;
+}
+
+.viewport .game-frame .rules-roles span.team-wildcard {
+  border-color: #9a7cc066;
+  color: #d4c2ee;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .viewport .game-frame .lobby-screen .lobby-rules {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    align-self: end;
+    gap: 4px;
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 6px 9px;
+  }
+
+  .viewport .game-frame .lobby-screen .lobby-rules .rules-roles span {
+    padding: 1px 6px;
+    font-size: 9.5px;
+  }
+
+  .viewport .game-frame .lobby-rules-edit {
+    height: 23px;
+  }
+
+  .viewport .game-frame .rules-modal {
+    gap: 6px;
+    padding: 9px 12px;
+  }
+
+  .viewport .game-frame .rules-modal h2 {
+    font-size: 17px;
+  }
+
+  .viewport .game-frame .rules-modes button {
+    padding: 5px 8px;
+  }
+
+  .viewport .game-frame .rules-modes button small {
+    font-size: 9px;
+  }
+
+  .viewport .game-frame .rules-switches button,
+  .viewport .game-frame .rules-row button {
+    height: 25px;
+  }
+
+  .viewport .game-frame .rules-preview {
+    padding: 5px 8px;
+  }
+}
+
+.viewport .game-frame .rules-modal {
+  display: grid;
+  gap: 8px;
+  width: min(660px, 96%);
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.viewport .game-frame .rules-modal h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.viewport .game-frame .rules-modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.viewport .game-frame .rules-modes button {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 1px solid #ffffff1f;
+  border-radius: 10px;
+  background: #15110e;
+  color: #e7ddcc;
+  text-align: left;
+}
+
+.viewport .game-frame .rules-modes button b {
+  font-family: var(--display, 'Barlow Condensed', sans-serif);
+  font-size: 15px;
+  letter-spacing: .5px;
+}
+
+.viewport .game-frame .rules-modes button small {
+  color: #9d9389;
+  font-size: 9.5px;
+  line-height: 1.3;
+}
+
+.viewport .game-frame .rules-modes button.is-picked,
+.viewport .game-frame .rules-row button.is-picked {
+  border-color: #f1d79a;
+  background: linear-gradient(160deg, #3a2d19, #1b1510);
+  color: #f1d79a;
+}
+
+.viewport .game-frame .rules-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.viewport .game-frame .rules-switches button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #ffffff22;
+  border-radius: 14px;
+  background: #120e0c;
+  color: #8f877d;
+  font-size: 11px;
+}
+
+.viewport .game-frame .rules-switches button.is-on {
+  border-color: #d2b07399;
+  background: #2a2015;
+  color: #f1d79a;
+}
+
+.viewport .game-frame .rules-switches.is-locked button {
+  cursor: default;
+  opacity: .55;
+}
+
+.viewport .game-frame .rules-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #a68f6c;
+  font-size: 11px;
+}
+
+.viewport .game-frame .rules-row span {
+  margin-right: 4px;
+}
+
+.viewport .game-frame .rules-row button {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #ffffff1f;
+  border-radius: 14px;
+  background: #15110e;
+  color: #e7ddcc;
+  font-size: 11px;
+}
+
+.viewport .game-frame .rules-preview {
+  display: grid;
+  gap: 4px;
+  padding: 7px 9px;
+  border: 1px dashed #ffffff1f;
+  border-radius: 10px;
+  color: #a68f6c;
+  font-size: 10px;
+}
+
+.viewport .game-frame .rules-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.viewport .game-frame .rules-modal .modal-actions {
+  margin-top: 0;
+  justify-content: flex-end;
+}
+
+.viewport .game-frame .game-modal p.rules-line {
+  color: #e2c88f;
+}
+
+/* Role Reveal: everyone taps "ready"; the host may still start the Night at once. */
+.viewport .game-frame .reveal-ready-row {
+  z-index: 1;
+  grid-column: 1;
+  grid-row: 2;
+  align-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viewport .game-frame .reveal-ready-row .primary-button,
+.viewport .game-frame .reveal-ready-row .secondary-button {
+  height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.viewport .game-frame .reveal-ready-row .reveal-wait {
+  gap: 6px;
+  min-height: 0;
+}
+
+.viewport .game-frame .results-heading p.results-stats {
+  margin-top: 4px;
+  color: #d8bd84;
+  letter-spacing: .4px;
+}

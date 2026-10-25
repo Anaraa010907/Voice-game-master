@@ -1,8 +1,8 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import {
-  MIN_PLAYERS, allNightActionsSubmitted, allVerdictsSubmitted, allVotesSubmitted, createInitialGame, finishDay, openDiscussion,
-  privateView, publicView, recordVerdict, recordVote, removePlayer, resolveNight, resolveTrial, resolveVoting, startNight, startVoting,
-  submitNightAction, type GameEngineState, type Verdict, type VoteChoice,
+  MIN_PLAYERS, allNightActionsSubmitted, allRevealReady, allVerdictsSubmitted, allVotesSubmitted, createInitialGame, finishDay, markRevealReady,
+  openDiscussion, privateView, publicView, recordVerdict, recordVote, removePlayer, resolveNight, resolveTrial, resolveVoting, sanitizeMafiaSettings,
+  startNight, startVoting, submitNightAction, type GameEngineState, type MafiaSettings, type Verdict, type VoteChoice,
 } from '../_shared/gameEngine.ts';
 import {
   MIN_MONOPOLY_PLAYERS, applyMonopolyAction, autoPlay, createMonopolyGame, removeMonopolyPlayer,
@@ -19,7 +19,7 @@ import type { VoicePhase } from '../_shared/voicePolicy.ts';
  */
 
 type GameType = 'mafia' | 'monopoly';
-type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type: GameType };
+type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type: GameType; settings?: Partial<MafiaSettings> | null };
 /** The stored engine also carries the match id used to record win/loss statistics exactly once. */
 type StoredGame = GameEngineState & { matchId?: string };
 type StoredBoard = MonopolyState & { matchId?: string };
@@ -162,8 +162,14 @@ export function discussionSeconds(living: number) {
   return Math.min(180, Math.max(75, 40 + living * 15));
 }
 
+/** The host's "short / long discussion" room setting scales that time. */
+const DISCUSSION_SCALE = { short: 0.65, normal: 1, long: 1.5 } as const;
+
 function phaseSeconds(state: GameEngineState, key: string) {
-  if (key === 'Discussion') return discussionSeconds(state.publicPlayers.filter((player) => player.alive).length);
+  if (key === 'Discussion') {
+    const scale = DISCUSSION_SCALE[state.settings?.discussion ?? 'normal'] ?? 1;
+    return Math.round(discussionSeconds(state.publicPlayers.filter((player) => player.alive).length) * scale);
+  }
   return PHASE_SECONDS[key];
 }
 
@@ -181,6 +187,7 @@ function advance(state: GameEngineState): GameEngineState {
 
 /** Skips waiting when everyone who must act already has. */
 function settle(state: GameEngineState): GameEngineState {
+  if (state.phase === 'Role Reveal' && allRevealReady(state)) return advance(state);
   if (state.phase === 'Night' && !state.nightResolved && allNightActionsSubmitted(state)) return advance(state);
   if (state.phase === 'Voting' && !state.votesRevealed && (state.trial ? allVerdictsSubmitted(state) : allVotesSubmitted(state))) return advance(state);
   return state;
@@ -377,7 +384,7 @@ class GameServer {
     }));
     const engine: AnyGame = room.game_type === 'monopoly'
       ? { ...createMonopolyGame(people, secureRandom), matchId: crypto.randomUUID() }
-      : { ...createInitialGame(people, undefined, secureRandom), matchId: crypto.randomUUID() };
+      : { ...createInitialGame(people, undefined, secureRandom, sanitizeMafiaSettings(room.settings)), matchId: crypto.randomUUID() };
     await this.admin.from('game_private').delete().eq('room_code', roomCodeValue);
     const { error } = await this.admin.from('game_states').update({ engine, version: 1, updated_at: new Date().toISOString() }).eq('room_code', roomCodeValue);
     if (error) throw error;
@@ -485,7 +492,8 @@ class GameServer {
     for (const seat of seats) {
       const secret = state.privatePlayers[seat.seat];
       if (!secret || seat.is_bot) continue;
-      const won = (state.winner === 'Mafia') === (secret.team === 'mafia');
+      // The Jester only ever wins alone; town and Mafia win as teams.
+      const won = state.winner === 'Jester' ? secret.role === 'Jester' : secret.team !== 'wildcard' && (state.winner === 'Mafia') === (secret.team === 'mafia');
       await this.recordOutcome(seat.user_id, won ? 'win' : 'loss', state.matchId);
     }
   }
@@ -565,6 +573,33 @@ class GameServer {
   }
 
   /** Guilty or innocent, from a living player other than the accused, while a trial is open. */
+  /** Role Reveal: "I've read my card". The Night starts once every living person has. */
+  async revealReady(body: Body) {
+    const roomCodeValue = code(body);
+    const { mine } = await this.requireSeat(roomCodeValue);
+    let failure = '';
+    await this.mutate(roomCodeValue, (state) => {
+      if (isBoard(state)) return state;
+      const result = markRevealReady(state, mine.seat);
+      failure = result.error ?? '';
+      return result.error ? state : progress(result.state);
+    });
+    if (failure) throw new GameError(409, failure);
+    return { ok: true };
+  }
+
+  /** Host-only, in the lobby: the Mafia room rules (mode, optional roles, reveal, anonymous votes, discussion length). */
+  async settings(body: Body) {
+    const roomCodeValue = code(body);
+    const room = await this.room(roomCodeValue);
+    if (room.host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн дүрэм өөрчилнө.');
+    if (room.status !== 'lobby') throw new GameError(409, 'Тоглоом эхэлсэн үед дүрэм өөрчлөх боломжгүй.');
+    if ((room.game_type ?? 'mafia') !== 'mafia') throw new GameError(409, 'Энэ тохиргоо зөвхөн Мафид хамаатай.');
+    const settings = sanitizeMafiaSettings(body.settings);
+    await this.touchRoom(roomCodeValue, { settings });
+    return { settings };
+  }
+
   async verdict(body: Body) {
     const roomCodeValue = code(body);
     const { mine } = await this.requireSeat(roomCodeValue);
@@ -708,6 +743,8 @@ Deno.serve(async (request) => {
       night: (value) => server.night(value),
       vote: (value) => server.vote(value),
       verdict: (value) => server.verdict(value),
+      'reveal-ready': (value) => server.revealReady(value),
+      settings: (value) => server.settings(value),
       tick: (value) => server.tick(value),
       rematch: (value) => server.rematch(value),
       list: (value) => server.list(value),

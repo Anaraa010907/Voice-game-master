@@ -248,8 +248,11 @@ export const i18n = {
     },
     roles: {
       Mafia: 'Мафийн гишүүн',
+      Don: 'Дон',
       Doctor: 'Эмч',
       Detective: 'Цагдаа',
+      Bodyguard: 'Бие хамгаалагч',
+      Jester: 'Алиа',
       'Good Informant': 'Сайн мэдээлэгч',
       'Bad Informant': 'Мафийн мэдээлэгч',
       'Old Lady with Shotgun': 'Буутай эмээ',
@@ -271,6 +274,9 @@ export const i18n = {
     },
     roleDescriptions: {
       Mafia: 'Шөнө нэг зорилт сонгоод өдрийн цагаар хоорондоо нууцаар ажиллах.',
+      Don: 'Мафийг удирдана. Довтолгооны эцсийн шийдвэр таных, цагдаад илрэхгүй.',
+      Bodyguard: 'Шөнө нэг хүнийг хамгаалж, халдлагад түүний оронд амиа өгнө.',
+      Jester: 'Өдрийн шүүх хурлаар хасагдвал ганцаараа ялна.',
       Doctor: 'Шөнө нэг тоглогчийг хамгаалж, халдлагаас аварч чадна.',
       Detective: 'Шөнө нэг тоглогчийн нууцыг шалгаж чадна.',
       'Good Informant': 'Чимээгүй хамтрагч бөгөөд үнэ цэнэтэй сэжүүр өгдөг.',
@@ -371,6 +377,7 @@ export const i18n = {
       eliminated: 'Хасагдсан',
       citizensWin: 'Энгийн иргэд ялалт байгууллаа.',
       mafiaWin: 'Мафийн бүлэг ялалт байгууллаа.',
+      jesterWin: 'Алиа бүх хотыг хуурлаа.',
       draw: 'Тэнцээ',
     },
   },
@@ -480,6 +487,10 @@ export const translateMessage = (message: string): string => {
     'The runoff was tied again. No one was eliminated.': 'Давтан санал хураалт дахин тэнцлээ. Хэн ч хасагдсангүй.',
     'You cannot protect the same player two nights in a row.': 'Нэг тоглогчийг хоёр шөнө дараалан хамгаалах боломжгүй.',
     'Runoff votes can only target the tied players.': 'Давтан санал хураалтад зөвхөн тэнцсэн тоглогчдод санал өгнө.',
+    'Choose another living player to guard.': 'Хамгаалах өөр амьд тоглогч сонгоно уу.',
+    'No attack came for the player you guarded.': 'Таны хамгаалсан хүн рүү энэ шөнө халдлага гараагүй.',
+    'The Jester fooled the town and wins alone.': 'Алиа хотынхныг хуурч, ганцаараа яллаа!',
+    'The Night has already begun.': 'Шөнө аль хэдийн эхэлсэн.',
   };
   if (map[message]) return map[message];
   const investigation = message.match(/^(.+) is (aligned with|not aligned with) the Mafia\.$/);

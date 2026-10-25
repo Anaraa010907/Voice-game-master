@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { botAcceptsTrade, botBid, boardBotToMove, mafiaBotsAct, monopolyBotStep, nextBotName } from '../supabase/functions/_shared/bots.ts';
 import {
   allNightActionsSubmitted, allVerdictsSubmitted, allVotesSubmitted, createInitialGame, finishDay, openDiscussion, recordVote, removePlayer,
-  publicView, resolveNight, resolveTrial, resolveVoting, startNight, startVoting, type GameEngineState,
+  publicView, resolveNight, resolveTrial, resolveVoting, sanitizeMafiaSettings, startNight, startVoting, type GameEngineState,
 } from '../supabase/functions/_shared/gameEngine.ts';
 import { actingPlayerId, applyMonopolyAction, autoPlay, createMonopolyGame, currentPlayerId, type MonopolyState } from '../supabase/functions/_shared/monopolyEngine.ts';
 
@@ -45,6 +45,20 @@ for (const seed of [1, 7, 42, 99, 1234]) {
   const recap = publicView(state).history ?? [];
   assert.ok(recap.some((entry) => entry.kind === 'night') && recap.every((entry) => entry.round >= 1), 'The finished game carries a night-by-night recap.');
   assert.equal(publicView({ ...state, phase: 'Night' }).history, null, 'The recap stays hidden until the game ends.');
+}
+
+// Mafia: big tables with the Don, Jester and Bodyguard (Classic) and a Custom table also finish.
+for (const [seed, count, settings] of [[21, 12, undefined], [8, 10, undefined], [33, 9, sanitizeMafiaSettings({ mode: 'custom' })], [4, 12, sanitizeMafiaSettings({ mode: 'hard' })]] as const) {
+  const random = seeded(seed);
+  const people = Array.from({ length: count }, (_, index) => ({ id: index + 1, name: `Bot ${index + 1}`, initials: `B${index + 1}`, color: 'rose', bot: true }));
+  let state = createInitialGame(people, undefined, random, settings);
+  let steps = 0;
+  while (state.phase !== 'Results' && steps < 120) {
+    state = mafiaBotsAct(advance(state, random), random);
+    steps += 1;
+  }
+  assert.equal(state.phase, 'Results', `Bot-only Mafia game with ${count} seats (seed ${seed}) reaches Results.`);
+  assert.ok(state.winner === 'Citizens' || state.winner === 'Mafia' || state.winner === 'Jester', 'Someone wins.');
 }
 
 // Mafia: humans are never moved for.

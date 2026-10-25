@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  ArrowLeft, Check, ChevronRight, Clock3, Crown, Crosshair, Eye, Fingerprint,
+  ArrowLeft, Check, ChevronRight, Clock3, Crown, Crosshair, Drama, Eye, Fingerprint,
   HeartPulse, Info, LockKeyhole, Mic, Moon, Radio, Settings,
-  Shield, Skull, Sun, Target, Vote, X,
+  Shield, ShieldHalf, Skull, Sun, Target, Vote, X,
 } from 'lucide-react';
 import { roles, type RoleName } from './gameData';
 import RoleCardArtwork from './RoleCardArtwork';
 import { MyRoleCard, RoleCardViewer, RoleRevealIntro } from './RoleCardReveal';
-import type { PrivateGameView, PublicGamePlayer, PublicGameView, VoteChoice } from './gameEngine';
+import { isMafiaMember, type PrivateGameView, type PublicGamePlayer, type PublicGameView, type VoteChoice } from './gameEngine';
+import { rulesSummary } from './MafiaRules';
 import { i18n, translateMessage, translatePhase, translateRole, translateTeam } from './i18n';
 import { VoiceAvatarIndicator, VoiceChatProvider, type VoicePhase } from './VoiceChat';
 import { FullscreenToggle, type FullscreenState } from './fullscreen';
@@ -24,6 +25,9 @@ function roleInfo(name: RoleName) {
 function NightIcon({ role, size = 19 }: { role: RoleName; size?: number }) {
   const iconProps = { size, strokeWidth: 1.7 };
   if (role === 'Mafia') return <Skull {...iconProps} />;
+  if (role === 'Don') return <Crown {...iconProps} />;
+  if (role === 'Bodyguard') return <ShieldHalf {...iconProps} />;
+  if (role === 'Jester') return <Drama {...iconProps} />;
   if (role === 'Doctor') return <HeartPulse {...iconProps} />;
   if (role === 'Detective') return <Eye {...iconProps} />;
   if (role === 'Good Informant') return <Fingerprint {...iconProps} />;
@@ -127,9 +131,9 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
   const living = game.players.filter((player) => player.alive);
   const nameOf = (id: number) => game.players.find((player) => player.id === id)?.name;
   const namesOf = (ids: number[]) => ids.map(nameOf).filter((name): name is string => Boolean(name));
-  const mafiaNames = namesOf(me.role === 'Mafia' ? me.info.mafiaTeammateIds : me.role === 'Good Informant' ? me.info.informantMafiaIds : []);
+  const mafiaNames = namesOf(isMafiaMember(me.role) ? me.info.mafiaTeammateIds : me.role === 'Good Informant' ? me.info.informantMafiaIds : []);
   const livingTeammates = me.info.mafiaTeammateIds.filter((id) => game.players.find((player) => player.id === id)?.alive);
-  const whisperOpen = game.phase === 'Night' && currentPlayer.alive && me.role === 'Mafia' && livingTeammates.length > 0;
+  const whisperOpen = game.phase === 'Night' && currentPlayer.alive && isMafiaMember(me.role) && livingTeammates.length > 0;
   const leftPlayers = game.players.slice(0, Math.ceil(game.players.length / 2));
   const rightPlayers = game.players.slice(Math.ceil(game.players.length / 2));
   const time = secondsLeft === null ? '--:--' : `${String(Math.floor(secondsLeft / 60)).padStart(2, '0')}:${String(secondsLeft % 60).padStart(2, '0')}`;
@@ -153,7 +157,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
   const canChooseNightTarget = (target: PublicGamePlayer) => {
     if (!target.alive || !currentPlayer.alive || game.phase !== 'Night' || me.nightAction.submitted || !me.nightRole) return false;
     if (me.nightRole === 'Mafia') return target.id !== me.seat && !me.info.mafiaTeammateIds.includes(target.id);
-    if (me.nightRole === 'Detective') return target.id !== me.seat;
+    if (me.nightRole === 'Detective' || me.nightRole === 'Bodyguard') return target.id !== me.seat;
     if (me.nightRole === 'Doctor') return target.id !== me.lastProtectedId;
     return true;
   };
@@ -186,7 +190,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
       <div className="game-top-actions"><button className="game-icon-button" onClick={() => setSettingsOpen(true)} aria-label="Тоглоомын тохиргоо" title="Тоглоомын тохиргоо"><Settings size={16} /></button><button className="game-leave-button" onClick={() => setLeaveDialog(true)}><ArrowLeft size={14} /> {i18n.game.leaveGame.toUpperCase()}</button></div>
     </header>
 
-    {game.phase === 'Role Reveal' ? <RoleReveal player={currentPlayer} me={me} namesOf={namesOf} roomName={roomName} isHost={isHost} busy={busy} secondsLeft={secondsLeft} onContinue={hostSkip} /> : <>
+    {game.phase === 'Role Reveal' ? <RoleReveal game={game} player={currentPlayer} me={me} namesOf={namesOf} roomName={roomName} isHost={isHost} busy={busy} secondsLeft={secondsLeft} onContinue={hostSkip} onReady={() => { void send('reveal-ready'); }} /> : <>
       <div className="core-game-board">
         <aside className="game-player-list game-player-list-left"><div className="game-list-heading">{i18n.game.table} <span>{String(game.players.length).padStart(2, '0')}</span></div>{leftPlayers.map(renderPlayer)}{!currentPlayer.alive && <GhostVoice roomCode={roomCode} userId={userId} />}{whisperOpen && <GhostVoice key="mafia-whisper" roomCode={roomCode} userId={userId} channel="mafia" />}</aside>
         <section className="crime-stage">
@@ -206,7 +210,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
     {cardOpen && <RoleCardViewer role={roleInfo(me.role)} onClose={closeCard} />}
     {privateOpen && <PrivateInfoPanel player={currentPlayer} me={me} mafiaNames={mafiaNames} namesOf={namesOf} onClose={() => setPrivateOpen(false)} />}
     {leaveDialog && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="leave-game-title"><div className="modal-symbol"><ArrowLeft size={18} /></div><h2 id="leave-game-title">Тоглоомоос гарах уу?</h2><p>Гарвал та хасагдсанд тооцогдож, энэ тоглолтод буцаж орох боломжгүй.</p><div className="modal-actions"><button className="secondary-button" onClick={() => setLeaveDialog(false)}>ҮЛДЭХ</button><button className="primary-button" onClick={onLeave}>ТОГЛООМООС ГАРАХ</button></div></section></div>}
-    {settingsOpen && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title"><div className="modal-symbol"><Settings size={18} /></div><h2 id="game-settings-title">Тоглоомын тохиргоо</h2><p>Үе шат бүр цаг дуусахад автоматаар солигдоно. Өрөөний эзэн хүлээх үеийг алгасаж болно.</p><div className="modal-fullscreen"><FullscreenToggle fullscreen={fullscreen} /></div><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>ТОГЛООМ ҮРГЭЛЖЛҮҮЛЭХ</button></div></section></div>}
+    {settingsOpen && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title"><div className="modal-symbol"><Settings size={18} /></div><h2 id="game-settings-title">Тоглоомын тохиргоо</h2><p>Үе шат бүр цаг дуусахад автоматаар солигдоно. Өрөөний эзэн хүлээх үеийг алгасаж болно.</p><p className="rules-line">Дүрэм: {rulesSummary(game.settings)}</p><div className="modal-fullscreen"><FullscreenToggle fullscreen={fullscreen} /></div><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>ТОГЛООМ ҮРГЭЛЖЛҮҮЛЭХ</button></div></section></div>}
   </div>);
 }
 
@@ -215,10 +219,20 @@ function HostButton({ isHost, busy, label, onClick }: { isHost: boolean; busy: b
   return <button className="primary-button" disabled={busy} onClick={onClick}>{label} <ChevronRight size={15} /></button>;
 }
 
-function RoleReveal({ player, me, namesOf, roomName, isHost, busy, secondsLeft, onContinue }: { player: PublicGamePlayer; me: PrivateGameView; namesOf: (ids: number[]) => string[]; roomName: string; isHost: boolean; busy: boolean; secondsLeft: number | null; onContinue: () => void }) {
+function RoleReveal({ game, player, me, namesOf, roomName, isHost, busy, secondsLeft, onContinue, onReady }: { game: PublicGameView; player: PublicGamePlayer; me: PrivateGameView; namesOf: (ids: number[]) => string[]; roomName: string; isHost: boolean; busy: boolean; secondsLeft: number | null; onContinue: () => void; onReady: () => void }) {
   const role = roleInfo(me.role);
-  const roleSecret = me.role === 'Mafia' ? `Таны мафийн хамтрагчид: ${namesOf(me.info.mafiaTeammateIds).join(', ') || 'байхгүй'}.` : me.role === 'Good Informant' ? `Мафийн таних тэмдэг: ${namesOf(me.info.informantMafiaIds).join(', ') || 'идэвхтэй гишүүн алга'}.` : me.role === 'Bad Informant' ? translateMessage(me.info.badInformantObjective) : '';
-  return <main className="role-reveal-screen"><div className="reveal-backdrop"><div className="reveal-moon" /><div className="reveal-city" /></div><div className="reveal-heading"><span>ЭЭЛЖ 01 <i>•</i> {roomName.toUpperCase()}</span><h1>Хот <em>шийдвэрээ гаргалаа.</em></h1><p>{player.name}, таны дүр нууц. Дэлгэцээ бусдад бүү харуул.</p></div><article className={`reveal-role-card team-${role.team}`}><div className="reveal-card-art"><RoleCardArtwork role={role} /><span>НУУЦ</span></div><div className="reveal-card-copy"><span className={`team-tag ${role.team}`}>{translateTeam(role.team).toUpperCase()} {i18n.game.messages.specialAbility.toUpperCase()}</span><h2>{role.displayName}</h2><p>{role.description}</p><p className="reveal-role-ability">{role.ability}</p>{roleSecret && <div className="role-reveal-secret"><LockKeyhole size={12} />{roleSecret}</div>}<div className="reveal-private-note"><LockKeyhole size={13} /><span>Энэ картыг зөвхөн та харах боломжтой.</span></div></div></article>{isHost ? <button className="primary-button reveal-continue" disabled={busy} onClick={onContinue}>ШӨНИЙГ ЭХЛҮҮЛЭХ <ChevronRight size={16} /></button> : <span className="reveal-continue reveal-wait">Шөнө {secondsLeft ?? '…'} секундын дараа эхэлнэ</span>}</main>;
+  const roleSecret = isMafiaMember(me.role) ? `Таны мафийн хамтрагчид: ${namesOf(me.info.mafiaTeammateIds).join(', ') || 'байхгүй'}.${me.role === 'Don' ? ' Та тэднийг удирдана.' : ''}` : me.role === 'Good Informant' ? `Мафийн таних тэмдэг: ${namesOf(me.info.informantMafiaIds).join(', ') || 'идэвхтэй гишүүн алга'}.` : me.role === 'Bad Informant' ? translateMessage(me.info.badInformantObjective) : me.role === 'Jester' ? 'Зорилго: шүүх хурлаар хасагдах. Сэжигтэй харагдаарай!' : '';
+  const people = game.players.filter((entry) => entry.alive && !entry.bot);
+  const readyCount = people.filter((entry) => (game.readyIds ?? []).includes(entry.id)).length;
+  const waitLine = `Бэлэн ${readyCount}/${people.length} · шөнө ${secondsLeft ?? '…'} секундын дараа`;
+  return <main className="role-reveal-screen"><div className="reveal-backdrop"><div className="reveal-moon" /><div className="reveal-city" /></div><div className="reveal-heading"><span>ЭЭЛЖ 01 <i>•</i> {roomName.toUpperCase()}</span><h1>Хот <em>шийдвэрээ гаргалаа.</em></h1><p>{player.name}, таны дүр нууц. Дэлгэцээ бусдад бүү харуул.</p></div><article className={`reveal-role-card team-${role.team}`}><div className="reveal-card-art"><RoleCardArtwork role={role} /><span>НУУЦ</span></div><div className="reveal-card-copy"><span className={`team-tag ${role.team}`}>{translateTeam(role.team).toUpperCase()} {i18n.game.messages.specialAbility.toUpperCase()}</span><h2>{role.displayName}</h2><p>{role.description}</p><p className="reveal-role-ability">{role.ability}</p>{roleSecret && <div className="role-reveal-secret"><LockKeyhole size={12} />{roleSecret}</div>}<div className="reveal-private-note"><LockKeyhole size={13} /><span>Энэ картыг зөвхөн та харах боломжтой.</span></div></div></article>
+    <div className="reveal-ready-row">
+      {me.readyForNight
+        ? <span className="reveal-wait"><Check size={14} /> {waitLine}</span>
+        : <button className="primary-button" disabled={busy} onClick={onReady}><Check size={15} /> БЭЛЭН</button>}
+      {isHost && <button className="secondary-button" disabled={busy} onClick={onContinue}>ШӨНИЙГ ЭХЛҮҮЛЭХ <ChevronRight size={15} /></button>}
+      {!me.readyForNight && <span className="reveal-wait">{waitLine}</span>}
+    </div></main>;
 }
 
 function NightPanel({ round, player, me, mafiaNames, nameOf, selectedName, lockedName, lastProtectedName, busy, onConfirm, onCancel }: {
@@ -226,19 +240,20 @@ function NightPanel({ round, player, me, mafiaNames, nameOf, selectedName, locke
 }) {
   const role = me.role;
   const nightRole = me.nightRole;
-  const targetVerb = nightRole === 'Mafia' ? (role === 'Bad Informant' ? 'Мафийн гишүүд хасагдсан тул довтолгоог та удирдана. Зорилтоо сонгоно уу.' : 'Мафийн зорилт сонгоно уу.') : nightRole === 'Doctor' ? 'Шөнө хамгаалах тоглогчоо сонгоно уу.' : nightRole === 'Detective' ? 'Шалгах тоглогчоо сонгоно уу.' : '';
+  const targetVerb = nightRole === 'Mafia' ? (role === 'Bad Informant' ? 'Мафийн гишүүд хасагдсан тул довтолгоог та удирдана. Зорилтоо сонгоно уу.' : role === 'Don' ? 'Довтолгооны зорилтоо сонгоно уу. Таны сонголт эцсийнх.' : 'Мафийн зорилт сонгоно уу.') : nightRole === 'Doctor' ? 'Шөнө хамгаалах тоглогчоо сонгоно уу.' : nightRole === 'Detective' ? 'Шалгах тоглогчоо сонгоно уу.' : nightRole === 'Bodyguard' ? 'Хамгаалах тоглогчоо сонгоно уу. Түүн рүү халдвал та оронд нь амиа өгнө.' : '';
   const submitted = me.nightAction.submitted;
   const privateResult = nightRole === 'Detective' ? translateMessage(me.info.investigationResult) : '';
   return <div className="phase-panel night-panel"><div className="phase-panel-heading"><span className="night-panel-icon"><Moon size={17} /></span><div><small>ШӨНӨ {round} · ХУВИЙН ҮЙЛДЭЛ</small><h2>{player.alive ? translateRole(role) : 'Шөнө бууж ирлээ'}</h2></div></div>
     {!player.alive ? <p>Та хасагдсан тул шөнийн үйлдэл хийх боломжгүй. Хот сэрэхийг хүлээнэ үү.</p> : <>
       <p>{nightRole ? targetVerb : 'Таны дүрд шөнийн үйлдэл байхгүй. Нүдээ аниад өглөөг хүлээнэ үү.'}</p>
-      {role === 'Mafia' && mafiaNames.length > 0 && <div className="night-secret"><Skull size={12} /> Хамтрагчид: {mafiaNames.join(', ')}. Олонхийн сонгосон хүн рүү довтолно.</div>}
+      {isMafiaMember(role) && mafiaNames.length > 0 && <div className="night-secret"><Skull size={12} /> Хамтрагчид: {mafiaNames.join(', ')}. {role === 'Don' ? 'Тэд санал өгнө, эцсийн шийдвэр таных.' : 'Дон байвал түүний сонголт, үгүй бол олонхийн сонгосон хүн рүү довтолно.'}</div>}
       {me.teamTargets && Object.keys(me.teamTargets).length > 0 && <div className="night-secret team-picks"><Target size={12} /> Хамтрагчийн сонголт — {Object.entries(me.teamTargets).map(([id, target]) => `${nameOf(Number(id)) ?? '?'}: ${target === null ? 'сонгоогүй' : nameOf(target) ?? '?'}`).join(' · ')}</div>}
       {role === 'Good Informant' && <div className="night-secret"><LockKeyhole size={12} /> Таны хувийн сэжүүр: {mafiaNames.join(', ') || 'Идэвхтэй мафийн гишүүн алга.'}</div>}
       {nightRole === 'Doctor' && lastProtectedName && !submitted && <div className="night-secret"><HeartPulse size={12} /> Өчигдөр {lastProtectedName}-г хамгаалсан тул энэ шөнө өөр хүн сонгоно.</div>}
       {role === 'Old Lady with Shotgun' && <div className="night-secret"><Crosshair size={12} /> {me.shotgunSpent ? 'Таны буу аль хэдийн буудсан. Дахин хариу буудах боломжгүй.' : 'Мафи тан руу анх халдахад буугаар нэг удаа хариу буудна.'}</div>}
       {role === 'Bad Informant' && nightRole !== 'Mafia' && <div className="night-secret"><LockKeyhole size={12} /> {translateMessage(me.info.badInformantObjective)}</div>}
       {role === 'Citizen' && <div className="night-secret"><Shield size={12} /> Өглөөний тайланг анхаараарай.</div>}
+      {role === 'Jester' && <div className="night-secret"><Drama size={12} /> Өдөр сэжигтэй харагдаж, шүүх хурлаар хасагдвал та ганцаараа ялна.</div>}
       {privateResult && <div className="action-locked"><LockKeyhole size={12} /> {privateResult}</div>}
       {submitted && <div className="action-locked"><Check size={13} /> Үйлдэл баталгаажсан{lockedName ? ` · ${lockedName}` : ''}. Бусдыг хүлээж байна.</div>}
       {!submitted && nightRole && <div className="night-target-hint"><Target size={12} /> {selectedName ? `Сонгосон: ${selectedName}` : 'Амьд тоглогчийн картыг товшоод зорилт сонгоно уу.'}</div>}
@@ -310,7 +325,9 @@ function PrivateInfoPanel({ player, me, mafiaNames, namesOf, onClose }: { player
   const informant = me.role === 'Good Informant' ? `Мафийн таних тэмдэг: ${namesOf(info.informantMafiaIds).join(', ') || 'идэвхтэй гишүүн алга'}` : '';
   const notebook = Object.entries(me.knownAlignment);
   return <aside className="game-private-panel" aria-label="Нууц дүрийн мэдээлэл"><header><span><LockKeyhole size={12} /> ЗӨВХӨН {player.name.toUpperCase()} ҮҮНИЙГ ХАРНА</span><button onClick={onClose} aria-label="Нууц мэдээлэл хаах"><X size={15} /></button></header><div className="private-game-role"><span className={`private-game-icon team-${role.team}`}><NightIcon role={role.name} /></span><div><small>ТАНЫ ДҮР</small><b>{role.displayName}</b></div></div><RoleCardArtwork role={role} compact /><p>{role.description}</p><p className="private-role-ability">{role.ability}</p>
-    {me.role === 'Mafia' && <div className="private-secret-line"><b>МАФИЙН ХАМТРАГЧИД</b><span>{mafiaNames.join(', ') || 'Та цорын ганц мафийн гишүүн.'}</span></div>}
+    {isMafiaMember(me.role) && <div className="private-secret-line"><b>МАФИЙН ХАМТРАГЧИД</b><span>{mafiaNames.join(', ') || 'Та цорын ганц мафийн гишүүн.'}</span></div>}
+    {me.role === 'Don' && <div className="private-secret-line"><b>ДОН</b><span>Довтолгооны эцсийн шийдвэр таных. Цагдаа таныг «мафи биш» гэж харна.</span></div>}
+    {me.role === 'Jester' && <div className="private-secret-line"><b>НУУЦ ЗОРИЛГО</b><span>Шүүх хурлаар гэмтэй гэж хасагдвал ганцаараа ялна.</span></div>}
     {informant && <div className="private-secret-line"><b>ХУВИЙН СЭЖҮҮР</b><span>{informant}</span></div>}
     {me.role === 'Bad Informant' && <div className="private-secret-line"><b>НУУЦ ЗОРИЛГО</b><span>{translateMessage(info.badInformantObjective)}</span></div>}
     {me.role === 'Detective' && notebook.length > 0 && <div className="private-secret-line detective-notebook"><b>ЦАГДААГИЙН ТЭМДЭГЛЭЛ</b>{notebook.map(([id, alignment]) => <span key={id} className={`notebook-entry is-${alignment}`}>{namesOf([Number(id)])[0] ?? '?'} — {alignment === 'mafia' ? 'мафийн талд' : 'мафи биш'}</span>)}</div>}
@@ -331,19 +348,30 @@ function MatchRecap({ game, onClose }: { game: PublicGameView; onClose: () => vo
     <ol className="recap-list">{(game.history ?? []).map((entry, index) => entry.kind === 'night'
       ? <li key={index} className="recap-night"><b><Moon size={13} /> ШӨНӨ {entry.round}</b>
           <span>{entry.mafiaTargetId === null ? 'Мафи хэнийг ч онилоогүй.' : `Мафи ${withRole(entry.mafiaTargetId)}-г онилсон.`}
-            {entry.outcome === 'killed' ? ` ${name(entry.eliminatedId)} алагдсан.` : entry.outcome === 'protected' ? ' Эмч хамгаалж аварсан.' : entry.outcome === 'shotgun' ? (entry.eliminatedId === null ? ' Буутай эмээ халдлагыг няцаасан.' : ` Буутай эмээ хариу буудаж ${withRole(entry.eliminatedId)}-г хассан.`) : ''}</span>
+            {entry.outcome === 'killed' ? ` ${name(entry.eliminatedId)} алагдсан.` : entry.outcome === 'protected' ? ' Эмч хамгаалж аварсан.' : entry.outcome === 'guarded' ? ` Бие хамгаалагч ${name(entry.eliminatedId)} оронд нь амиа өгсөн.` : entry.outcome === 'shotgun' ? (entry.eliminatedId === null ? ' Буутай эмээ халдлагыг няцаасан.' : ` Буутай эмээ хариу буудаж ${withRole(entry.eliminatedId)}-г хассан.`) : ''}</span>
           {entry.protectedIds.length > 0 && <span>Эмч: {entry.protectedIds.map(name).join(', ')}-г хамгаалсан.</span>}
+          {(entry.guardIds?.length ?? 0) > 0 && <span>Бие хамгаалагч: {entry.guardIds!.map(name).join(', ')}-г манасан.</span>}
           {entry.investigations.map((check) => <span key={`${check.detectiveId}-${check.targetId}`}>Цагдаа {name(check.detectiveId)}: {name(check.targetId)} — {check.mafia ? 'мафийн тал' : 'мафи биш'}.</span>)}
         </li>
       : <li key={index} className="recap-day"><b><Sun size={13} /> ӨДӨР {entry.round}</b>
-          <span>{entry.accusedId === null ? 'Хэн ч шүүгдээгүй.' : `${withRole(entry.accusedId)} шүүгдсэн: гэмтэй ${entry.guilty ?? 0} – гэмгүй ${entry.innocent ?? 0}. ${entry.eliminatedId === null ? 'Цагаатгагдсан.' : 'Хасагдсан.'}`}</span>
+          <span>{entry.accusedId === null ? 'Хэн ч шүүгдээгүй.' : `${withRole(entry.accusedId)} шүүгдсэн: гэмтэй ${entry.guilty ?? 0} – гэмгүй ${entry.innocent ?? 0}. ${entry.eliminatedId === null ? 'Цагаатгагдсан.' : entry.jester ? 'Хасагдсан — Алиа яллаа!' : 'Хасагдсан.'}`}</span>
         </li>)}</ol>
   </section></div>;
 }
 
 function ResultsScreen({ game, me, roomName, isHost, onReplay, onMenu }: { game: PublicGameView; me: PrivateGameView; roomName: string; isHost: boolean; onReplay: () => void; onMenu: () => void }) {
   const [recapOpen, setRecapOpen] = useState(false);
-  const headline = game.winner === 'Citizens' ? i18n.game.results.citizensWin : game.winner === 'Mafia' ? i18n.game.results.mafiaWin : i18n.game.results.draw;
-  const myTeamWon = (game.winner === 'Mafia') === (me.team === 'mafia');
-  return <main className="game-results-screen"><div className="results-glow" /><div className="results-heading"><span>ЭЭЛЖ {String(game.round).padStart(2, '0')} · {roomName.toUpperCase()}</span><h1>{headline}</h1><p>{myTeamWon ? 'Таны баг яллаа!' : 'Таны баг энэ удаа ялагдлаа.'}</p></div><div className="results-player-list">{game.players.map((player) => { const roleName = game.finalRoles?.[player.id]; const role = roleName ? roleInfo(roleName) : null; return <div className={`results-player ${!player.alive ? 'is-dead' : ''}`} key={player.id}><Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}><VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar><span className="results-name">{player.name}{player.id === me.seat && <small>ЧИ</small>}</span>{role && <span className={`team-tag ${role.team}`}>{translateRole(role.name)}</span>}<span className="results-status">{player.alive ? 'АМЬД' : 'ХАСАГДСАН'}</span></div>; })}</div><div className="results-actions"><button className="secondary-button" onClick={onMenu}><ArrowLeft size={14} /> {i18n.game.results.mainMenu}</button>{(game.history?.length ?? 0) > 0 && <button className="secondary-button" onClick={() => setRecapOpen(true)}><Info size={14} /> ТОГЛОЛТЫН ТҮҮХ</button>}{isHost ? <button className="primary-button" onClick={onReplay}>{i18n.game.results.playAgain} <ChevronRight size={15} /></button> : <span className="discussion-wait">Эзэн шинэ тоглолт эхлүүлэхийг хүлээж байна</span>}</div>{recapOpen && <MatchRecap game={game} onClose={() => setRecapOpen(false)} />}</main>;
+  const headline = game.winner === 'Citizens' ? i18n.game.results.citizensWin : game.winner === 'Mafia' ? i18n.game.results.mafiaWin : game.winner === 'Jester' ? i18n.game.results.jesterWin : i18n.game.results.draw;
+  // The Jester only wins alone; town and Mafia win as teams.
+  const iWon = game.winner === 'Jester' ? me.role === 'Jester' : me.team !== 'wildcard' && (game.winner === 'Mafia') === (me.team === 'mafia');
+  const history = game.history ?? [];
+  const nights = history.filter((entry) => entry.kind === 'night');
+  const stats = [
+    `${nights.length} шөнө`,
+    `${nights.filter((entry) => entry.eliminatedId !== null && entry.outcome !== 'shotgun').length} аллага`,
+    `${nights.filter((entry) => entry.outcome === 'protected' || entry.outcome === 'guarded' || entry.outcome === 'shotgun').length} аврагдсан`,
+    `${nights.reduce((total, entry) => total + (entry.kind === 'night' ? entry.investigations.length : 0), 0)} шалгалт`,
+    `${history.filter((entry) => entry.kind === 'day' && entry.accusedId !== null).length} шүүх хурал`,
+  ];
+  return <main className="game-results-screen"><div className="results-glow" /><div className="results-heading"><span>ЭЭЛЖ {String(game.round).padStart(2, '0')} · {roomName.toUpperCase()}</span><h1>{headline}</h1><p>{game.winner === 'Jester' ? (iWon ? 'Та бүгдийг хуурч ганцаараа яллаа!' : 'Алиа таныг хуурчээ.') : iWon ? 'Таны баг яллаа!' : 'Таны баг энэ удаа ялагдлаа.'}</p>{history.length > 0 && <p className="results-stats">{stats.join(' · ')}</p>}</div><div className="results-player-list">{game.players.map((player) => { const roleName = game.finalRoles?.[player.id]; const role = roleName ? roleInfo(roleName) : null; return <div className={`results-player ${!player.alive ? 'is-dead' : ''}`} key={player.id}><Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}><VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar><span className="results-name">{player.name}{player.id === me.seat && <small>ЧИ</small>}</span>{role && <span className={`team-tag ${role.team}`}>{translateRole(role.name)}</span>}<span className="results-status">{player.alive ? 'АМЬД' : 'ХАСАГДСАН'}</span></div>; })}</div><div className="results-actions"><button className="secondary-button" onClick={onMenu}><ArrowLeft size={14} /> {i18n.game.results.mainMenu}</button>{(game.history?.length ?? 0) > 0 && <button className="secondary-button" onClick={() => setRecapOpen(true)}><Info size={14} /> ТОГЛОЛТЫН ТҮҮХ</button>}{isHost ? <button className="primary-button" onClick={onReplay}>{i18n.game.results.playAgain} <ChevronRight size={15} /></button> : <span className="discussion-wait">Эзэн шинэ тоглолт эхлүүлэхийг хүлээж байна</span>}</div>{recapOpen && <MatchRecap game={game} onClose={() => setRecapOpen(false)} />}</main>;
 }
