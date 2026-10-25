@@ -75,7 +75,7 @@ export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, o
       {message && <div className="account-inline-success"><Check size={13} /> {message}</div>}
       <div className="profile-data-grid"><Stat value={profile.total_matches} label={i18n.account.matches} /><Stat value={profile.wins} label={i18n.account.wins} /><Stat value={profile.losses} label={i18n.account.losses} /><Stat value={`${profile.win_rate.toFixed(1)}%`} label={i18n.account.winRate} />
       </div>
-      {editing ? <form className="profile-edit-form" onSubmit={saveProfile}><label className="auth-field"><span>{i18n.account.displayNameLabel}</span><input value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={24} /></label><fieldset className="avatar-picker"><legend>{i18n.account.chooseAvatar}</legend><div>{avatarOptions.map((option) => <button type="button" key={option.key} aria-label={option.label} title={option.label} aria-pressed={avatar === option.key} className={`avatar-choice avatar avatar-${option.key} ${avatar === option.key ? 'chosen' : ''}`} onClick={() => setAvatar(option.key)}><span>{initials(name || profile.display_name)}</span></button>)}</div></fieldset>{error && <p className="form-error" role="alert">{error}</p>}<div className="account-actions"><button type="button" className="secondary-button" onClick={() => { setEditing(false); setError(''); }}>{i18n.account.cancel}</button><button type="submit" className="primary-button" disabled={saving}>{saving ? 'ХАДГАЛЖ БАЙНА…' : i18n.account.saveProfile} <Check size={14} /></button></div></form> : <div className="profile-footer"><span><Shield size={13} /> {i18n.account.profileNote}</span><button className="secondary-button" onClick={() => { setEditing(true); setMessage(''); }}>{i18n.account.editProfile} <ChevronRight size={14} /></button></div>}
+      {editing ? <form className="profile-edit-form" onSubmit={saveProfile}><label className="auth-field"><span>{i18n.account.displayNameLabel}</span><input value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={24} /></label>{error && <p className="form-error" role="alert">{error}</p>}<div className="account-actions"><button type="button" className="secondary-button" onClick={() => { setEditing(false); setError(''); }}>{i18n.account.cancel}</button><button type="submit" className="primary-button" disabled={saving}>{saving ? 'ХАДГАЛЖ БАЙНА…' : i18n.account.saveProfile} <Check size={14} /></button></div></form> : <div className="profile-footer"><span><Shield size={13} /> {i18n.account.profileNote}</span><button className="secondary-button" onClick={() => { setEditing(true); setMessage(''); }}>{i18n.account.editProfile} <ChevronRight size={14} /></button></div>}
     </div>}
     {portraitsOpen && profile && <div className="game-modal-backdrop" onClick={() => setPortraitsOpen(false)}>
       <section className="game-modal portrait-picker" role="dialog" aria-modal="true" aria-labelledby="portrait-title" onClick={(event) => event.stopPropagation()}>
@@ -109,10 +109,6 @@ function LoadingState({ label, compact = false }: { label: string; compact?: boo
 
 function Stat({ value, label }: { value: string | number; label: string }) {
   return <div className="account-stat"><b>{value}</b><span>{label}</span></div>;
-}
-
-function initials(name: string) {
-  return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('') || '??';
 }
 
 function formatDate(value: string) {

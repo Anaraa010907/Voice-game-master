@@ -5,8 +5,8 @@ import {
   startNight, startVoting, submitNightAction, type GameEngineState, type MafiaSettings, type Verdict, type VoteChoice,
 } from '../_shared/gameEngine.ts';
 import {
-  MIN_MONOPOLY_PLAYERS, applyMonopolyAction, autoPlay, createMonopolyGame, removeMonopolyPlayer,
-  type MonopolyAction, type MonopolyState,
+  MIN_MONOPOLY_PLAYERS, applyMonopolyAction, autoPlay, createMonopolyGame, removeMonopolyPlayer, sanitizeMonopolySettings,
+  type MonopolyAction, type MonopolySettings, type MonopolyState,
 } from '../_shared/monopolyEngine.ts';
 import { BOT_STEP_SECONDS, boardBotToMove, mafiaBotsAct, monopolyBotStep, nextBotName } from '../_shared/bots.ts';
 import { isAllowedOrigin } from '../_shared/voiceRequest.ts';
@@ -19,7 +19,7 @@ import type { VoicePhase } from '../_shared/voicePolicy.ts';
  */
 
 type GameType = 'mafia' | 'monopoly';
-type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type: GameType; settings?: Partial<MafiaSettings> | null };
+type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type: GameType; settings?: Partial<MafiaSettings> | Partial<MonopolySettings> | null };
 /** The stored engine also carries the match id used to record win/loss statistics exactly once. */
 type StoredGame = GameEngineState & { matchId?: string };
 type StoredBoard = MonopolyState & { matchId?: string };
@@ -142,6 +142,11 @@ function boardAction(move: string, body: Body): MonopolyAction {
   return { type: move } as MonopolyAction;
 }
 
+/** Validated room rules for this kind of game. */
+function roomSettings(type: GameType, input: unknown) {
+  return type === 'monopoly' ? sanitizeMonopolySettings(input) : sanitizeMafiaSettings(input);
+}
+
 function deadlineFor(state: AnyGame): string | null {
   if (isBoard(state)) {
     if (state.phase === 'finished') return null;
@@ -257,7 +262,7 @@ class GameServer {
 
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const roomCodeValue = roomCode();
-      const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate, game_type: type });
+      const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate, game_type: type, settings: roomSettings(type, body.settings) });
       if (error?.code === '23505') continue;
       if (error) throw error;
       const seat: Seat = { user_id: this.userId, seat: 1, display_name: me.name, color: me.color, ready: true, avatar_url: me.url };
@@ -383,7 +388,7 @@ class GameServer {
       bot: seat.is_bot === true,
     }));
     const engine: AnyGame = room.game_type === 'monopoly'
-      ? { ...createMonopolyGame(people, secureRandom), matchId: crypto.randomUUID() }
+      ? { ...createMonopolyGame(people, secureRandom, sanitizeMonopolySettings(room.settings)), matchId: crypto.randomUUID() }
       : { ...createInitialGame(people, undefined, secureRandom, sanitizeMafiaSettings(room.settings)), matchId: crypto.randomUUID() };
     await this.admin.from('game_private').delete().eq('room_code', roomCodeValue);
     const { error } = await this.admin.from('game_states').update({ engine, version: 1, updated_at: new Date().toISOString() }).eq('room_code', roomCodeValue);
@@ -588,14 +593,13 @@ class GameServer {
     return { ok: true };
   }
 
-  /** Host-only, in the lobby: the Mafia room rules (mode, optional roles, reveal, anonymous votes, discussion length). */
+  /** Host-only, in the lobby: the room rules (Mafia: mode, roles, reveal, ballots, discussion; board game: round limit). */
   async settings(body: Body) {
     const roomCodeValue = code(body);
     const room = await this.room(roomCodeValue);
     if (room.host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн дүрэм өөрчилнө.');
     if (room.status !== 'lobby') throw new GameError(409, 'Тоглоом эхэлсэн үед дүрэм өөрчлөх боломжгүй.');
-    if ((room.game_type ?? 'mafia') !== 'mafia') throw new GameError(409, 'Энэ тохиргоо зөвхөн Мафид хамаатай.');
-    const settings = sanitizeMafiaSettings(body.settings);
+    const settings = roomSettings(room.game_type ?? 'mafia', body.settings);
     await this.touchRoom(roomCodeValue, { settings });
     return { settings };
   }
