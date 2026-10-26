@@ -298,7 +298,9 @@ class GameServer {
     const { data: secret } = await this.admin.from('game_states').select('password_hash').eq('room_code', roomCodeValue).maybeSingle();
     if (secret?.password_hash) {
       const password = typeof body.password === 'string' ? body.password : '';
-      if (await hashPassword(roomCodeValue, password) !== secret.password_hash) throw new GameError(403, 'Өрөөний нууц үг таарахгүй байна.');
+      if (await hashPassword(roomCodeValue, password) !== secret.password_hash && !(await this.invitedTo(roomCodeValue, seats))) {
+        throw new GameError(403, 'Өрөөний нууц үг таарахгүй байна.');
+      }
     }
     const me = await this.profile();
     const taken = new Set(seats.map((seat) => seat.seat));
@@ -311,6 +313,14 @@ class GameServer {
     await this.addVoiceMember(roomCodeValue, seat, false);
     await this.touchRoom(roomCodeValue);
     return { roomCode: roomCodeValue };
+  }
+
+  /** A friend seated in the room invited me within the last hour: the invite stands in for the password. */
+  private async invitedTo(roomCode: string, seats: Seat[]) {
+    const since = new Date(Date.now() - 3600_000).toISOString();
+    const { data } = await this.admin.from('direct_messages').select('sender').eq('recipient', this.userId).eq('kind', 'invite')
+      .eq('room_code', roomCode).gte('created_at', since).limit(20);
+    return ((data ?? []) as Array<{ sender: string }>).some((invite) => seats.some((seat) => seat.user_id === invite.sender));
   }
 
   async requireSeat(roomCode: string) {

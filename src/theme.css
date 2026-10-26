@@ -2836,3 +2836,90 @@
 }
 .viewport .game-frame .watch-banner button { display: inline-flex; align-items: center; gap: 3px; min-height: 22px; padding: 0 9px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .12); color: #fff; font-size: 9.5px; font-weight: 700; }
 .watch-lobby-body { padding: 12px 4%; display: grid; gap: 10px; overflow-y: auto; }
+
+/* ---------- Friends: list, chat, invites ---------- */
+.viewport .game-frame:is(.screen-friends) {
+  background: linear-gradient(90deg, rgba(5, 6, 10, .8), rgba(5, 6, 10, .6) 55%, rgba(5, 6, 10, .75)), var(--bg-office, none) center / cover no-repeat, var(--fallback-office);
+}
+.viewport .game-frame .my-id { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 12px; border: 1px solid var(--gold-line); border-radius: 999px; background: rgba(12, 14, 20, .8); color: #cfc4b0; font-size: 10.5px; }
+.my-id b { color: var(--gold-bright); letter-spacing: .5px; }
+.chip.profile-id { color: var(--gold-bright); }
+
+.friends-layout { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(250px, 34%) minmax(0, 1fr); }
+.friends-side { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 10px 10px 14px 14px; display: grid; gap: 10px; align-content: start; border-right: 1px solid var(--gold-faint); background: rgba(6, 7, 11, .45); }
+.friends-group { display: grid; gap: 5px; }
+.friends-group > header { display: flex; align-items: center; justify-content: space-between; color: var(--gold); font-size: 9.5px; font-weight: 700; letter-spacing: 1.2px; }
+.viewport .game-frame .friends-group > header .icon-button { width: 22px; height: 22px; min-height: 0; }
+
+.viewport .game-frame .friend-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 46px;
+  padding: 6px 9px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 10px;
+  background: rgba(12, 14, 20, .78);
+  color: #e9e1d4;
+  text-align: left;
+}
+.viewport .game-frame .friend-row.is-friend:hover, .viewport .game-frame .friend-row.is-selected { border-color: var(--gold-line); background: rgba(210, 176, 115, .1); }
+.viewport .game-frame .friend-row.is-request { border-color: rgba(90, 190, 140, .45); }
+.viewport .game-frame .friend-row .avatar { width: 32px; height: 32px; font-size: 12px; flex: none; }
+.viewport .game-frame .friend-row .avatar-frame.is-painted { inset: -24%; }
+.viewport .game-frame .friend-row > :is(.primary-button, .secondary-button) { flex: none; min-height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px; font-size: 9.5px; }
+.friend-copy { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.friend-copy b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.friend-copy b small { color: #8f8a8e; font-weight: 400; font-size: 10px; }
+.friend-copy small { color: #8f8a8e; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friend-copy small.is-online { color: #8fe0b5; }
+.friend-copy small.is-lobby { color: #b9d6ff; }
+.friend-copy small.is-playing { color: #ffd979; }
+.viewport .game-frame .avatar i.presence-dot { left: auto; right: -2px; top: auto; bottom: -1px; width: 10px; height: 10px; border: 2px solid #0c0e14; border-radius: 50%; background: #5d5960; z-index: 3; }
+.viewport .game-frame .avatar i.presence-dot.is-online { background: #3ddc84; }
+.viewport .game-frame .avatar i.presence-dot.is-lobby { background: #3fa7ff; }
+.viewport .game-frame .avatar i.presence-dot.is-playing { background: #ffd23f; }
+
+.friends-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.friends-empty { margin: auto; display: grid; justify-items: center; gap: 8px; max-width: 300px; color: #8f8a8e; font-size: 11.5px; text-align: center; }
+.friend-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.friend-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--gold-faint); background: rgba(8, 10, 15, .55); }
+.viewport .game-frame .friend-head-avatar { width: 38px; height: 38px; font-size: 14px; flex: none; }
+.viewport .game-frame .friend-head-avatar .avatar-frame.is-painted { inset: -26%; }
+.friend-head-actions { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.viewport .game-frame .friend-head-actions > button:not(.icon-button) { min-height: 30px; padding: 0 12px; display: inline-flex; align-items: center; gap: 5px; font-size: 10px; }
+.viewport .game-frame .friend-head-actions .icon-button { width: 30px; height: 30px; min-height: 0; }
+
+.chat-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; list-style: none; margin: 0; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+.chat-empty { margin: auto; color: #8f8a8e; font-size: 12px; }
+.chat-message { align-self: flex-start; max-width: 76%; display: grid; gap: 2px; }
+.chat-message.is-mine { align-self: flex-end; justify-items: end; }
+.chat-message p { margin: 0; padding: 7px 11px; border-radius: 14px 14px 14px 4px; background: rgba(30, 32, 42, .92); color: #efe7da; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.chat-message.is-mine p { border-radius: 14px 14px 4px 14px; background: linear-gradient(180deg, rgba(150, 40, 55, .92), rgba(110, 28, 40, .92)); color: #fff2e6; }
+.chat-message small { color: #77727a; font-size: 9px; }
+.chat-card { display: flex; align-items: center; gap: 9px; padding: 9px 11px; border: 1px solid var(--gold-line); border-radius: 12px; background: rgba(40, 30, 16, .85); color: #f4ead7; font-size: 11px; }
+.chat-card > span { display: grid; gap: 1px; }
+.chat-card b { color: var(--gold-bright); font-size: 11.5px; }
+.chat-card.is-gift .gift-icon { font-size: 26px; }
+.viewport .game-frame .chat-card .primary-button { min-height: 28px; padding: 0 12px; font-size: 10px; }
+.chat-input { display: flex; gap: 6px; padding: 8px 14px 10px; border-top: 1px solid var(--gold-faint); background: rgba(8, 10, 15, .6); }
+.viewport .game-frame .chat-input input { flex: 1; min-width: 0; height: 34px; padding: 0 14px; border: 1px solid rgba(255, 255, 255, .14); border-radius: 999px; background: rgba(6, 7, 11, .9); color: #efe7da; font-size: 12px; outline: none; }
+.viewport .game-frame .chat-input input:focus { border-color: var(--gold-line); }
+.viewport .game-frame .chat-input .primary-button { width: 38px; min-height: 34px; padding: 0; display: grid; place-items: center; }
+.friend-gift { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px; display: grid; gap: 8px; align-content: start; }
+
+.viewport .game-frame .menu-nav .menu-nav-friends { border-color: rgba(90, 190, 140, .55); color: #c8f5dc; }
+.viewport .game-frame .menu-nav .admin-count { justify-self: end; }
+.viewport .game-frame .invite-friends-button { display: inline-flex; align-items: center; gap: 6px; }
+.invite-list { display: grid; gap: 5px; max-height: 50vh; overflow-y: auto; }
+
+/* Gift picker: frames and nameplates */
+.gift-tabs { margin-top: -2px; }
+.viewport .game-frame .gift-grid .gift-frame-preview { width: 30px; height: 30px; margin: 6px 0 4px; font-size: 10px; }
+.viewport .game-frame .gift-grid .gift-frame-preview .avatar-frame.is-painted { inset: -34%; }
+.gift-plate-preview { display: block; width: 100%; height: 30px; border-radius: 6px; margin-bottom: 2px; }
+.gift-grid.kind-nameplate { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.viewport .game-frame .friend-gift .pcard-note { margin: 0; color: #8f8a8e; font-size: 10.5px; }
+.viewport .game-frame .friend-gift .modal-actions { display: flex; justify-content: flex-end; }
+.viewport .game-frame .friend-gift .modal-actions .primary-button { display: inline-flex; align-items: center; gap: 6px; }

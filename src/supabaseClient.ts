@@ -37,6 +37,7 @@ export type PublicProfile = {
   frame_key?: string | null;
   title_key?: string | null;
   nameplate_key?: string | null;
+  player_no?: number;
 };
 
 export type RatingChange = {

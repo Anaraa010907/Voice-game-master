@@ -3,7 +3,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
   ArrowLeft, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, LockKeyhole, Moon,
-  MessageSquare, Radio, RefreshCw, Settings as SettingsIcon, Shield, ShieldCheck, ShoppingBag, UserRound, Users, WandSparkles, Zap,
+  MessageSquare, Radio, RefreshCw, Settings as SettingsIcon, Shield, ShieldCheck, ShoppingBag, UserPlus, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles, type RoleName } from './gameData';
 import RoleCardArtwork from './RoleCardArtwork';
@@ -12,6 +12,7 @@ import Auth, { takeOAuthPending, type AuthView } from './Auth';
 import { ProfileScreen } from './AccountScreens';
 import { AdminScreen, AnnouncementBanner, BannedOverlay, FeedbackScreen, banActive, type PlayerBan, type StaffRole } from './AdminScreens';
 import { GiftLayer, PlayerCardModal, ShopScreen } from './Social';
+import { FriendsScreen, InviteFriendsModal, useFriends, useMessageToasts, type Friend } from './Friends';
 import { supabase, supabaseConfigured, type PublicProfile } from './supabaseClient';
 import { i18n, translateMessage } from './i18n';
 import { removeProfilePhoto, uploadProfilePhoto } from './avatarUpload';
@@ -26,7 +27,7 @@ import { musicEnabled, setMusicEnabled, setSfxEnabled, sfxEnabled, startMusic, w
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { FullscreenToggle, useFullscreen, type FullscreenState } from './fullscreen';
 
-type Screen = 'menu' | 'hub' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth' | 'feedback' | 'admin' | 'shop' | 'watch';
+type Screen = 'menu' | 'hub' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth' | 'feedback' | 'admin' | 'shop' | 'watch' | 'friends';
 
 type RoomSettings = { name: string; maxPlayers: number; isPublic: boolean; password: string; gameType: GameType; settings?: Record<string, unknown> };
 const ROOM_STORAGE_KEY = 'mafia-shadows:room';
@@ -60,6 +61,8 @@ export default function App() {
   const [watchRoom, setWatchRoom] = useState<string | null>(null);
   const [ban, setBan] = useState<PlayerBan | null>(null);
   const fullscreen = useFullscreen();
+  const friendsState = useFriends(userId);
+  const [myRoomInfo, setMyRoomInfo] = useState<{ code: string; name: string; status: string } | null>(null);
 
   // The menu theme starts on the main menu and keeps playing across menus and lobbies; games swap in their own music.
   useEffect(() => {
@@ -153,6 +156,28 @@ export default function App() {
       void listener.then((handle) => handle.remove());
     };
   }, []);
+
+  useMessageToasts(userId, screen === 'friends', notify);
+
+  // The friends screen can invite to the lobby I sit in, so it needs that room's name and state.
+  useEffect(() => {
+    if (screen !== 'friends' || !roomCode || !supabase) { setMyRoomInfo(null); return; }
+    let active = true;
+    void supabase.from('game_rooms').select('room_code,name,status').eq('room_code', roomCode).maybeSingle().then(({ data }) => {
+      if (active) setMyRoomInfo(data ? { code: data.room_code as string, name: data.name as string, status: data.status as string } : null);
+    });
+    return () => { active = false; };
+  }, [screen, roomCode]);
+
+  /** Accept an invite: leave the room I was in (if another), then sit down in the new one. */
+  const joinInvite = async (code: string) => {
+    try {
+      if (roomCode && roomCode !== code) { try { await callGame('leave', { roomCode }); } catch { /* already gone */ } }
+      await joinRoom(code, '');
+    } catch (cause) {
+      notify(cause instanceof Error ? cause.message : 'Өрөөнд нэгдэж чадсангүй.', 'error');
+    }
+  };
 
   // The profile shows coins, frame and title bought in the shop, so it is re-read each time it opens.
   useEffect(() => {
@@ -262,7 +287,7 @@ export default function App() {
     <main className="viewport">
       <section className={`game-frame screen-${screen}`} aria-label="MAFIA: SHADOWS тоглоом">
         <div className="grain" aria-hidden="true" />
-        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} onFeedback={() => requireAccount('feedback')} onShop={() => requireAccount('shop')} signedIn={Boolean(userId)} staffRole={staffRole} onAuth={openAuth} fullscreen={fullscreen} />}
+        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} onFeedback={() => requireAccount('feedback')} onShop={() => requireAccount('shop')} onFriends={() => requireAccount('friends')} friendBadge={friendsState.badge} signedIn={Boolean(userId)} staffRole={staffRole} onAuth={openAuth} fullscreen={fullscreen} />}
         {screen === 'hub' && <GameHub onBack={goBack} onChoose={(type) => { setGameType(type); setScreen('browse'); }} onJoinCode={() => setScreen('join-room')} />}
         {screen === 'browse' && <RoomBrowser key={gameType} gameType={gameType} onBack={() => setScreen('hub')} onCreate={() => setScreen('create-room')} onJoinCode={() => setScreen('join-room')} onEnter={enterRoom} />}
         {screen === 'create-room' && <CreateRoom key={gameType} gameType={gameType} onBack={() => setScreen('browse')} onCreate={createRoom} />}
@@ -276,6 +301,7 @@ export default function App() {
             onLeft={leaveRoom}
             onNotice={notify}
             fullscreen={fullscreen}
+            friends={friendsState.friends}
           />
         )}
         {screen === 'lobby' && (!roomCode || !userId) && <JoinRoom onBack={goBack} onJoin={joinRoom} />}
@@ -287,6 +313,8 @@ export default function App() {
         {screen === 'watch' && staffRole === 'admin' && watchRoom && userId && <AdminWatch roomCode={watchRoom} userId={userId} notify={notify} fullscreen={fullscreen}
           onExit={() => { setWatchRoom(null); setScreen('admin'); }} />}
         {screen === 'shop' && userId && <ShopScreen onBack={goBack} notify={notify} />}
+        {screen === 'friends' && userId && <FriendsScreen userId={userId} playerNo={profile?.player_no ?? null} friendsState={friendsState} myRoom={myRoomInfo}
+          onBack={goBack} onJoinRoom={joinInvite} notify={notify} />}
         {userId && banActive(ban) && screen !== 'feedback' && screen !== 'auth'
           && <BannedOverlay ban={ban!} onSignOut={() => openAuth('sign-out')} onFeedback={() => setScreen('feedback')} />}
         {screen === 'settings' && <Settings onBack={goBack} onProfile={() => setScreen('profile')} onAuth={() => openAuth(userId ? 'sign-out' : 'sign-in')} signedIn={Boolean(userId)} />}
@@ -307,7 +335,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
   return <div className={`brand-mark ${compact ? 'compact' : ''}`}><span className="brand-emblem"><img src="/assets/brand/emblem-192.png" alt="" width={compact ? 30 : 42} height={compact ? 30 : 42} /></span><span>MAFIA<span className="brand-colon">:</span> <b>SHADOWS</b></span></div>;
 }
 
-function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, onShop, signedIn, staffRole, onAuth, fullscreen }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; onFeedback: () => void; onShop: () => void; signedIn: boolean; staffRole: StaffRole | null; onAuth: (view?: AuthView) => void; fullscreen: FullscreenState }) {
+function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, onShop, onFriends, friendBadge, signedIn, staffRole, onAuth, fullscreen }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; onFeedback: () => void; onShop: () => void; onFriends: () => void; friendBadge: number; signedIn: boolean; staffRole: StaffRole | null; onAuth: (view?: AuthView) => void; fullscreen: FullscreenState }) {
   return (
     <div className="menu-screen">
       <header className="menu-top"><Brand /><div className="menu-top-actions"><div className="online-note"><span className="status-dot" /> {signedIn ? 'ОНЛАЙН' : 'НЭВТРЭЭГҮЙ'}</div><FullscreenToggle fullscreen={fullscreen} /></div></header>
@@ -325,6 +353,7 @@ function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, onShop, signed
         <button onClick={onJoin}><span className="nav-icon"><Radio size={16} /></span><span>{i18n.app.joinRoom}</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('roles')}><span className="nav-icon"><Shield size={16} /></span><span>{i18n.app.roleGallery}</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('profile')}><span className="nav-icon"><UserRound size={16} /></span><span>{i18n.app.profile}</span><ChevronRight size={14} /></button>
+        <button className="menu-nav-friends" onClick={onFriends}><span className="nav-icon"><Users size={16} /></span><span>Найзууд</span>{friendBadge > 0 ? <b className="admin-count">{friendBadge}</b> : <ChevronRight size={14} />}</button>
         <button className="menu-nav-shop" onClick={onShop}><span className="nav-icon"><ShoppingBag size={16} /></span><span>Дэлгүүр</span><ChevronRight size={14} /></button>
         <button onClick={onFeedback}><span className="nav-icon"><MessageSquare size={16} /></span><span>Санал хүсэлт</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('settings')}><span className="nav-icon"><SettingsIcon size={16} /></span><span>{i18n.app.settings}</span><ChevronRight size={14} /></button>
@@ -488,9 +517,10 @@ function RoomBrowser({ gameType, onBack, onCreate, onJoinCode, onEnter }: { game
 }
 
 /** Lobby while the room waits; switches to the live game once the host starts. */
-function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullscreen }: {
-  roomCode: string; userId: string; copied: boolean; onCopy: () => void; onLeft: () => void; onNotice: NotifyFn; fullscreen: FullscreenState;
+function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullscreen, friends }: {
+  roomCode: string; userId: string; copied: boolean; onCopy: () => void; onLeft: () => void; onNotice: NotifyFn; fullscreen: FullscreenState; friends: Friend[];
 }) {
+  const [inviteOpen, setInviteOpen] = useState(false);
   const { room, seats, loaded, missing, error, reload } = useRoom(roomCode);
   const [busy, setBusy] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -504,7 +534,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
   // Gifts pop up for the whole table; a tapped player's card sits on top of any screen in the room.
   const overlays = <>
     <GiftLayer roomCode={roomCode} />
-    {profileSeat && <PlayerCardModal seat={profileSeat} roomCode={roomCode} myUserId={userId} notify={onNotice} onClose={() => setProfileSeat(null)} />}
+    {profileSeat && <PlayerCardModal seat={profileSeat} roomCode={roomCode} myUserId={userId} inGame={room?.status === 'playing'} notify={onNotice} onClose={() => setProfileSeat(null)} />}
   </>;
 
   useEffect(() => {
@@ -578,6 +608,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
           <div className="lobby-bottom">
             <div className="lobby-hint"><LockKeyhole size={14} /><span>{isHost ? 'ТА ӨРӨӨНИЙ ЭЗЭН' : 'ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА'} <b>•</b> {hint}</span></div>
             <div className="lobby-actions">
+              <button className="secondary-button invite-friends-button" onClick={() => setInviteOpen(true)}><UserPlus size={15} /> НАЙЗ УРИХ</button>
               {!isHost && <button className={`secondary-button ready-button ${mine.ready ? 'is-ready' : ''}`} disabled={busy} onClick={() => run('ready', { ready: !mine.ready })}>{mine.ready ? <Check size={15} /> : <Shield size={15} />}{mine.ready ? 'БЭЛЭН' : 'БИ БЭЛЭН'}</button>}
               <button className="text-button" onClick={leave}><ArrowLeft size={15} /> {isHost ? 'ӨРӨӨГ ХААХ' : i18n.common.leave.toUpperCase()}</button>
               {isHost && <button className="primary-button start-button" disabled={busy || !canStart} onClick={() => run('start')}><Moon size={15} /> {i18n.app.startGame.toUpperCase()} <ChevronRight size={16} /></button>}
@@ -588,6 +619,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
           onClose={() => setRulesOpen(false)} onSave={(settings) => { void run('settings', { settings }).then((saved) => { if (saved) setRulesOpen(false); }); }} />}
       </div>
       {overlays}
+      {inviteOpen && <InviteFriendsModal roomCode={roomCode} friends={friends} onClose={() => setInviteOpen(false)} notify={onNotice} />}
     </VoiceChatProvider>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, Bot, Check, Coins, Flag, Gift, Send, ShoppingBag, Sparkles, Trophy, X } from 'lucide-react';
+import { ArrowLeft, Bot, Check, Coins, Flag, Gift, Send, ShoppingBag, Sparkles, Trophy, UserPlus, X } from 'lucide-react';
 import Avatar, { nameplate } from './Avatar';
 import { supabase } from './supabaseClient';
 import type { NotifyFn, RoomSeat } from './multiplayer';
@@ -58,6 +58,7 @@ function useMyCoins() {
 }
 
 const failure = (error: { message?: string } | null | undefined) => error?.message || 'Алдаа гарлаа. Дахин оролдоно уу.';
+const failureOf = (result: { error: { message?: string } | null }) => result.error ? failure(result.error) : '';
 
 export function CoinCount({ value, className = '' }: { value: number | null; className?: string }) {
   return <span className={`coin-count ${className}`}><Coins size={13} />{value === null ? '…' : value.toLocaleString('en-US')}</span>;
@@ -110,6 +111,41 @@ export function GiftLayer({ roomCode }: { roomCode: string }) {
   </div>;
 }
 
+/* ---------- choosing a gift ---------- */
+
+type GiftTab = 'gift' | 'frame' | 'nameplate';
+const GIFT_TABS: { key: GiftTab; label: string }[] = [{ key: 'gift', label: 'Бэлэг' }, { key: 'frame', label: 'Хүрээ' }, { key: 'nameplate', label: 'Нэрийн хавтан' }];
+
+/**
+ * The gift grid. Frames and nameplates (given to a friend to keep) are offered only outside a game;
+ * `onSend` gets the item so the caller decides how it is delivered.
+ */
+export function GiftPicker({ targetName, allowCosmetics, busy, note, onBack, onSend }: {
+  targetName: string; allowCosmetics: boolean; busy: boolean; note: string; onBack?: () => void; onSend: (item: ShopItem) => void;
+}) {
+  const items = useShopItems();
+  const { coins } = useMyCoins();
+  const free = useFreeShopping();
+  const [tab, setTab] = useState<GiftTab>('gift');
+  const [picked, setPicked] = useState<string | null>(null);
+  const shown = items.filter((item) => item.kind === tab);
+  const choice = items.find((item) => item.key === picked);
+  return <>
+    <div className="pcard-subhead">{onBack && <button type="button" className="icon-button" onClick={onBack} aria-label="Буцах"><ArrowLeft size={14} /></button>}<b>{targetName}-д бэлэг</b><CoinCount value={coins} /></div>
+    {allowCosmetics && <div className="admin-choice-row gift-tabs" role="tablist">{GIFT_TABS.map((item) => <button type="button" role="tab" aria-selected={tab === item.key} key={item.key}
+      className={tab === item.key ? 'is-picked' : ''} onClick={() => { setTab(item.key); setPicked(null); }}>{item.label}</button>)}</div>}
+    <div className={`gift-grid kind-${tab}`}>{shown.map((item) => <button type="button" key={item.key} className={picked === item.key ? 'is-picked' : ''} disabled={!free && coins !== null && coins < item.price}
+      onClick={() => setPicked(item.key)} aria-pressed={picked === item.key}>
+      {item.kind === 'gift' && <span className="gift-icon">{item.icon}</span>}
+      {item.kind === 'frame' && <Avatar name={item.name} color="rose" frame={item.key} className="gift-frame-preview" />}
+      {item.kind === 'nameplate' && <span className={`gift-plate-preview ${nameplate(item.key).className}`} style={nameplate(item.key).style} />}
+      <b>{item.name}</b><small>{free ? 'ҮНЭГҮЙ' : <><Coins size={10} />{item.price}</>}</small></button>)}</div>
+    <p className="pcard-note">{tab === 'gift' ? note : 'Найз тань энэ барааг өөрийн болгож авна. Аль хэдийн байгаа бол илгээгдэхгүй.'}</p>
+    <div className="modal-actions"><button type="button" className="primary-button" disabled={busy || !choice} onClick={() => choice && onSend(choice)}>
+      <Gift size={14} /> {choice ? (free ? 'ҮНЭГҮЙ ИЛГЭЭХ' : `${choice.price} ЗООСООР ИЛГЭЭХ`) : 'БЭЛЭГ СОНГОНО УУ'}</button></div>
+  </>;
+}
+
 /* ---------- a player's card at the table ---------- */
 
 type Card = {
@@ -121,21 +157,24 @@ type Card = {
 const REPORT_REASONS = ['Доромжилсон, хараасан', 'Хуурсан, луйвардсан', 'Тоглоомыг зориуд эвдсэн', 'Зохисгүй нэр, зураг', 'Бусад'];
 const RANK_LABEL: Record<string, string> = { Rookie: 'Шинэ тоглогч', Bronze: 'Хүрэл', Silver: 'Мөнгө', Gold: 'Алт', Platinum: 'Платин', Diamond: 'Алмаз', Master: 'Мастер' };
 
-/** Tap a player: their profile, a gift for them (everyone sees it) or a report to the admin. */
-export function PlayerCardModal({ seat, roomCode, myUserId, onClose, notify }: {
-  seat: RoomSeat; roomCode: string; myUserId: string; onClose: () => void; notify: NotifyFn;
+/** Sends a frame, nameplate or gift to a friend outside a room. Returns '' or the error. */
+export async function sendFriendGift(to: string, item: ShopItem) {
+  if (!supabase) return 'Сервер тохируулагдаагүй байна.';
+  const { error } = await supabase.rpc('send_friend_gift', { p_to: to, p_key: item.key });
+  return error ? failure(error) : '';
+}
+
+/** Tap a player: their profile, a gift for them (everyone sees it), a friend request or a report to the admin. */
+export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, notify }: {
+  seat: RoomSeat; roomCode: string; myUserId: string; inGame: boolean; onClose: () => void; notify: NotifyFn;
 }) {
   const items = useShopItems();
-  const gifts = items.filter((item) => item.kind === 'gift');
   const [card, setCard] = useState<Card | null>(null);
   const [loadError, setLoadError] = useState('');
   const [view, setView] = useState<'card' | 'gift' | 'report'>('card');
-  const [picked, setPicked] = useState<string | null>(null);
   const [reason, setReason] = useState(REPORT_REASONS[0]);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
-  const { coins, setCoins } = useMyCoins();
-  const free = useFreeShopping();
   const isMe = seat.user_id === myUserId;
   const isBot = Boolean(seat.is_bot);
 
@@ -149,15 +188,26 @@ export function PlayerCardModal({ seat, roomCode, myUserId, onClose, notify }: {
     return () => { active = false; };
   }, [seat.user_id, isBot]);
 
-  const sendGift = async () => {
-    if (!supabase || !picked) return;
+  const sendGift = async (item: ShopItem) => {
+    if (!supabase) return;
     setBusy(true);
-    const { data, error } = await supabase.rpc('send_gift', { p_room: roomCode, p_to: seat.user_id, p_gift: picked });
+    // Emoji gifts pop up for the whole table; frames and nameplates go to a friend to keep.
+    const problem = item.kind === 'gift'
+      ? failureOf(await supabase.rpc('send_gift', { p_room: roomCode, p_to: seat.user_id, p_gift: item.key }))
+      : await sendFriendGift(seat.user_id, item);
+    setBusy(false);
+    if (problem) { notify(problem, 'error'); return; }
+    notify(item.kind === 'gift' ? 'Бэлэг илгээгдлээ!' : `${item.name} бэлэглэлээ!`, 'success');
+    onClose();
+  };
+
+  const addFriend = async () => {
+    if (!supabase) return;
+    setBusy(true);
+    const { data, error } = await supabase.rpc('send_friend_request', { p_user: seat.user_id });
     setBusy(false);
     if (error) { notify(failure(error), 'error'); return; }
-    if (typeof data === 'number') setCoins(data);
-    notify('Бэлэг илгээгдлээ!', 'success');
-    onClose();
+    notify(data === 'friend' ? 'Та хоёр найз боллоо!' : 'Найзын хүсэлт илгээлээ.', 'success');
   };
 
   const sendReport = async () => {
@@ -174,14 +224,7 @@ export function PlayerCardModal({ seat, roomCode, myUserId, onClose, notify }: {
   const giftIcon = (key: string) => items.find((item) => item.key === key)?.icon || '🎁';
   let body: ReactNode;
   if (view === 'gift') {
-    const choice = gifts.find((item) => item.key === picked);
-    body = <>
-      <div className="pcard-subhead"><button type="button" className="icon-button" onClick={() => setView('card')} aria-label="Буцах"><ArrowLeft size={14} /></button><b>{name}-д бэлэг</b><CoinCount value={coins} /></div>
-      <div className="gift-grid">{gifts.map((item) => <button type="button" key={item.key} className={picked === item.key ? 'is-picked' : ''} disabled={!free && coins !== null && coins < item.price}
-        onClick={() => setPicked(item.key)} aria-pressed={picked === item.key}><span className="gift-icon">{item.icon}</span><b>{item.name}</b><small>{free ? 'ҮНЭГҮЙ' : <><Coins size={10} />{item.price}</>}</small></button>)}</div>
-      <p className="pcard-note">Бэлэг ширээн дээрх бүх хүнд харагдана.</p>
-      <div className="modal-actions"><button type="button" className="primary-button" disabled={busy || !choice} onClick={() => void sendGift()}><Gift size={14} /> {choice ? (free ? 'ҮНЭГҮЙ ИЛГЭЭХ' : `${choice.price} ЗООСООР ИЛГЭЭХ`) : 'БЭЛЭГ СОНГОНО УУ'}</button></div>
-    </>;
+    body = <GiftPicker targetName={name} allowCosmetics={!inGame} busy={busy} note="Бэлэг ширээн дээрх бүх хүнд харагдана." onBack={() => setView('card')} onSend={(item) => void sendGift(item)} />;
   } else if (view === 'report') {
     body = <>
       <div className="pcard-subhead"><button type="button" className="icon-button" onClick={() => setView('card')} aria-label="Буцах"><ArrowLeft size={14} /></button><b>{name}-г мэдээлэх</b></div>
@@ -213,6 +256,7 @@ export function PlayerCardModal({ seat, roomCode, myUserId, onClose, notify }: {
         {card.gifts.length > 0 && <div className="pcard-gifts" aria-label="Хүлээн авсан бэлгүүд">{card.gifts.slice(0, 8).map((entry) => <span key={entry.gift_key}>{giftIcon(entry.gift_key)}<small>×{entry.count}</small></span>)}</div>}
       </>}
       {!isMe && !isBot && <div className="modal-actions pcard-actions">
+        <button type="button" className="secondary-button" disabled={busy} onClick={() => void addFriend()}><UserPlus size={14} /> НАЙЗ</button>
         <button type="button" className="secondary-button" onClick={() => setView('report')}><Flag size={14} /> ГОМДОЛ</button>
         <button type="button" className="primary-button" onClick={() => setView('gift')}><Gift size={14} /> БЭЛЭГ ИЛГЭЭХ</button>
       </div>}
