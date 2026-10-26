@@ -33,6 +33,9 @@ export type PublicProfile = {
   win_rate: number;
   current_win_streak: number;
   best_win_streak: number;
+  coins?: number;
+  frame_key?: string | null;
+  title_key?: string | null;
 };
 
 export type RatingChange = {

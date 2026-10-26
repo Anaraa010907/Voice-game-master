@@ -58,12 +58,15 @@ function ownerColor(game: MonopolyState, id: number | null | undefined, mySeat: 
 }
 const ownerStyle = (color: string | undefined) => (color ? { '--owner': color } : {}) as CSSProperties;
 
+/** Trade offers this player may still make during the current turn. */
+const offersLeft = (game: MonopolyState, id: number) => MAX_OFFERS_PER_TURN - (game.offerCounts?.[id] ?? 0);
+
 /** Digits only, so a typed amount never starts with a stuck "0". */
 const digits = (value: string) => value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 7);
 
-export default function MonopolyScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice }: {
+export default function MonopolyScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice, onProfile }: {
   roomCode: string; roomName: string; userId: string; isHost: boolean; seats: RoomSeat[];
-  onLeave: () => void; onRematch: () => void; onNotice: NotifyFn;
+  onLeave: () => void; onRematch: () => void; onNotice: NotifyFn; onProfile: (seat: number) => void;
 }) {
   const { publicView, deadline, reload } = useGame(roomCode, userId);
   const game = publicView as unknown as MonopolyState | null;
@@ -74,8 +77,9 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
   const [trading, setTrading] = useState(false);
   const tickedFor = useRef<number | null>(null);
   const mySeat = seats.find((seat) => seat.user_id === userId)?.seat ?? null;
-  // The trade composer only stays open while it is still my free move.
-  const canPropose = Boolean(game && game.kind === 'monopoly' && mySeat !== null && currentPlayerId(game) === mySeat && !game.trade
+  // Anyone still in the game may offer a trade (also off turn) while no other offer, purchase or auction is open.
+  const meNow = game && game.kind === 'monopoly' ? game.players.find((entry) => entry.id === mySeat) : undefined;
+  const canPropose = Boolean(game && game.kind === 'monopoly' && meNow && !meNow.bankrupt && !game.trade
     && (game.phase === 'roll' || game.phase === 'end'));
   useEffect(() => { if (!canPropose) setTrading(false); }, [canPropose]);
 
@@ -196,7 +200,8 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
         </header>
 
         <div className="mono-players">
-          {game.players.map((entry) => <PlayerRow key={entry.id} entry={entry} game={game} color={ownerColor(game, entry.id, mySeat)} isTurn={entry.id === turnId && game.phase !== 'finished'} isMe={entry.id === mySeat} />)}
+          {game.players.map((entry) => <PlayerRow key={entry.id} entry={entry} game={game} color={ownerColor(game, entry.id, mySeat)} isTurn={entry.id === turnId && game.phase !== 'finished'} isMe={entry.id === mySeat}
+            frame={seats.find((seat) => seat.seat === entry.id)?.frame_key} onProfile={() => onProfile(entry.id)} />)}
         </div>
 
         <div className="mono-actions">
@@ -207,7 +212,11 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
               : auction
                 ? <AuctionPanel game={game} auction={auction} me={me} busy={busy} onBid={(amount) => void send('bid', { amount })} onPass={() => void send('pass')} />
                 : !myTurn
-                  ? <div className="mono-waiting"><Avatar name={current.name} color={current.color} url={current.avatarUrl} initials={current.initials} /><span><b>{current.name}</b>{game.phase === 'roll' ? ' шоо хаяхыг хүлээж байна' : game.phase === 'buy' ? ` ${landingTile.name}-г авах эсэхээ шийдэж байна` : ' ээлжээ дуусгаж байна'}</span></div>
+                  ? <div className="mono-waiting-wrap">
+                    <div className="mono-waiting"><Avatar name={current.name} color={current.color} url={current.avatarUrl} initials={current.initials} /><span><b>{current.name}</b>{game.phase === 'roll' ? ' шоо хаяхыг хүлээж байна' : game.phase === 'buy' ? ` ${landingTile.name}-г авах эсэхээ шийдэж байна` : ' ээлжээ дуусгаж байна'}</span></div>
+                    {me && !me.bankrupt && <button type="button" className="secondary-button mono-offturn-trade" disabled={busy || !canPropose || offersLeft(game, me.id) <= 0} onClick={() => setTrading(true)}
+                      title={offersLeft(game, me.id) <= 0 ? 'Энэ ээлжийн саналууд дууссан' : undefined}><ArrowLeftRight size={14} /> АРИЛЖААНЫ САНАЛ</button>}
+                  </div>
                   : <MyTurn game={game} me={me!} busy={busy} onAction={(move) => void send(move)} onTrade={() => setTrading(true)} />}
         </div>
       </aside>
@@ -255,10 +264,11 @@ function Die({ value, index }: { value: number; index: number }) {
   return <span className={`mono-die ${value ? 'is-rolled' : 'is-empty'} die-${index}`}>{Array.from({ length: 9 }, (_, cell) => <i key={cell} className={(pips[value] ?? []).includes(cell + 1) ? 'on' : ''} />)}</span>;
 }
 
-function PlayerRow({ entry, game, color, isTurn, isMe }: { entry: MonopolyPlayer; game: MonopolyState; color?: string; isTurn: boolean; isMe: boolean }) {
+function PlayerRow({ entry, game, color, isTurn, isMe, frame, onProfile }: { entry: MonopolyPlayer; game: MonopolyState; color?: string; isTurn: boolean; isMe: boolean; frame?: string | null; onProfile: () => void }) {
   const owned = game.tiles.filter((tileState) => tileState.owner === entry.id).length;
-  return <div className={`mono-player ${isTurn ? 'is-turn' : ''} ${entry.bankrupt ? 'is-bankrupt' : ''}`} style={ownerStyle(color)}>
-    <Avatar name={entry.name} color={entry.color} url={entry.avatarUrl} initials={entry.initials}>{entry.host && <i><Crown size={9} /></i>}<VoiceAvatarIndicator name={entry.name} seat={entry.id} /></Avatar>
+  return <div className={`mono-player is-tappable ${isTurn ? 'is-turn' : ''} ${entry.bankrupt ? 'is-bankrupt' : ''}`} style={ownerStyle(color)} role="button" tabIndex={0}
+    onClick={onProfile} onKeyDown={(event) => { if (event.key === 'Enter') onProfile(); }} aria-label={`${entry.name} — профайл`}>
+    <Avatar name={entry.name} color={entry.color} url={entry.avatarUrl} initials={entry.initials} frame={frame}>{entry.host && <i><Crown size={9} /></i>}<VoiceAvatarIndicator name={entry.name} seat={entry.id} /></Avatar>
     <span className="mono-player-copy"><b>{entry.name}{isMe && <small>ЧИ</small>}</b><span>{entry.bankrupt ? 'ДАМПУУРСАН' : `${entry.inJail ? 'ШОРОНД' : BOARD[entry.position].short} · ${owned} газар`}{!entry.bankrupt && (entry.jailCards?.length ?? 0) > 0 && <i className="mono-jail-card" title="Шоронгоос гарах карт"><KeyRound size={9} />{entry.jailCards!.length}</i>}</span></span>
     <span className="mono-player-money">{entry.bankrupt ? '—' : money(entry.money)}</span>
   </div>;
@@ -266,8 +276,8 @@ function PlayerRow({ entry, game, color, isTurn, isMe }: { entry: MonopolyPlayer
 
 function MyTurn({ game, me, busy, onAction, onTrade }: { game: MonopolyState; me: MonopolyPlayer; busy: boolean; onAction: (move: string) => void; onTrade: () => void }) {
   const tile = BOARD[me.position];
-  const offersLeft = MAX_OFFERS_PER_TURN - (game.offersThisTurn ?? 0);
-  const tradeButton = <button className="secondary-button" disabled={busy || offersLeft <= 0} onClick={onTrade} title={offersLeft <= 0 ? 'Энэ ээлжийн саналууд дууссан' : undefined}><ArrowLeftRight size={14} /> АРИЛЖАА</button>;
+  const left = offersLeft(game, me.id);
+  const tradeButton = <button className="secondary-button" disabled={busy || left <= 0} onClick={onTrade} title={left <= 0 ? 'Энэ ээлжийн саналууд дууссан' : undefined}><ArrowLeftRight size={14} /> АРИЛЖАА</button>;
   const cards = me.jailCards?.length ?? 0;
   if (game.phase === 'roll') {
     return <div className="mono-turn">

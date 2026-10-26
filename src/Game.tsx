@@ -17,6 +17,7 @@ import { playSfx, startMusic } from './sfx';
 import GhostVoice from './GhostVoice';
 import { QUICK_REPLIES, useQuickReplies } from './quickReplies';
 import Avatar from './Avatar';
+import { useLongPress } from './Social';
 
 function roleInfo(name: RoleName) {
   return roles.find((item) => item.name === name)!;
@@ -36,12 +37,16 @@ function NightIcon({ role, size = 19 }: { role: RoleName; size?: number }) {
   return <Shield {...iconProps} />;
 }
 
-function GamePlayerCard({ player, isCurrent, selected, selectable, voteCount, voteTargetName, runoff, finalRole, bubble, onSelect }: {
-  player: PublicGamePlayer; isCurrent: boolean; selected: boolean; selectable: boolean; voteCount?: number; voteTargetName?: string; runoff?: boolean; finalRole?: RoleName; bubble?: string; onSelect: () => void;
+function GamePlayerCard({ player, isCurrent, selected, selectable, voteCount, voteTargetName, runoff, finalRole, bubble, frame, onSelect, onProfile }: {
+  player: PublicGamePlayer; isCurrent: boolean; selected: boolean; selectable: boolean; voteCount?: number; voteTargetName?: string; runoff?: boolean; finalRole?: RoleName; bubble?: string;
+  frame?: string | null; onSelect: () => void; onProfile: () => void;
 }) {
   const shownRole = player.revealedRole ?? finalRole;
-  return <button type="button" className={`game-player-card ${isCurrent ? 'is-current' : ''} ${selected ? 'is-selected' : ''} ${!player.alive ? 'is-dead' : ''} ${runoff ? 'is-runoff' : ''}`} onClick={onSelect} disabled={!selectable} aria-pressed={selected}>
-    <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}>{player.host && <i><Crown size={10} /></i>}<VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
+  // Tap picks a target while one can be picked, otherwise opens the profile; a long press always opens it.
+  const press = useLongPress(onProfile);
+  const tap = () => { if (press.fired.current) { press.fired.current = false; return; } if (selectable) onSelect(); else onProfile(); };
+  return <button type="button" className={`game-player-card ${isCurrent ? 'is-current' : ''} ${selected ? 'is-selected' : ''} ${!player.alive ? 'is-dead' : ''} ${runoff ? 'is-runoff' : ''} ${selectable ? '' : 'is-locked'}`} onClick={tap} {...press.handlers} aria-pressed={selected}>
+    <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials} frame={frame}>{player.host && <i><Crown size={10} /></i>}<VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
     <span className="game-player-copy"><b>{player.name}{isCurrent && <small>ЧИ</small>}</b><span className={`${player.alive ? 'alive-label' : 'dead-label'} ${finalRole && roleInfo(finalRole).team === 'mafia' ? 'spectator-mafia' : ''}`}>{player.alive ? (runoff ? 'ДАВТАН САНАЛД' : finalRole ? `АМЬД · ${translateRole(finalRole).toUpperCase()}` : 'АМЬД') : shownRole ? `ХАСАГДСАН · ${translateRole(shownRole).toUpperCase()}` : 'ХАСАГДСАН'}</span></span>
     {voteCount !== undefined && <span className="player-vote-count">{voteCount} <small>САНАЛ</small></span>}
     {player.voteStatus === 'revealed' && <span className="player-vote-status">{player.voteTargetId === null ? 'АЛГАСАВ' : `САНАЛ ${voteTargetName ?? ''}`}</span>}
@@ -50,9 +55,9 @@ function GamePlayerCard({ player, isCurrent, selected, selectable, voteCount, vo
   </button>;
 }
 
-export default function GameScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice, fullscreen }: {
+export default function GameScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice, fullscreen, onProfile }: {
   roomCode: string; roomName: string; userId: string; isHost: boolean; seats: RoomSeat[];
-  onLeave: () => void; onRematch: () => void; onNotice: NotifyFn; fullscreen: FullscreenState;
+  onLeave: () => void; onRematch: () => void; onNotice: NotifyFn; fullscreen: FullscreenState; onProfile: (seat: number) => void;
 }) {
   const { publicView: game, privateView: me, deadline, reload } = useGame(roomCode, userId);
   const secondsLeft = useCountdown(deadline);
@@ -167,7 +172,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
     if (game.phase === 'Night' && canChooseNightTarget(player)) setNightSelection(player.id);
     if (game.phase === 'Voting' && canSelectForVote(player)) setVoteSelection(player.id);
   };
-  const renderPlayer = (player: PublicGamePlayer) => <GamePlayerCard key={player.id} player={player} isCurrent={player.id === me.seat} selected={game.phase === 'Night' ? nightSelection === player.id : voteSelection === player.id} selectable={game.phase === 'Night' ? canChooseNightTarget(player) : canSelectForVote(player)} voteCount={game.voteCountsOpen ? game.voteCounts[String(player.id)] : undefined} voteTargetName={player.voteTargetId === null ? undefined : nameOf(player.voteTargetId)} runoff={inRunoff(player)} finalRole={game.finalRoles?.[player.id] ?? me.spectatorRoles?.[player.id]} bubble={quick.bubbles[player.id]?.text} onSelect={() => select(player)} />;
+  const renderPlayer = (player: PublicGamePlayer) => <GamePlayerCard key={player.id} player={player} isCurrent={player.id === me.seat} selected={game.phase === 'Night' ? nightSelection === player.id : voteSelection === player.id} selectable={game.phase === 'Night' ? canChooseNightTarget(player) : canSelectForVote(player)} voteCount={game.voteCountsOpen ? game.voteCounts[String(player.id)] : undefined} voteTargetName={player.voteTargetId === null ? undefined : nameOf(player.voteTargetId)} runoff={inRunoff(player)} finalRole={game.finalRoles?.[player.id] ?? me.spectatorRoles?.[player.id]} bubble={quick.bubbles[player.id]?.text} frame={seats.find((seat) => seat.seat === player.id)?.frame_key} onSelect={() => select(player)} onProfile={() => onProfile(player.id)} />;
 
   const confirmNight = async () => {
     if (nightSelection === null) return onNotice(translateMessage('Select a living target first.'));

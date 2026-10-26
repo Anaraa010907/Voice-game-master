@@ -223,6 +223,8 @@ export type MonopolyState = {
   /** A trade offer waiting for `to` to answer; the turn pauses until it is settled. */
   trade?: TradeOffer | null;
   offersThisTurn?: number;
+  /** Offers each player has made during the current turn (anyone may propose, not only the player whose turn it is). */
+  offerCounts?: Record<number, number>;
   /** Draw piles (card indexes). A drawn card goes to the bottom; a jail card stays with its holder. */
   decks?: Record<DeckName, number[]>;
   /** Round limit for this match; null = until one player is left. Older saves: MAX_ROUNDS. */
@@ -567,7 +569,7 @@ function nextTurn(state: MonopolyState): MonopolyState {
     if (turn === 0) round += 1;
     if (!player(state, state.order[turn]).bankrupt) break;
   }
-  const reset = { auction: null, trade: null, offersThisTurn: 0 };
+  const reset = { auction: null, trade: null, offersThisTurn: 0, offerCounts: {} };
   const limit = roundLimit(state);
   if (limit !== null && round > limit) return finishByRounds({ ...state, ...reset, round: limit });
   const next = player(state, state.order[turn]);
@@ -781,6 +783,9 @@ function applyAction(state: MonopolyState, actorId: number, action: MonopolyActi
     return { state: executeTrade(state, trade) };
   }
 
+  // Any player still in the game may offer a trade, also when it is not their turn.
+  if (action.type === 'propose') return proposeTrade(state, actor, action.offer);
+
   const problem = ownTurnProblem(state, actorId);
   if (problem) return { state, error: problem };
 
@@ -886,23 +891,30 @@ function applyAction(state: MonopolyState, actorId: number, action: MonopolyActi
       next = withPlayer(next, actorId, (value) => ({ ...value, money: value.money - cost }));
       return { state: log(next, `${actor.name} ${tile.name}-г ${money(cost)} төлж барьцаанаас гаргалаа.`) };
     }
-    case 'propose': {
-      if (state.phase !== 'roll' && state.phase !== 'end') return { state, error: 'Арилжааг шоо хаяхаас өмнө эсвэл ээлжийн төгсгөлд санал болгоно.' };
-      if ((state.offersThisTurn ?? 0) >= MAX_OFFERS_PER_TURN) return { state, error: `Нэг ээлжид ${MAX_OFFERS_PER_TURN}-аас олон санал тавих боломжгүй.` };
-      const raw = action.offer;
-      const offer: TradeOffer = {
-        from: actorId, to: Number(raw?.to),
-        give: Array.isArray(raw?.give) ? raw.give.map(Number) : [], get: Array.isArray(raw?.get) ? raw.get.map(Number) : [],
-        giveCash: Number(raw?.giveCash ?? 0), getCash: Number(raw?.getCash ?? 0), giveCards: Number(raw?.giveCards ?? 0), getCards: Number(raw?.getCards ?? 0),
-      };
-      const reason = tradeProblem(state, offer);
-      if (reason) return { state, error: reason };
-      const next = withPlayer({ ...state, trade: offer, offersThisTurn: (state.offersThisTurn ?? 0) + 1 }, actorId, (value) => ({ ...value, lastOfferRound: state.round }));
-      return { state: log(next, `${actor.name} ${player(state, offer.to).name}-д арилжааны санал тавилаа.`) };
-    }
     default:
       return { state, error: 'Үйлдэл буруу байна.' };
   }
+}
+
+/**
+ * A trade offer from any player still in the game. The table pauses for the answer, so offers wait
+ * for a calm moment (before a roll or at the end of a turn) and each player has a few per turn.
+ */
+function proposeTrade(state: MonopolyState, actor: MonopolyPlayer, raw: TradeProposal | undefined): MonopolyResult {
+  if (state.trade) return { state, error: 'Өөр арилжааны хариуг хүлээж байна. Түр хүлээнэ үү.' };
+  if (state.phase !== 'roll' && state.phase !== 'end') return { state, error: 'Газар худалдан авах эсвэл дуудлага худалдааны үед арилжаа санал болгох боломжгүй.' };
+  const made = state.offerCounts?.[actor.id] ?? 0;
+  if (made >= MAX_OFFERS_PER_TURN) return { state, error: `Нэг ээлжид ${MAX_OFFERS_PER_TURN}-аас олон санал тавих боломжгүй.` };
+  const offer: TradeOffer = {
+    from: actor.id, to: Number(raw?.to),
+    give: Array.isArray(raw?.give) ? raw.give.map(Number) : [], get: Array.isArray(raw?.get) ? raw.get.map(Number) : [],
+    giveCash: Number(raw?.giveCash ?? 0), getCash: Number(raw?.getCash ?? 0), giveCards: Number(raw?.giveCards ?? 0), getCards: Number(raw?.getCards ?? 0),
+  };
+  const reason = tradeProblem(state, offer);
+  if (reason) return { state, error: reason };
+  const counted = { ...state, trade: offer, offersThisTurn: (state.offersThisTurn ?? 0) + 1, offerCounts: { ...(state.offerCounts ?? {}), [actor.id]: made + 1 } };
+  const next = withPlayer(counted, actor.id, (value) => ({ ...value, lastOfferRound: state.round }));
+  return { state: log(next, `${actor.name} ${player(state, offer.to).name}-д арилжааны санал тавилаа.`) };
 }
 
 /** What happens when the acting player's timer runs out: roll, skip buying, pass a bid, turn down an offer, or end the turn. */
@@ -1037,6 +1049,27 @@ export function runMonopolySelfTests() {
   state = act(state, t1, { type: 'propose', offer: { to: t2, give: [], get: [], giveCash: 10, getCash: 0, giveCards: 0, getCards: 0 } });
   state = act(state, t2, { type: 'reject' });
   require(!state.trade && player(state, t1).money === START_MONEY - 50, 'A rejected offer changes nothing.');
+
+  // Offers may come from any player, not only the one whose turn it is.
+  state = createMonopolyGame(people, () => 0.99);
+  const [o1, o2, o3] = state.order;
+  state = own(state, { 1: o2, 3: o3 });
+  require(currentPlayerId(state) === o1, 'The first player is on turn.');
+  state = act(state, o2, { type: 'propose', offer: { to: o3, give: [1], get: [3], giveCash: 0, getCash: 0, giveCards: 0, getCards: 0 } });
+  require(state.trade?.from === o2 && actingPlayerId(state) === o3, 'A player off turn can offer a trade to another.');
+  require(Boolean(applyMonopolyAction(state, o1, { type: 'roll' }).error), 'The turn waits for the answer.');
+  require(Boolean(applyMonopolyAction(state, o1, { type: 'propose', offer: { to: o2, give: [], get: [], giveCash: 5, getCash: 0, giveCards: 0, getCards: 0 } }).error), 'Only one offer is open at a time.');
+  state = act(state, o3, { type: 'accept' });
+  require(state.tiles[1].owner === o3 && state.tiles[3].owner === o2 && currentPlayerId(state) === o1, 'The off-turn trade goes through and the turn carries on.');
+  state = act(state, o1, { type: 'roll' }, sequence([dieValue(1), dieValue(2)]));
+  require(state.phase !== 'roll' || state.dice !== null, 'The player on turn can roll once the offer is settled.');
+  let capped = createMonopolyGame(people, () => 0.99);
+  for (let index = 0; index < MAX_OFFERS_PER_TURN; index += 1) {
+    capped = act(capped, o2, { type: 'propose', offer: { to: o3, give: [], get: [], giveCash: 1, getCash: 0, giveCards: 0, getCards: 0 } });
+    capped = act(capped, o3, { type: 'reject' });
+  }
+  require(Boolean(applyMonopolyAction(capped, o2, { type: 'propose', offer: { to: o3, give: [], get: [], giveCash: 1, getCash: 0, giveCards: 0, getCards: 0 } }).error), 'Each player has a few offers per turn.');
+  require(!applyMonopolyAction(capped, o3, { type: 'propose', offer: { to: o2, give: [], get: [], giveCash: 1, getCash: 0, giveCards: 0, getCards: 0 } }).error, 'The cap is per player.');
 
   // A "get out of jail free" card is kept, used, and goes back under its deck.
   state = createMonopolyGame(people, () => 0.99);

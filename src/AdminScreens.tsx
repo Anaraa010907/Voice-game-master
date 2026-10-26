@@ -168,7 +168,7 @@ type AdminPlayer = {
   id: string; display_name: string; avatar_url: string | null; email: string | null; provider: string; created_at: string;
   last_sign_in_at: string | null; total_matches: number; wins: number; is_admin: boolean; is_banned: boolean; banned_until: string | null; ban_reason: string | null;
 };
-type AdminFeedback = MyFeedback & { user_id: string; display_name: string; avatar_url: string | null };
+type AdminFeedback = MyFeedback & { user_id: string; display_name: string; avatar_url: string | null; target_user: string | null; target_name: string | null; room_code: string | null };
 type AdminRoom = { room_code: string; name: string; game_type: string; status: string; is_private: boolean; players: number; bots: number; max_players: number; host_name: string; updated_at: string };
 type AdminAction = { id: number; admin_name: string; action: string; target: string | null; detail: string | null; created_at: string };
 
@@ -328,7 +328,7 @@ function FeedbackTab({ notify, onChanged }: { notify: NotifyFn; onChanged: () =>
 
   const load = useCallback(async () => {
     if (!supabase) return;
-    const { data, error } = await supabase.rpc('admin_list_feedback', { p_status: status, p_limit: 80 });
+    const { data, error } = await supabase.rpc('admin_feedback_inbox', { p_status: status, p_limit: 80 });
     if (error) { notify(failure(error), 'error'); return; }
     setItems((data as AdminFeedback[] | null) ?? []);
   }, [notify, status]);
@@ -359,6 +359,7 @@ function FeedbackTab({ notify, onChanged }: { notify: NotifyFn; onChanged: () =>
         <b>{item.display_name}</b><span className="chip">{categoryLabel(item.category)}</span><small>{ago(item.created_at)}</small>
         <span className={`chip status-${item.status}`}>{item.status === 'resolved' ? 'ШИЙДСЭН' : 'ШИНЭ'}</span>
       </header>
+      {item.target_name && <p className="feedback-target"><Flag size={12} /> Гомдол: <b>{item.target_name}</b>{item.room_code ? ` · ${item.room_code} өрөө` : ''}</p>}
       <p>{item.message}</p>
       {item.admin_reply && <p className="feedback-reply"><ShieldCheck size={12} /> <b>Хариу:</b> {item.admin_reply}</p>}
       {item.status === 'open'

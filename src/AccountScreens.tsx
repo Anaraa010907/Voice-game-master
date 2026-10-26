@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useRef } from 'react';
-import { ArrowLeft, Camera, Check, ChevronRight, LoaderCircle, LockKeyhole, Shield, Trash2, UserRound, X } from 'lucide-react';
+import { ArrowLeft, Camera, Check, ChevronRight, LoaderCircle, LockKeyhole, Shield, ShoppingBag, Trash2, UserRound, X } from 'lucide-react';
+import { CoinCount, TitleBadge, useShopItems } from './Social';
 import Avatar from './Avatar';
 import { PORTRAITS } from './portraits';
 import { supabaseConfigured, type PublicProfile } from './supabaseClient';
@@ -17,13 +18,14 @@ export const avatarOptions = [
 
 
 
-export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, onSignOut, onSave, onPhoto, onPortrait }: {
-  profile: PublicProfile | null; loading: boolean; loadError: string; onBack: () => void; onSignIn: () => void; onSignOut: () => void;
+export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, onSignOut, onSave, onPhoto, onPortrait, onShop }: {
+  profile: PublicProfile | null; loading: boolean; loadError: string; onBack: () => void; onSignIn: () => void; onSignOut: () => void; onShop: () => void;
   onSave: (displayName: string, avatarKey: string) => Promise<string>;
   onPhoto: (file: File | null) => Promise<string>;
   onPortrait: (url: string) => Promise<string>;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
+  const shopItems = useShopItems();
   const [uploading, setUploading] = useState(false);
   const [portraitsOpen, setPortraitsOpen] = useState(false);
   const choosePortrait = async (url: string) => {
@@ -70,7 +72,7 @@ export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, o
 
   return <div className="inner-screen account-screen"><AccountTopBar title={i18n.account.yourFile.toUpperCase()} subtitle={i18n.account.playerProfile.toUpperCase()} onBack={onBack} trailing={profile && <button className="account-signout-link" onClick={onSignOut}>{i18n.account.signOut}</button>} />
     {!supabaseConfigured ? <BackendSetupNotice /> : loading ? <LoadingState label={i18n.account.loadingAccount} /> : !profile ? <AccountEmpty title={i18n.account.profileWaiting} detail={loadError || i18n.account.profileDetail} action={i18n.account.signInAction} onAction={onSignIn} /> : <div className="account-body profile-body">
-      <div className="profile-identity-row"><div className="profile-photo-block"><Avatar name={profile.display_name} color={profile.avatar_key} url={profile.avatar_url} className="account-avatar" /><input ref={fileInput} type="file" accept="image/*" hidden onChange={(event) => { const file = event.target.files?.[0] ?? null; event.target.value = ''; if (file) void changePhoto(file); }} /><div className="profile-photo-actions"><button type="button" className="secondary-button" disabled={uploading} onClick={() => fileInput.current?.click()}>{uploading ? <LoaderCircle size={13} className="voice-spinner" /> : <Camera size={13} />}{uploading ? 'ХУУЛЖ БАЙНА…' : 'ЗУРАГ'}</button><button type="button" className="secondary-button" disabled={uploading} onClick={() => setPortraitsOpen(true)}><UserRound size={13} />ПОРТРЕТ</button>{profile.avatar_url && <button type="button" className="text-button" disabled={uploading} onClick={() => void changePhoto(null)} aria-label="Зураг устгах"><Trash2 size={13} /></button>}</div></div><div className="profile-identity"><div className="eyebrow left-eye">{profile.is_verified ? i18n.account.verifiedAccount : i18n.account.verificationRequired} <span className={profile.is_verified ? 'verified-led' : 'unverified-led'} /></div><h1>{profile.display_name}</h1><p>{i18n.account.memberSince} {formatDate(profile.created_at)} · {profile.registration_method === 'email' ? i18n.account.emailAccount : i18n.account.phoneAccount}</p></div></div>
+      <div className="profile-identity-row"><div className="profile-photo-block"><Avatar name={profile.display_name} color={profile.avatar_key} url={profile.avatar_url} frame={profile.frame_key} className="account-avatar" /><input ref={fileInput} type="file" accept="image/*" hidden onChange={(event) => { const file = event.target.files?.[0] ?? null; event.target.value = ''; if (file) void changePhoto(file); }} /><div className="profile-photo-actions"><button type="button" className="secondary-button" disabled={uploading} onClick={() => fileInput.current?.click()}>{uploading ? <LoaderCircle size={13} className="voice-spinner" /> : <Camera size={13} />}{uploading ? 'ХУУЛЖ БАЙНА…' : 'ЗУРАГ'}</button><button type="button" className="secondary-button" disabled={uploading} onClick={() => setPortraitsOpen(true)}><UserRound size={13} />ПОРТРЕТ</button>{profile.avatar_url && <button type="button" className="text-button" disabled={uploading} onClick={() => void changePhoto(null)} aria-label="Зураг устгах"><Trash2 size={13} /></button>}</div></div><div className="profile-identity"><div className="eyebrow left-eye">{profile.is_verified ? i18n.account.verifiedAccount : i18n.account.verificationRequired} <span className={profile.is_verified ? 'verified-led' : 'unverified-led'} /></div><h1>{profile.display_name}</h1><div className="profile-shop-row"><TitleBadge titleKey={profile.title_key} items={shopItems} /><CoinCount value={profile.coins ?? null} /><button type="button" className="text-button" onClick={onShop}><ShoppingBag size={13} /> ДЭЛГҮҮР</button></div><p>{i18n.account.memberSince} {formatDate(profile.created_at)} · {profile.registration_method === 'email' ? i18n.account.emailAccount : i18n.account.phoneAccount}</p></div></div>
       {loadError && <div className="account-inline-error">{loadError}</div>}
       {message && <div className="account-inline-success"><Check size={13} /> {message}</div>}
       <div className="profile-data-grid"><Stat value={profile.total_matches} label={i18n.account.matches} /><Stat value={profile.wins} label={i18n.account.wins} /><Stat value={profile.losses} label={i18n.account.losses} /><Stat value={`${profile.win_rate.toFixed(1)}%`} label={i18n.account.winRate} />

@@ -3,7 +3,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
   ArrowLeft, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, LockKeyhole, Moon,
-  MessageSquare, Radio, RefreshCw, Settings as SettingsIcon, Shield, ShieldCheck, UserRound, Users, WandSparkles, Zap,
+  MessageSquare, Radio, RefreshCw, Settings as SettingsIcon, Shield, ShieldCheck, ShoppingBag, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles } from './gameData';
 import RoleCardArtwork from './RoleCardArtwork';
@@ -11,6 +11,7 @@ import GameScreen from './Game';
 import Auth, { takeOAuthPending, type AuthView } from './Auth';
 import { ProfileScreen } from './AccountScreens';
 import { AdminScreen, AnnouncementBanner, BannedOverlay, FeedbackScreen, banActive, type PlayerBan } from './AdminScreens';
+import { GiftLayer, PlayerCardModal, ShopScreen } from './Social';
 import { supabase, supabaseConfigured, type PublicProfile } from './supabaseClient';
 import { i18n, translateMessage } from './i18n';
 import { removeProfilePhoto, uploadProfilePhoto } from './avatarUpload';
@@ -25,7 +26,7 @@ import { musicEnabled, setMusicEnabled, setSfxEnabled, sfxEnabled, startMusic, w
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { FullscreenToggle, useFullscreen, type FullscreenState } from './fullscreen';
 
-type Screen = 'menu' | 'hub' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth' | 'feedback' | 'admin';
+type Screen = 'menu' | 'hub' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth' | 'feedback' | 'admin' | 'shop';
 
 type RoomSettings = { name: string; maxPlayers: number; isPublic: boolean; password: string; gameType: GameType; settings?: Record<string, unknown> };
 const ROOM_STORAGE_KEY = 'mafia-shadows:room';
@@ -152,6 +153,14 @@ export default function App() {
     };
   }, []);
 
+  // The profile shows coins, frame and title bought in the shop, so it is re-read each time it opens.
+  useEffect(() => {
+    if (screen !== 'profile' || !userId || !supabase) return;
+    let active = true;
+    void supabase.from('profiles').select('*').eq('id', userId).maybeSingle().then(({ data }) => { if (active && data) setProfile(data as PublicProfile); });
+    return () => { active = false; };
+  }, [screen, userId]);
+
   // Return to the room after a reload or app restart.
   useEffect(() => {
     if (!userId) return;
@@ -252,7 +261,7 @@ export default function App() {
     <main className="viewport">
       <section className={`game-frame screen-${screen}`} aria-label="MAFIA: SHADOWS тоглоом">
         <div className="grain" aria-hidden="true" />
-        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} onFeedback={() => requireAccount('feedback')} signedIn={Boolean(userId)} isAdmin={isAdmin} onAuth={openAuth} fullscreen={fullscreen} />}
+        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} onFeedback={() => requireAccount('feedback')} onShop={() => requireAccount('shop')} signedIn={Boolean(userId)} isAdmin={isAdmin} onAuth={openAuth} fullscreen={fullscreen} />}
         {screen === 'hub' && <GameHub onBack={goBack} onChoose={(type) => { setGameType(type); setScreen('browse'); }} onJoinCode={() => setScreen('join-room')} />}
         {screen === 'browse' && <RoomBrowser key={gameType} gameType={gameType} onBack={() => setScreen('hub')} onCreate={() => setScreen('create-room')} onJoinCode={() => setScreen('join-room')} onEnter={enterRoom} />}
         {screen === 'create-room' && <CreateRoom key={gameType} gameType={gameType} onBack={() => setScreen('browse')} onCreate={createRoom} />}
@@ -270,10 +279,11 @@ export default function App() {
         )}
         {screen === 'lobby' && (!roomCode || !userId) && <JoinRoom onBack={goBack} onJoin={joinRoom} />}
         {screen === 'roles' && <RoleGallery onBack={goBack} />}
-        {screen === 'profile' && <ProfileScreen profile={profile} loading={accountLoading} loadError={profileError} onBack={goBack} onSignIn={() => openAuth('sign-in')} onSignOut={() => openAuth('sign-out')} onSave={saveProfile} onPhoto={saveProfilePhoto} onPortrait={saveProfilePortrait} />}
+        {screen === 'profile' && <ProfileScreen profile={profile} loading={accountLoading} loadError={profileError} onBack={goBack} onSignIn={() => openAuth('sign-in')} onSignOut={() => openAuth('sign-out')} onSave={saveProfile} onPhoto={saveProfilePhoto} onPortrait={saveProfilePortrait} onShop={() => setScreen('shop')} />}
         {screen === 'auth' && <Auth key={authView} initialView={authView} onBack={goBack} onAuthenticated={() => setScreen('profile')} onSignedOut={() => { setUserId(null); setProfile(null); setScreen('menu'); }} />}
         {screen === 'feedback' && userId && <FeedbackScreen onBack={goBack} notify={notify} />}
         {screen === 'admin' && isAdmin && <AdminScreen onBack={goBack} notify={notify} />}
+        {screen === 'shop' && userId && <ShopScreen onBack={goBack} notify={notify} />}
         {userId && banActive(ban) && screen !== 'feedback' && screen !== 'auth'
           && <BannedOverlay ban={ban!} onSignOut={() => openAuth('sign-out')} onFeedback={() => setScreen('feedback')} />}
         {screen === 'settings' && <Settings onBack={goBack} onProfile={() => setScreen('profile')} onAuth={() => openAuth(userId ? 'sign-out' : 'sign-in')} signedIn={Boolean(userId)} />}
@@ -294,7 +304,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
   return <div className={`brand-mark ${compact ? 'compact' : ''}`}><span className="brand-emblem"><img src="/assets/brand/emblem-192.png" alt="" width={compact ? 30 : 42} height={compact ? 30 : 42} /></span><span>MAFIA<span className="brand-colon">:</span> <b>SHADOWS</b></span></div>;
 }
 
-function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, signedIn, isAdmin, onAuth, fullscreen }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; onFeedback: () => void; signedIn: boolean; isAdmin: boolean; onAuth: (view?: AuthView) => void; fullscreen: FullscreenState }) {
+function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, onShop, signedIn, isAdmin, onAuth, fullscreen }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; onFeedback: () => void; onShop: () => void; signedIn: boolean; isAdmin: boolean; onAuth: (view?: AuthView) => void; fullscreen: FullscreenState }) {
   return (
     <div className="menu-screen">
       <header className="menu-top"><Brand /><div className="menu-top-actions"><div className="online-note"><span className="status-dot" /> {signedIn ? 'ОНЛАЙН' : 'НЭВТРЭЭГҮЙ'}</div><FullscreenToggle fullscreen={fullscreen} /></div></header>
@@ -312,6 +322,7 @@ function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, signedIn, isAd
         <button onClick={onJoin}><span className="nav-icon"><Radio size={16} /></span><span>{i18n.app.joinRoom}</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('roles')}><span className="nav-icon"><Shield size={16} /></span><span>{i18n.app.roleGallery}</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('profile')}><span className="nav-icon"><UserRound size={16} /></span><span>{i18n.app.profile}</span><ChevronRight size={14} /></button>
+        <button className="menu-nav-shop" onClick={onShop}><span className="nav-icon"><ShoppingBag size={16} /></span><span>Дэлгүүр</span><ChevronRight size={14} /></button>
         <button onClick={onFeedback}><span className="nav-icon"><MessageSquare size={16} /></span><span>Санал хүсэлт</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('settings')}><span className="nav-icon"><SettingsIcon size={16} /></span><span>{i18n.app.settings}</span><ChevronRight size={14} /></button>
         {isAdmin && <button className="menu-nav-admin" onClick={() => onNavigate('admin')}><span className="nav-icon"><ShieldCheck size={16} /></span><span>Админ</span><ChevronRight size={14} /></button>}
@@ -480,7 +491,18 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
   const { room, seats, loaded, missing, error, reload } = useRoom(roomCode);
   const [busy, setBusy] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [profileSeat, setProfileSeat] = useState<RoomSeat | null>(null);
   const mine = seats.find((seat) => seat.user_id === userId);
+  /** Opens a seated player's card by seat number (games) or seat row (lobby). */
+  const openProfile = useCallback((seatNumber: number) => {
+    const seat = seats.find((entry) => entry.seat === seatNumber);
+    if (seat) setProfileSeat(seat);
+  }, [seats]);
+  // Gifts pop up for the whole table; a tapped player's card sits on top of any screen in the room.
+  const overlays = <>
+    <GiftLayer roomCode={roomCode} />
+    {profileSeat && <PlayerCardModal seat={profileSeat} roomCode={roomCode} myUserId={userId} notify={onNotice} onClose={() => setProfileSeat(null)} />}
+  </>;
 
   useEffect(() => {
     // The room was closed, or this player is no longer seated (left on another device).
@@ -512,11 +534,11 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
   if (!room || !mine) return <div className="inner-screen"><TopBar title="ӨРӨӨ" subtitle={error ? 'АЛДАА' : 'АЧААЛЖ БАЙНА'} onBack={leave} /><div className="room-loading">{error ?? 'Өрөөнд холбогдож байна…'}</div></div>;
 
   if (room.status !== 'lobby' && room.game_type === 'monopoly') {
-    return <MonopolyScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} />;
+    return <><MonopolyScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} onProfile={openProfile} />{overlays}</>;
   }
 
   if (room.status !== 'lobby') {
-    return <GameScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} fullscreen={fullscreen} />;
+    return <><GameScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} fullscreen={fullscreen} onProfile={openProfile} />{overlays}</>;
   }
 
   const isHost = room.host_id === userId;
@@ -542,7 +564,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
           <div className="lobby-toolbar"><span><Users size={14} /> ТОГЛОГЧИД <b>{String(seats.length).padStart(2, '0')}</b> <span className="muted">/ {room.max_players}</span></span><span className="room-visibility">{room.is_private ? 'ХУВИЙН · ЗӨВХӨН КОДООР' : 'НИЙТЭД НЭЭЛТТЭЙ'}</span></div>
           <div className="player-grid">
             {seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={seat.user_id === userId}
-              onRemoveBot={isHost && seat.is_bot ? () => run('bot-remove', { seat: seat.seat }) : undefined} busy={busy} />)}
+              onRemoveBot={isHost && seat.is_bot ? () => run('bot-remove', { seat: seat.seat }) : undefined} busy={busy} onProfile={() => setProfileSeat(seat)} />)}
             {Array.from({ length: emptySlots }, (_, index) => isHost && botsAllowed
               ? <button type="button" className="invite-slot add-bot-slot" key={`slot-${index}`} disabled={busy} onClick={() => run('bot-add')}><Bot size={20} /><small>БОТ НЭМЭХ</small></button>
               : <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>СУЛ СУУДАЛ</small></div>)}
@@ -562,16 +584,18 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
         {rulesOpen && isHost && <MafiaRulesEditor initial={room.settings} players={seats.length} busy={busy}
           onClose={() => setRulesOpen(false)} onSave={(settings) => { void run('settings', { settings }).then((saved) => { if (saved) setRulesOpen(false); }); }} />}
       </div>
+      {overlays}
     </VoiceChatProvider>
   );
 }
 
-function SeatCard({ seat, isHost, isMe, onRemoveBot, busy }: { seat: RoomSeat; isHost: boolean; isMe: boolean; onRemoveBot?: () => void; busy?: boolean }) {
-  return <div className={`player-card compact-card ${seat.ready || isHost ? 'player-ready' : ''} ${seat.is_bot ? 'is-bot' : ''}`}>
-    <Avatar name={seat.is_bot ? seat.display_name.replace(/ \(бот\)$/, '') : seat.display_name} color={seat.color} url={seat.avatar_url}>{isHost && <i title="Өрөөний эзэн"><Crown size={11} /></i>}{seat.is_bot ? <i className="bot-badge" title="Бот"><Bot size={11} /></i> : <VoiceAvatarIndicator name={seat.display_name} identity={seat.user_id} />}</Avatar>
+function SeatCard({ seat, isHost, isMe, onRemoveBot, busy, onProfile }: { seat: RoomSeat; isHost: boolean; isMe: boolean; onRemoveBot?: () => void; busy?: boolean; onProfile: () => void }) {
+  return <div className={`player-card compact-card is-tappable ${seat.ready || isHost ? 'player-ready' : ''} ${seat.is_bot ? 'is-bot' : ''}`} role="button" tabIndex={0}
+    onClick={onProfile} onKeyDown={(event) => { if (event.key === 'Enter') onProfile(); }} aria-label={`${seat.display_name} — профайл`}>
+    <Avatar name={seat.is_bot ? seat.display_name.replace(/ \(бот\)$/, '') : seat.display_name} color={seat.color} url={seat.avatar_url} frame={seat.frame_key}>{isHost && <i title="Өрөөний эзэн"><Crown size={11} /></i>}{seat.is_bot ? <i className="bot-badge" title="Бот"><Bot size={11} /></i> : <VoiceAvatarIndicator name={seat.display_name} identity={seat.user_id} />}</Avatar>
     <div className="player-name">{seat.display_name}{isMe && <small>ЧИ</small>}</div>
     <div className={`player-status ${seat.ready || isHost ? 'online' : ''}`}>{isHost ? 'ЭЗЭН' : seat.is_bot ? 'БОТ' : seat.ready ? 'БЭЛЭН' : 'ХҮЛЭЭЖ БАЙНА'}</div>
-    {onRemoveBot && <button type="button" className="remove-bot-button" disabled={busy} onClick={onRemoveBot} aria-label={`${seat.display_name} хасах`} title="Ботыг хасах"><X size={13} /></button>}
+    {onRemoveBot && <button type="button" className="remove-bot-button" disabled={busy} onClick={(event) => { event.stopPropagation(); onRemoveBot(); }} aria-label={`${seat.display_name} хасах`} title="Ботыг хасах"><X size={13} /></button>}
   </div>;
 }
 
