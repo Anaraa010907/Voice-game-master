@@ -2690,3 +2690,30 @@
   .viewport .game-frame .pcard-avatar { width: 54px; height: 54px; }
   .pcard-stats b { font-size: 16px; }
 }
+
+/* Painted frames (images): the picture's hole is half its width, so it is drawn 1.8× the avatar,
+ * leaving the ring just over the avatar's edge. A soft aura breathes and a few sparks twinkle. */
+.avatar-frame.is-painted {
+  inset: -40%;
+  background: center / contain no-repeat;
+  animation: frame-aura 3.2s ease-in-out infinite;
+}
+.avatar-frame.is-painted::before { display: none; }
+.avatar-frame.is-painted::after {
+  inset: 12%;
+  background:
+    radial-gradient(circle at 18% 30%, #fff 0 1.4px, transparent 2.6px),
+    radial-gradient(circle at 84% 22%, #f3dcff 0 1.6px, transparent 2.8px),
+    radial-gradient(circle at 88% 74%, #fff 0 1.2px, transparent 2.4px),
+    radial-gradient(circle at 26% 86%, #f3dcff 0 1.4px, transparent 2.6px);
+  animation: frame-twinkle 1.3s ease-in-out infinite alternate;
+}
+@keyframes frame-aura {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(190, 90, 255, .4)); }
+  50% { filter: drop-shadow(0 0 8px rgba(205, 120, 255, .9)); }
+}
+.frame-butterfly .avatar-frame.is-painted { animation-duration: 2.6s; }
+/* In tight rows (lobby seats, game cards, board rows) the painted frame is drawn smaller so it stays inside the row. */
+.viewport .game-frame :is(.player-card, .mono-player, .game-player-card, .results-player) .avatar-frame.is-painted { inset: -24%; }
+.viewport .game-frame .pcard-avatar.has-frame { margin: 14px; }
+.viewport .game-frame .shop-avatar.is-preview.has-frame { margin: 44px auto 40px; }

@@ -4,8 +4,14 @@ export function initialsOf(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('') || '??';
 }
 
-/** Animated avatar frames sold in the shop (see the frame-* styles in theme.css). */
-export const FRAME_KEYS = ['frame-gold', 'frame-neon', 'frame-ice', 'frame-fire', 'frame-blood', 'frame-royal'];
+/** Painted frames: a 512px image whose transparent hole is half its width, centred on the avatar. */
+const FRAME_IMAGES: Record<string, string> = {
+  'frame-rose-night': '/assets/frames/rose-night.webp',
+  'frame-butterfly': '/assets/frames/butterfly.webp',
+};
+
+/** Avatar frames sold in the shop: CSS-animated rings plus painted ones (see the frame-* styles in theme.css). */
+export const FRAME_KEYS = ['frame-gold', 'frame-neon', 'frame-ice', 'frame-fire', 'frame-blood', 'frame-royal', ...Object.keys(FRAME_IMAGES)];
 
 /**
  * Round player avatar: the profile photo when there is one, otherwise coloured initials.
@@ -16,7 +22,8 @@ export default function Avatar({ name, color, url, initials, frame, className = 
 }) {
   const framed = frame && FRAME_KEYS.includes(frame) ? frame : null;
   return <span className={`avatar avatar-${color} ${url ? 'has-photo' : ''} ${framed ? `has-frame ${framed}` : ''} ${className}`} style={url ? { backgroundImage: `url("${url}")` } : undefined} role="img" aria-label={name}>
-    {framed && <span className="avatar-frame" aria-hidden="true" />}
+    {framed && <span className={`avatar-frame ${FRAME_IMAGES[framed] ? 'is-painted' : ''}`} aria-hidden="true"
+      style={FRAME_IMAGES[framed] ? { backgroundImage: `url("${FRAME_IMAGES[framed]}")` } : undefined} />}
     {!url && <span>{initials ?? initialsOf(name)}</span>}
     {children}
   </span>;
