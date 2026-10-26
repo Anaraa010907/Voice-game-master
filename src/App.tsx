@@ -15,7 +15,7 @@ import { GiftLayer, PlayerCardModal, ShopScreen } from './Social';
 import { supabase, supabaseConfigured, type PublicProfile } from './supabaseClient';
 import { i18n, translateMessage } from './i18n';
 import { removeProfilePhoto, uploadProfilePhoto } from './avatarUpload';
-import Avatar from './Avatar';
+import Avatar, { nameplate } from './Avatar';
 import { callGame, useRoom, type ListedRoom, type NoticeTone, type NotifyFn, type RoomSeat } from './multiplayer';
 import { GAMES, type GameType } from './games';
 import MonopolyScreen from './Monopoly';
@@ -590,7 +590,8 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
 }
 
 function SeatCard({ seat, isHost, isMe, onRemoveBot, busy, onProfile }: { seat: RoomSeat; isHost: boolean; isMe: boolean; onRemoveBot?: () => void; busy?: boolean; onProfile: () => void }) {
-  return <div className={`player-card compact-card is-tappable ${seat.ready || isHost ? 'player-ready' : ''} ${seat.is_bot ? 'is-bot' : ''}`} role="button" tabIndex={0}
+  const plate = nameplate(seat.nameplate_key);
+  return <div className={`player-card compact-card is-tappable ${seat.ready || isHost ? 'player-ready' : ''} ${seat.is_bot ? 'is-bot' : ''} ${plate.className}`} style={plate.style} role="button" tabIndex={0}
     onClick={onProfile} onKeyDown={(event) => { if (event.key === 'Enter') onProfile(); }} aria-label={`${seat.display_name} — профайл`}>
     <Avatar name={seat.is_bot ? seat.display_name.replace(/ \(бот\)$/, '') : seat.display_name} color={seat.color} url={seat.avatar_url} frame={seat.frame_key}>{isHost && <i title="Өрөөний эзэн"><Crown size={11} /></i>}{seat.is_bot ? <i className="bot-badge" title="Бот"><Bot size={11} /></i> : <VoiceAvatarIndicator name={seat.display_name} identity={seat.user_id} />}</Avatar>
     <div className="player-name">{seat.display_name}{isMe && <small>ЧИ</small>}</div>

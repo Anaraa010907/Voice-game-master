@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 export function initialsOf(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('') || '??';
@@ -15,6 +15,17 @@ const FRAME_IMAGES: Record<string, string> = {
   'frame-twin-serpent': '/assets/frames/twin-serpent.webp',
   'frame-eagle-crown': '/assets/frames/eagle-crown.webp',
 };
+
+/** Nameplates: a wide picture behind the player's name; the decoration sits on the right, the name on the dark left. */
+const NAMEPLATE_IMAGES: Record<string, string> = {
+  'plate-ice-crystal': '/assets/nameplates/ice-crystal.webp',
+};
+
+/** Class and style that put the player's nameplate behind a row (see .has-nameplate in theme.css). */
+export function nameplate(key: string | null | undefined): { className: string; style: CSSProperties } {
+  const image = key ? NAMEPLATE_IMAGES[key] : undefined;
+  return image ? { className: `has-nameplate ${key}`, style: { ['--plate' as string]: `url("${image}")` } as CSSProperties } : { className: '', style: {} };
+}
 
 /** Avatar frames sold in the shop: CSS-animated rings plus painted ones (see the frame-* styles in theme.css). */
 export const FRAME_KEYS = ['frame-gold', 'frame-neon', 'frame-ice', 'frame-fire', 'frame-blood', 'frame-royal', ...Object.keys(FRAME_IMAGES)];

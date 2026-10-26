@@ -36,6 +36,7 @@ export type PublicProfile = {
   coins?: number;
   frame_key?: string | null;
   title_key?: string | null;
+  nameplate_key?: string | null;
 };
 
 export type RatingChange = {

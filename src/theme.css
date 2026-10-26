@@ -2746,3 +2746,59 @@
 .viewport .game-frame :is(.player-card, .mono-player, .game-player-card, .results-player) .avatar-frame.is-painted { inset: -24%; }
 .viewport .game-frame .pcard-avatar.has-frame { margin: 14px; }
 .viewport .game-frame .shop-avatar.is-preview.has-frame { margin: 44px auto 40px; }
+
+/* ---------- Nameplates: a picture behind the player's name ----------
+ * The art is drawn as a layer under the row's content; its decorated right side shows and the
+ * left fades into the row so the name stays readable. A slow light sweep keeps it alive. */
+.has-nameplate { position: relative; isolation: isolate; overflow: hidden; }
+.has-nameplate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(8, 9, 14, .92) 0%, rgba(8, 9, 14, .72) 28%, rgba(8, 9, 14, .1) 62%, rgba(8, 9, 14, 0) 100%),
+    var(--plate) right 50% / cover no-repeat;
+  pointer-events: none;
+}
+.has-nameplate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 40%, rgba(180, 220, 255, .16) 50%, transparent 60%) no-repeat;
+  background-size: 250% 100%;
+  animation: plate-sheen 5.5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes plate-sheen { 0% { background-position: 120% 0; } 60%, 100% { background-position: -120% 0; } }
+.viewport .game-frame .has-nameplate :is(.player-name, .game-player-copy b, .mono-player-copy b, .pcard-name h2) { text-shadow: 0 1px 3px rgba(0, 0, 0, .9); }
+/* Whatever sits on the bright right side (status, money, votes) gets a dark pill so it stays readable. */
+.viewport .game-frame .has-nameplate :is(.player-status, .mono-player-money, .player-vote-count, .player-vote-status) {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(8, 9, 14, .8);
+  box-shadow: 0 0 10px rgba(8, 9, 14, .6);
+}
+.viewport .game-frame .has-nameplate .game-player-target { filter: drop-shadow(0 0 3px #000) drop-shadow(0 0 3px #000); }
+.viewport .game-frame .profile-identity-row.has-nameplate::before { background-position: 0 0, right 40%; }
+
+.viewport .game-frame .plate-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 46px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 10px;
+  text-align: left;
+}
+.viewport .game-frame .plate-preview .avatar { width: 30px; height: 30px; font-size: 11px; }
+.viewport .game-frame .plate-preview b { color: #f4ead7; font-size: 12px; }
+.viewport .game-frame .shop-grid.kind-nameplate { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.viewport .game-frame .plate-preview.is-large { width: min(330px, 100%); height: 70px; margin: 14px 0 6px; padding: 0 14px; }
+.viewport .game-frame .plate-preview.is-large .avatar { width: 44px; height: 44px; font-size: 15px; }
+.viewport .game-frame .plate-preview.is-large b { font-size: 16px; }
