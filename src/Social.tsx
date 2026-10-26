@@ -30,6 +30,18 @@ export function useShopItems() {
   return items;
 }
 
+/** Admins get everything in the shop for free (the server checks this too). */
+export function useFreeShopping() {
+  const [free, setFree] = useState(false);
+  useEffect(() => {
+    if (!supabase) return;
+    let active = true;
+    void Promise.resolve(supabase.rpc('is_admin')).then(({ data }) => { if (active) setFree(data === true); }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+  return free;
+}
+
 /** My coins, refreshed on demand. */
 function useMyCoins() {
   const [coins, setCoins] = useState<number | null>(null);
@@ -123,6 +135,7 @@ export function PlayerCardModal({ seat, roomCode, myUserId, onClose, notify }: {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const { coins, setCoins } = useMyCoins();
+  const free = useFreeShopping();
   const isMe = seat.user_id === myUserId;
   const isBot = Boolean(seat.is_bot);
 
@@ -164,10 +177,10 @@ export function PlayerCardModal({ seat, roomCode, myUserId, onClose, notify }: {
     const choice = gifts.find((item) => item.key === picked);
     body = <>
       <div className="pcard-subhead"><button type="button" className="icon-button" onClick={() => setView('card')} aria-label="Буцах"><ArrowLeft size={14} /></button><b>{name}-д бэлэг</b><CoinCount value={coins} /></div>
-      <div className="gift-grid">{gifts.map((item) => <button type="button" key={item.key} className={picked === item.key ? 'is-picked' : ''} disabled={coins !== null && coins < item.price}
-        onClick={() => setPicked(item.key)} aria-pressed={picked === item.key}><span className="gift-icon">{item.icon}</span><b>{item.name}</b><small><Coins size={10} />{item.price}</small></button>)}</div>
+      <div className="gift-grid">{gifts.map((item) => <button type="button" key={item.key} className={picked === item.key ? 'is-picked' : ''} disabled={!free && coins !== null && coins < item.price}
+        onClick={() => setPicked(item.key)} aria-pressed={picked === item.key}><span className="gift-icon">{item.icon}</span><b>{item.name}</b><small>{free ? 'ҮНЭГҮЙ' : <><Coins size={10} />{item.price}</>}</small></button>)}</div>
       <p className="pcard-note">Бэлэг ширээн дээрх бүх хүнд харагдана.</p>
-      <div className="modal-actions"><button type="button" className="primary-button" disabled={busy || !choice} onClick={() => void sendGift()}><Gift size={14} /> {choice ? `${choice.price} ЗООСООР ИЛГЭЭХ` : 'БЭЛЭГ СОНГОНО УУ'}</button></div>
+      <div className="modal-actions"><button type="button" className="primary-button" disabled={busy || !choice} onClick={() => void sendGift()}><Gift size={14} /> {choice ? (free ? 'ҮНЭГҮЙ ИЛГЭЭХ' : `${choice.price} ЗООСООР ИЛГЭЭХ`) : 'БЭЛЭГ СОНГОНО УУ'}</button></div>
     </>;
   } else if (view === 'report') {
     body = <>
@@ -254,6 +267,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
   const [owned, setOwned] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [preview, setPreview] = useState<ShopItem | null>(null);
+  const free = useFreeShopping();
 
   const load = useCallback(async () => {
     if (!supabase) return;
@@ -312,12 +326,12 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
             <b>{item.name}</b>
             <small>{item.description}</small>
             {item.kind === 'gift'
-              ? <span className="shop-price"><Coins size={12} />{item.price}</span>
+              ? <span className="shop-price">{free ? 'ҮНЭГҮЙ' : <><Coins size={12} />{item.price}</>}</span>
               : equipped
                 ? <button type="button" className="secondary-button" disabled={busy !== null} onClick={() => void call(item.key, 'equip_item', { p_kind: item.kind, p_key: null }, 'Тайллаа.')}><Check size={13} /> ЗҮҮСЭН</button>
                 : has
                   ? <button type="button" className="secondary-button" disabled={busy !== null} onClick={() => void call(item.key, 'equip_item', { p_kind: item.kind, p_key: item.key }, 'Зүүлээ!')}>ЗҮҮХ</button>
-                  : <button type="button" className="primary-button" disabled={busy !== null || (me !== null && me.coins < item.price)} onClick={() => void call(item.key, 'buy_item', { p_key: item.key }, `${item.name} таных боллоо!`)}><ShoppingBag size={13} /><Coins size={12} />{item.price}</button>}
+                  : <button type="button" className="primary-button" disabled={busy !== null || (!free && me !== null && me.coins < item.price)} onClick={() => void call(item.key, 'buy_item', { p_key: item.key }, `${item.name} таных боллоо!`)}><ShoppingBag size={13} />{free ? 'ҮНЭГҮЙ АВАХ' : <><Coins size={12} />{item.price}</>}</button>}
           </article>;
         })}
       </div>

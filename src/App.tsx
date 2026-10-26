@@ -5,12 +5,12 @@ import {
   ArrowLeft, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, LockKeyhole, Moon,
   MessageSquare, Radio, RefreshCw, Settings as SettingsIcon, Shield, ShieldCheck, ShoppingBag, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
-import { roles } from './gameData';
+import { roles, type RoleName } from './gameData';
 import RoleCardArtwork from './RoleCardArtwork';
 import GameScreen from './Game';
 import Auth, { takeOAuthPending, type AuthView } from './Auth';
 import { ProfileScreen } from './AccountScreens';
-import { AdminScreen, AnnouncementBanner, BannedOverlay, FeedbackScreen, banActive, type PlayerBan } from './AdminScreens';
+import { AdminScreen, AnnouncementBanner, BannedOverlay, FeedbackScreen, banActive, type PlayerBan, type StaffRole } from './AdminScreens';
 import { GiftLayer, PlayerCardModal, ShopScreen } from './Social';
 import { supabase, supabaseConfigured, type PublicProfile } from './supabaseClient';
 import { i18n, translateMessage } from './i18n';
@@ -26,7 +26,7 @@ import { musicEnabled, setMusicEnabled, setSfxEnabled, sfxEnabled, startMusic, w
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { FullscreenToggle, useFullscreen, type FullscreenState } from './fullscreen';
 
-type Screen = 'menu' | 'hub' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth' | 'feedback' | 'admin' | 'shop';
+type Screen = 'menu' | 'hub' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth' | 'feedback' | 'admin' | 'shop' | 'watch';
 
 type RoomSettings = { name: string; maxPlayers: number; isPublic: boolean; password: string; gameType: GameType; settings?: Record<string, unknown> };
 const ROOM_STORAGE_KEY = 'mafia-shadows:room';
@@ -56,7 +56,8 @@ export default function App() {
   const [notice, setNotice] = useState<{ text: string; tone: NoticeTone } | null>(null);
   const noticeTimer = useRef<number | null>(null);
   const [namePromptDismissed, setNamePromptDismissed] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [staffRole, setStaffRole] = useState<StaffRole | null>(null);
+  const [watchRoom, setWatchRoom] = useState<string | null>(null);
   const [ban, setBan] = useState<PlayerBan | null>(null);
   const fullscreen = useFullscreen();
 
@@ -77,13 +78,13 @@ export default function App() {
       setProfileError('');
       const [profileResult, adminResult, banResult] = await Promise.all([
         client.from('profiles').select('*').eq('id', id).maybeSingle(),
-        client.rpc('is_admin'),
+        client.rpc('staff_role'),
         client.from('player_bans').select('reason,banned_until').eq('user_id', id).maybeSingle(),
       ]);
       if (!active) return;
       if (profileResult.error) setProfileError(i18n.account.profileLoadFailed);
       else setProfile(profileResult.data as PublicProfile | null);
-      setIsAdmin(adminResult.data === true);
+      setStaffRole(adminResult.data === 'admin' || adminResult.data === 'moderator' ? adminResult.data : null);
       setBan((banResult.data as PlayerBan | null) ?? null);
       setAccountLoading(false);
     };
@@ -92,7 +93,7 @@ export default function App() {
       setUserId(id);
       if (!id) {
         setProfile(null);
-        setIsAdmin(false);
+        setStaffRole(null);
         setBan(null);
         setAccountLoading(false);
       } else if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY') {
@@ -261,7 +262,7 @@ export default function App() {
     <main className="viewport">
       <section className={`game-frame screen-${screen}`} aria-label="MAFIA: SHADOWS тоглоом">
         <div className="grain" aria-hidden="true" />
-        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} onFeedback={() => requireAccount('feedback')} onShop={() => requireAccount('shop')} signedIn={Boolean(userId)} isAdmin={isAdmin} onAuth={openAuth} fullscreen={fullscreen} />}
+        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} onFeedback={() => requireAccount('feedback')} onShop={() => requireAccount('shop')} signedIn={Boolean(userId)} staffRole={staffRole} onAuth={openAuth} fullscreen={fullscreen} />}
         {screen === 'hub' && <GameHub onBack={goBack} onChoose={(type) => { setGameType(type); setScreen('browse'); }} onJoinCode={() => setScreen('join-room')} />}
         {screen === 'browse' && <RoomBrowser key={gameType} gameType={gameType} onBack={() => setScreen('hub')} onCreate={() => setScreen('create-room')} onJoinCode={() => setScreen('join-room')} onEnter={enterRoom} />}
         {screen === 'create-room' && <CreateRoom key={gameType} gameType={gameType} onBack={() => setScreen('browse')} onCreate={createRoom} />}
@@ -282,7 +283,9 @@ export default function App() {
         {screen === 'profile' && <ProfileScreen profile={profile} loading={accountLoading} loadError={profileError} onBack={goBack} onSignIn={() => openAuth('sign-in')} onSignOut={() => openAuth('sign-out')} onSave={saveProfile} onPhoto={saveProfilePhoto} onPortrait={saveProfilePortrait} onShop={() => setScreen('shop')} />}
         {screen === 'auth' && <Auth key={authView} initialView={authView} onBack={goBack} onAuthenticated={() => setScreen('profile')} onSignedOut={() => { setUserId(null); setProfile(null); setScreen('menu'); }} />}
         {screen === 'feedback' && userId && <FeedbackScreen onBack={goBack} notify={notify} />}
-        {screen === 'admin' && isAdmin && <AdminScreen onBack={goBack} notify={notify} />}
+        {screen === 'admin' && staffRole && <AdminScreen role={staffRole} onBack={goBack} notify={notify} onWatch={(code) => { setWatchRoom(code); setScreen('watch'); }} />}
+        {screen === 'watch' && staffRole === 'admin' && watchRoom && userId && <AdminWatch roomCode={watchRoom} userId={userId} notify={notify} fullscreen={fullscreen}
+          onExit={() => { setWatchRoom(null); setScreen('admin'); }} />}
         {screen === 'shop' && userId && <ShopScreen onBack={goBack} notify={notify} />}
         {userId && banActive(ban) && screen !== 'feedback' && screen !== 'auth'
           && <BannedOverlay ban={ban!} onSignOut={() => openAuth('sign-out')} onFeedback={() => setScreen('feedback')} />}
@@ -304,7 +307,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
   return <div className={`brand-mark ${compact ? 'compact' : ''}`}><span className="brand-emblem"><img src="/assets/brand/emblem-192.png" alt="" width={compact ? 30 : 42} height={compact ? 30 : 42} /></span><span>MAFIA<span className="brand-colon">:</span> <b>SHADOWS</b></span></div>;
 }
 
-function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, onShop, signedIn, isAdmin, onAuth, fullscreen }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; onFeedback: () => void; onShop: () => void; signedIn: boolean; isAdmin: boolean; onAuth: (view?: AuthView) => void; fullscreen: FullscreenState }) {
+function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, onShop, signedIn, staffRole, onAuth, fullscreen }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; onFeedback: () => void; onShop: () => void; signedIn: boolean; staffRole: StaffRole | null; onAuth: (view?: AuthView) => void; fullscreen: FullscreenState }) {
   return (
     <div className="menu-screen">
       <header className="menu-top"><Brand /><div className="menu-top-actions"><div className="online-note"><span className="status-dot" /> {signedIn ? 'ОНЛАЙН' : 'НЭВТРЭЭГҮЙ'}</div><FullscreenToggle fullscreen={fullscreen} /></div></header>
@@ -325,7 +328,7 @@ function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, onShop, signed
         <button className="menu-nav-shop" onClick={onShop}><span className="nav-icon"><ShoppingBag size={16} /></span><span>Дэлгүүр</span><ChevronRight size={14} /></button>
         <button onClick={onFeedback}><span className="nav-icon"><MessageSquare size={16} /></span><span>Санал хүсэлт</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('settings')}><span className="nav-icon"><SettingsIcon size={16} /></span><span>{i18n.app.settings}</span><ChevronRight size={14} /></button>
-        {isAdmin && <button className="menu-nav-admin" onClick={() => onNavigate('admin')}><span className="nav-icon"><ShieldCheck size={16} /></span><span>Админ</span><ChevronRight size={14} /></button>}
+        {staffRole && <button className="menu-nav-admin" onClick={() => onNavigate('admin')}><span className="nav-icon"><ShieldCheck size={16} /></span><span>{staffRole === 'admin' ? 'Админ' : 'Модератор'}</span><ChevronRight size={14} /></button>}
         <button onClick={() => onAuth(signedIn ? 'sign-out' : 'sign-in')}><span className="nav-icon"><LockKeyhole size={16} /></span><span>{signedIn ? i18n.app.signOut : i18n.auth.signInAccount}</span><ChevronRight size={14} /></button>
       </nav>
       <footer className="menu-footer"><span>{i18n.app.afterDark.toUpperCase()}</span><span>{i18n.app.version} <i>•</i> ОНЛАЙН ДУУТ ТОГЛООМ</span></footer>
@@ -587,6 +590,38 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
       {overlays}
     </VoiceChatProvider>
   );
+}
+
+/** An admin looking into a room: the live table, read only. Mafia also shows every role. */
+function AdminWatch({ roomCode, userId, notify, fullscreen, onExit }: { roomCode: string; userId: string; notify: NotifyFn; fullscreen: FullscreenState; onExit: () => void }) {
+  const { room, seats, loaded, missing } = useRoom(roomCode);
+  const [roles, setRoles] = useState<Record<number, RoleName> | null>(null);
+  const playingMafia = Boolean(room) && room!.status !== 'lobby' && (room!.game_type ?? 'mafia') === 'mafia';
+  useEffect(() => {
+    if (!playingMafia) return;
+    let active = true;
+    const load = () => callGame<{ roles: Record<number, RoleName> | null }>('admin-watch', { roomCode })
+      .then((result) => { if (active) setRoles(result.roles); })
+      .catch((cause: unknown) => { if (active) notify(cause instanceof Error ? cause.message : 'Дүрүүдийг уншиж чадсангүй.', 'error'); });
+    void load();
+    // A rematch deals new roles.
+    const timer = window.setInterval(() => { void load(); }, 20000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [playingMafia, roomCode, notify]);
+
+  const banner = <div className="watch-banner" role="status"><ShieldCheck size={13} /> АДМИН АЖИГЛАЖ БАЙНА · {roomCode}<button type="button" onClick={onExit}><X size={13} /> ГАРАХ</button></div>;
+  if (!loaded) return <div className="inner-screen"><TopBar title="ӨРӨӨ" subtitle="АЖИГЛАХ" onBack={onExit} /><div className="room-loading">Өрөөнд холбогдож байна…</div></div>;
+  if (missing || !room) return <div className="inner-screen"><TopBar title="ӨРӨӨ" subtitle="АЖИГЛАХ" onBack={onExit} /><div className="room-loading">Өрөө хаагдсан байна.</div></div>;
+  if (room.status === 'lobby') {
+    return <div className="inner-screen lobby-screen watch-lobby"><TopBar title={room.name.toUpperCase()} subtitle={`${GAMES[room.game_type ?? 'mafia'].title.toUpperCase()} · ЛОББИ`} onBack={onExit} />
+      <div className="watch-lobby-body"><p className="admin-note">Тоглоом хараахан эхлээгүй байна. Эхэлмэгц энд шууд харагдана.</p>
+        <div className="player-grid">{seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={false} onProfile={() => undefined} />)}</div></div>
+      {banner}</div>;
+  }
+  if (room.game_type === 'monopoly') {
+    return <><MonopolyScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={false} seats={seats} onLeave={onExit} onRematch={() => undefined} onNotice={notify} onProfile={() => undefined} watching />{banner}</>;
+  }
+  return <><GameScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={false} seats={seats} onLeave={onExit} onRematch={() => undefined} onNotice={notify} fullscreen={fullscreen} onProfile={() => undefined} watching={{ roles }} />{banner}</>;
 }
 
 function SeatCard({ seat, isHost, isMe, onRemoveBot, busy, onProfile }: { seat: RoomSeat; isHost: boolean; isMe: boolean; onRemoveBot?: () => void; busy?: boolean; onProfile: () => void }) {

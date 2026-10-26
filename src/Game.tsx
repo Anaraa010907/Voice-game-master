@@ -56,11 +56,24 @@ function GamePlayerCard({ player, isCurrent, selected, selectable, voteCount, vo
   </button>;
 }
 
-export default function GameScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice, fullscreen, onProfile }: {
+/** What an admin watching the table sees: no seat of their own, every role (once loaded) like an eliminated player. */
+function watcherView(roles: Record<number, RoleName> | null): PrivateGameView {
+  return {
+    spectatorRoles: roles ?? {}, seat: 0, role: 'Citizen', team: 'town',
+    info: { mafiaTeammateIds: [], informantMafiaIds: [], badInformantObjective: '', investigationResult: '', protectionResult: '' },
+    nightRole: null, nightAction: { submitted: false, targetId: null }, vote: { submitted: false, choice: null }, verdict: null,
+    lastProtectedId: null, knownAlignment: {}, shotgunSpent: false, readyForNight: true, teamTargets: null,
+  } as unknown as PrivateGameView;
+}
+
+export default function GameScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice, fullscreen, onProfile, watching }: {
   roomCode: string; roomName: string; userId: string; isHost: boolean; seats: RoomSeat[];
   onLeave: () => void; onRematch: () => void; onNotice: NotifyFn; fullscreen: FullscreenState; onProfile: (seat: number) => void;
+  /** Set when an admin watches the table: read only, no voice, every role shown. */
+  watching?: { roles: Record<number, RoleName> | null };
 }) {
-  const { publicView: game, privateView: me, deadline, reload } = useGame(roomCode, userId);
+  const { publicView: game, privateView: ownView, deadline, reload } = useGame(roomCode, userId);
+  const me = watching ? watcherView(watching.roles) : ownView;
   const secondsLeft = useCountdown(deadline);
   const [nightSelection, setNightSelection] = useState<number | null>(null);
   const [voteSelection, setVoteSelection] = useState<VoteChoice>(null);
@@ -108,14 +121,14 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
 
   // When the clock runs out, any phone may ask the server to move on. The server re-checks the deadline.
   useEffect(() => {
-    if (secondsLeft !== 0 || deadline === null || tickedFor.current === deadline) return;
+    if (watching || secondsLeft !== 0 || deadline === null || tickedFor.current === deadline) return;
     tickedFor.current = deadline;
     const timer = window.setTimeout(() => { void callGame('tick', { roomCode }).then(reload).catch(() => undefined); }, 300 + Math.random() * 700);
     return () => window.clearTimeout(timer);
-  }, [secondsLeft, deadline, roomCode, reload]);
+  }, [watching, secondsLeft, deadline, roomCode, reload]);
 
   // The flash-and-flip reveal plays once, when the match opens on the role screen.
-  const hasPrivate = Boolean(me);
+  const hasPrivate = Boolean(me) && !watching;
   useEffect(() => {
     if (!hasPrivate || !game) return;
     if (game.phase === 'Role Reveal' && !revealShown.current) setIntroOpen(true);
@@ -184,37 +197,37 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
     if (await send('vote', { choice: voteSelection })) { setVoteConfirmOpen(false); setVoteSelection(null); }
   };
 
-  const withVoice = (content: ReactNode) => <VoiceChatProvider roomCode={roomCode} userId={userId} seats={seats} phase={voicePhase} alive={currentPlayer.alive} isHost={isHost}>{content}</VoiceChatProvider>;
+  const withVoice = (content: ReactNode) => watching ? <>{content}</> : <VoiceChatProvider roomCode={roomCode} userId={userId} seats={seats} phase={voicePhase} alive={currentPlayer.alive} isHost={isHost}>{content}</VoiceChatProvider>;
 
-  if (game.phase === 'Results') return withVoice(<ResultsScreen game={game} me={me} roomName={roomName} isHost={isHost} onReplay={onRematch} onMenu={onLeave} />);
+  if (game.phase === 'Results') return withVoice(<ResultsScreen game={game} me={me} roomName={roomName} isHost={isHost && !watching} watching={Boolean(watching)} onReplay={onRematch} onMenu={onLeave} />);
 
   return withVoice(<div className={`core-game ${game.phase === 'Night' ? 'is-night' : ''} stage-${game.phase === 'Night' ? 'night' : game.phase === 'Voting' ? 'vote' : 'day'}`}>
     <header className="core-game-topbar">
       <div className="round-label"><span>{i18n.game.round}</span><strong>{String(game.round).padStart(2, '0')}</strong></div>
       <div className={`current-phase phase-${game.phase.toLowerCase().replace(' ', '-')}`}><span>{translatePhase(game.phase)}</span></div>
       <div className="demo-timer"><Clock3 size={14} /><strong>{time}</strong></div>
-      <div className="game-top-actions"><button className="game-icon-button" onClick={() => setSettingsOpen(true)} aria-label="Тоглоомын тохиргоо" title="Тоглоомын тохиргоо"><Settings size={16} /></button><button className="game-leave-button" onClick={() => setLeaveDialog(true)}><ArrowLeft size={14} /> {i18n.game.leaveGame.toUpperCase()}</button></div>
+      <div className="game-top-actions"><button className="game-icon-button" onClick={() => setSettingsOpen(true)} aria-label="Тоглоомын тохиргоо" title="Тоглоомын тохиргоо"><Settings size={16} /></button><button className="game-leave-button" onClick={() => watching ? onLeave() : setLeaveDialog(true)}><ArrowLeft size={14} /> {i18n.game.leaveGame.toUpperCase()}</button></div>
     </header>
 
-    {game.phase === 'Role Reveal' ? <RoleReveal game={game} player={currentPlayer} me={me} namesOf={namesOf} roomName={roomName} isHost={isHost} busy={busy} secondsLeft={secondsLeft} onContinue={hostSkip} onReady={() => { void send('reveal-ready'); }} /> : <>
+    {game.phase === 'Role Reveal' && !watching ? <RoleReveal game={game} player={currentPlayer} me={me} namesOf={namesOf} roomName={roomName} isHost={isHost} busy={busy} secondsLeft={secondsLeft} onContinue={hostSkip} onReady={() => { void send('reveal-ready'); }} /> : <>
       <div className="core-game-board">
-        <aside className="game-player-list game-player-list-left"><div className="game-list-heading">{i18n.game.table} <span>{String(game.players.length).padStart(2, '0')}</span></div>{leftPlayers.map(renderPlayer)}{!currentPlayer.alive && <GhostVoice roomCode={roomCode} userId={userId} />}{whisperOpen && <GhostVoice key="mafia-whisper" roomCode={roomCode} userId={userId} channel="mafia" />}</aside>
+        <aside className="game-player-list game-player-list-left"><div className="game-list-heading">{i18n.game.table} <span>{String(game.players.length).padStart(2, '0')}</span></div>{leftPlayers.map(renderPlayer)}{!currentPlayer.alive && !watching && <GhostVoice roomCode={roomCode} userId={userId} />}{whisperOpen && !watching && <GhostVoice key="mafia-whisper" roomCode={roomCode} userId={userId} channel="mafia" />}</aside>
         <section className="crime-stage">
           <div className="crime-stage-art" aria-hidden="true"><div className="crime-window" /><div className="crime-light" /><div className="crime-table" /></div>
           <div className="crime-stage-label"><span><i /> {roomName.toUpperCase()} · {roomCode}</span>{me.spectatorRoles && <span className="spectator-tag">АЖИГЛАГЧ · БҮХ ДҮР ХАРАГДАНА</span>}</div>
           {game.phase === 'Night' && <NightPanel round={game.round} player={currentPlayer} me={me} mafiaNames={mafiaNames} nameOf={nameOf} selectedName={nightSelection === null ? undefined : nameOf(nightSelection)} lockedName={me.nightAction.targetId === null ? undefined : nameOf(me.nightAction.targetId)} lastProtectedName={me.lastProtectedId === null ? undefined : nameOf(me.lastProtectedId)} busy={busy} onConfirm={confirmNight} onCancel={() => setNightSelection(null)} />}
           {game.phase === 'Morning' && <MorningPanel round={game.round} report={game.morningReport} winner={game.winner} isHost={isHost} busy={busy} onContinue={hostSkip} />}
-          {game.phase === 'Discussion' && <DiscussionPanel round={game.round} alive={currentPlayer.alive} isHost={isHost} busy={busy} onVote={hostSkip} onPrivate={() => setPrivateOpen((open) => !open)} />}
+          {game.phase === 'Discussion' && <DiscussionPanel round={game.round} alive={currentPlayer.alive} watching={Boolean(watching)} isHost={isHost} busy={busy} onVote={hostSkip} onPrivate={() => setPrivateOpen((open) => !open)} />}
           {game.phase === 'Voting' && <VotingPanel game={game} me={me} alive={currentPlayer.alive} voteSelection={voteSelection} voteConfirmOpen={voteConfirmOpen} isHost={isHost} busy={busy} nameOf={nameOf} onSkip={() => setVoteSelection('skip')} onReview={() => voteSelection === null ? onNotice(translateMessage('Choose a living player or Skip Vote.')) : setVoteConfirmOpen(true)} onSubmit={submitVote} onCancel={() => { setVoteConfirmOpen(false); setVoteSelection(null); }} onNext={hostSkip} onVerdict={giveVerdict} />}
           {quickOpen && <div className="quick-replies" aria-label="Хурдан хариулт">{QUICK_REPLIES.map((text) => <button type="button" key={text} onClick={() => quick.send(text)}>{text}</button>)}</div>}
         </section>
-        <aside className="game-player-list game-player-list-right"><div className="game-list-heading">{i18n.game.stillInIt} <span>{String(living.length).padStart(2, '0')}</span></div>{rightPlayers.map(renderPlayer)}<MyRoleCard role={roleInfo(me.role)} dead={!currentPlayer.alive} onOpen={() => setCardOpen(true)} /><button className="private-info-button" onClick={() => setPrivateOpen((open) => !open)}><LockKeyhole size={13} /> {i18n.game.privateInfo}</button></aside>
+        <aside className="game-player-list game-player-list-right"><div className="game-list-heading">{i18n.game.stillInIt} <span>{String(living.length).padStart(2, '0')}</span></div>{rightPlayers.map(renderPlayer)}{!watching && <><MyRoleCard role={roleInfo(me.role)} dead={!currentPlayer.alive} onOpen={() => setCardOpen(true)} /><button className="private-info-button" onClick={() => setPrivateOpen((open) => !open)}><LockKeyhole size={13} /> {i18n.game.privateInfo}</button></>}</aside>
       </div>
     </>}
 
     {introOpen && <RoleRevealIntro role={roleInfo(me.role)} onDone={closeIntro} />}
     {cardOpen && <RoleCardViewer role={roleInfo(me.role)} onClose={closeCard} />}
-    {privateOpen && <PrivateInfoPanel player={currentPlayer} me={me} mafiaNames={mafiaNames} namesOf={namesOf} onClose={() => setPrivateOpen(false)} />}
+    {privateOpen && !watching && <PrivateInfoPanel player={currentPlayer} me={me} mafiaNames={mafiaNames} namesOf={namesOf} onClose={() => setPrivateOpen(false)} />}
     {leaveDialog && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="leave-game-title"><div className="modal-symbol"><ArrowLeft size={18} /></div><h2 id="leave-game-title">Тоглоомоос гарах уу?</h2><p>Гарвал та хасагдсанд тооцогдож, энэ тоглолтод буцаж орох боломжгүй.</p><div className="modal-actions"><button className="secondary-button" onClick={() => setLeaveDialog(false)}>ҮЛДЭХ</button><button className="primary-button" onClick={onLeave}>ТОГЛООМООС ГАРАХ</button></div></section></div>}
     {settingsOpen && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title"><div className="modal-symbol"><Settings size={18} /></div><h2 id="game-settings-title">Тоглоомын тохиргоо</h2><p>Үе шат бүр цаг дуусахад автоматаар солигдоно. Өрөөний эзэн хүлээх үеийг алгасаж болно.</p><p className="rules-line">Дүрэм: {rulesSummary(game.settings)}</p><div className="modal-fullscreen"><FullscreenToggle fullscreen={fullscreen} /></div><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>ТОГЛООМ ҮРГЭЛЖЛҮҮЛЭХ</button></div></section></div>}
   </div>);
@@ -273,8 +286,8 @@ function MorningPanel({ round, report, winner, isHost, busy, onContinue }: { rou
   return <div className="phase-panel morning-panel"><div className="morning-seal"><Sun size={21} /></div><div className="morning-kicker">ӨГЛӨӨНИЙ ТАЙЛАН · ЭЭЛЖ {round}</div><h2>{headline}</h2><p className="morning-report-text">{translateMessage(report)}</p><HostButton isHost={isHost} busy={busy} label={winner ? 'ҮР ДҮНГ ҮЗЭХ' : 'ХЭЛЭЛЦҮҮЛЭГ НЭЭХ'} onClick={onContinue} /></div>;
 }
 
-function DiscussionPanel({ round, alive, isHost, busy, onVote, onPrivate }: { round: number; alive: boolean; isHost: boolean; busy: boolean; onVote: () => void; onPrivate: () => void }) {
-  return <div className="phase-panel discussion-panel"><div className="discussion-head"><div><small>ӨДӨР {round} · ХЭЛЭЛЦҮҮЛЭГ</small><h2>Юу харсан бэ?</h2></div><Mic size={19} /></div><p>{alive ? 'Микрофоноо асаагаад сэжүүрээ хуваалцаарай. Хэн худлаа ярьж байна вэ?' : 'Та хасагдсан тул сонсох боломжтой, ярих боломжгүй.'}</p><div className="discussion-actions"><button className="secondary-button" onClick={onPrivate}><LockKeyhole size={13} /> НУУЦ МЭДЭЭЛЭЛ</button>{isHost ? <button className="primary-button" disabled={busy} onClick={onVote}>САНАЛ ХУРААЛТ НЭЭХ <Vote size={14} /></button> : <span className="discussion-wait">Цаг дуусахад санал хураалт эхэлнэ</span>}</div></div>;
+function DiscussionPanel({ round, alive, isHost, busy, watching = false, onVote, onPrivate }: { round: number; alive: boolean; isHost: boolean; busy: boolean; watching?: boolean; onVote: () => void; onPrivate: () => void }) {
+  return <div className="phase-panel discussion-panel"><div className="discussion-head"><div><small>ӨДӨР {round} · ХЭЛЭЛЦҮҮЛЭГ</small><h2>Юу харсан бэ?</h2></div><Mic size={19} /></div><p>{watching ? 'Тоглогчид хэлэлцэж байна. Та админаар ажиглаж байгаа тул бүх дүр харагдана.' : alive ? 'Микрофоноо асаагаад сэжүүрээ хуваалцаарай. Хэн худлаа ярьж байна вэ?' : 'Та хасагдсан тул сонсох боломжтой, ярих боломжгүй.'}</p><div className="discussion-actions">{!watching && <button className="secondary-button" onClick={onPrivate}><LockKeyhole size={13} /> НУУЦ МЭДЭЭЛЭЛ</button>}{isHost ? <button className="primary-button" disabled={busy} onClick={onVote}>САНАЛ ХУРААЛТ НЭЭХ <Vote size={14} /></button> : <span className="discussion-wait">Цаг дуусахад санал хураалт эхэлнэ</span>}</div></div>;
 }
 
 function VotingPanel({ game, me, alive, voteSelection, voteConfirmOpen, isHost, busy, nameOf, onSkip, onReview, onSubmit, onCancel, onNext, onVerdict }: {
@@ -365,7 +378,7 @@ function MatchRecap({ game, onClose }: { game: PublicGameView; onClose: () => vo
   </section></div>;
 }
 
-function ResultsScreen({ game, me, roomName, isHost, onReplay, onMenu }: { game: PublicGameView; me: PrivateGameView; roomName: string; isHost: boolean; onReplay: () => void; onMenu: () => void }) {
+function ResultsScreen({ game, me, roomName, isHost, watching = false, onReplay, onMenu }: { game: PublicGameView; me: PrivateGameView; roomName: string; isHost: boolean; watching?: boolean; onReplay: () => void; onMenu: () => void }) {
   const [recapOpen, setRecapOpen] = useState(false);
   const headline = game.winner === 'Citizens' ? i18n.game.results.citizensWin : game.winner === 'Mafia' ? i18n.game.results.mafiaWin : game.winner === 'Jester' ? i18n.game.results.jesterWin : i18n.game.results.draw;
   // The Jester only wins alone; town and Mafia win as teams.
@@ -379,5 +392,5 @@ function ResultsScreen({ game, me, roomName, isHost, onReplay, onMenu }: { game:
     `${nights.reduce((total, entry) => total + (entry.kind === 'night' ? entry.investigations.length : 0), 0)} шалгалт`,
     `${history.filter((entry) => entry.kind === 'day' && entry.accusedId !== null).length} шүүх хурал`,
   ];
-  return <main className="game-results-screen"><div className="results-glow" /><div className="results-heading"><span>ЭЭЛЖ {String(game.round).padStart(2, '0')} · {roomName.toUpperCase()}</span><h1>{headline}</h1><p>{game.winner === 'Jester' ? (iWon ? 'Та бүгдийг хуурч ганцаараа яллаа!' : 'Алиа таныг хуурчээ.') : iWon ? 'Таны баг яллаа!' : 'Таны баг энэ удаа ялагдлаа.'}</p>{history.length > 0 && <p className="results-stats">{stats.join(' · ')}</p>}</div><div className="results-player-list">{game.players.map((player) => { const roleName = game.finalRoles?.[player.id]; const role = roleName ? roleInfo(roleName) : null; return <div className={`results-player ${!player.alive ? 'is-dead' : ''}`} key={player.id}><Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}><VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar><span className="results-name">{player.name}{player.id === me.seat && <small>ЧИ</small>}</span>{role && <span className={`team-tag ${role.team}`}>{translateRole(role.name)}</span>}<span className="results-status">{player.alive ? 'АМЬД' : 'ХАСАГДСАН'}</span></div>; })}</div><div className="results-actions"><button className="secondary-button" onClick={onMenu}><ArrowLeft size={14} /> {i18n.game.results.mainMenu}</button>{(game.history?.length ?? 0) > 0 && <button className="secondary-button" onClick={() => setRecapOpen(true)}><Info size={14} /> ТОГЛОЛТЫН ТҮҮХ</button>}{isHost ? <button className="primary-button" onClick={onReplay}>{i18n.game.results.playAgain} <ChevronRight size={15} /></button> : <span className="discussion-wait">Эзэн шинэ тоглолт эхлүүлэхийг хүлээж байна</span>}</div>{recapOpen && <MatchRecap game={game} onClose={() => setRecapOpen(false)} />}</main>;
+  return <main className="game-results-screen"><div className="results-glow" /><div className="results-heading"><span>ЭЭЛЖ {String(game.round).padStart(2, '0')} · {roomName.toUpperCase()}</span><h1>{headline}</h1><p>{watching ? 'Админ ажиглагч · тоглолт дууслаа.' : game.winner === 'Jester' ? (iWon ? 'Та бүгдийг хуурч ганцаараа яллаа!' : 'Алиа таныг хуурчээ.') : iWon ? 'Таны баг яллаа!' : 'Таны баг энэ удаа ялагдлаа.'}</p>{history.length > 0 && <p className="results-stats">{stats.join(' · ')}</p>}</div><div className="results-player-list">{game.players.map((player) => { const roleName = game.finalRoles?.[player.id]; const role = roleName ? roleInfo(roleName) : null; return <div className={`results-player ${!player.alive ? 'is-dead' : ''}`} key={player.id}><Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}><VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar><span className="results-name">{player.name}{player.id === me.seat && <small>ЧИ</small>}</span>{role && <span className={`team-tag ${role.team}`}>{translateRole(role.name)}</span>}<span className="results-status">{player.alive ? 'АМЬД' : 'ХАСАГДСАН'}</span></div>; })}</div><div className="results-actions"><button className="secondary-button" onClick={onMenu}><ArrowLeft size={14} /> {i18n.game.results.mainMenu}</button>{(game.history?.length ?? 0) > 0 && <button className="secondary-button" onClick={() => setRecapOpen(true)}><Info size={14} /> ТОГЛОЛТЫН ТҮҮХ</button>}{isHost ? <button className="primary-button" onClick={onReplay}>{i18n.game.results.playAgain} <ChevronRight size={15} /></button> : <span className="discussion-wait">Эзэн шинэ тоглолт эхлүүлэхийг хүлээж байна</span>}</div>{recapOpen && <MatchRecap game={game} onClose={() => setRecapOpen(false)} />}</main>;
 }

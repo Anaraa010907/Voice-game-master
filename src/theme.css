@@ -2802,3 +2802,37 @@
 .viewport .game-frame .plate-preview.is-large { width: min(330px, 100%); height: 70px; margin: 14px 0 6px; padding: 0 14px; }
 .viewport .game-frame .plate-preview.is-large .avatar { width: 44px; height: 44px; font-size: 15px; }
 .viewport .game-frame .plate-preview.is-large b { font-size: 16px; }
+
+/* ---------- Staff tools: roles, coins, watching a room ---------- */
+.admin-badge.is-moderator { border-color: rgba(90, 160, 255, .6); color: #b9d6ff; }
+.chip.chip-blue { border-color: rgba(90, 160, 255, .6); color: #b9d6ff; }
+.admin-coins { display: inline-flex; align-items: center; gap: 2px; color: #ffd979; }
+.admin-row-actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; flex: none; }
+.viewport .game-frame .admin-row-actions > button, .viewport .game-frame .admin-list li > .admin-watch-button { min-height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px; font-size: 9.5px; }
+.role-choices { display: grid; gap: 6px; }
+.viewport .game-frame .role-choices button { display: grid; gap: 2px; padding: 9px 12px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 10px; background: rgba(10, 12, 18, .8); color: #e9e1d4; text-align: left; }
+.viewport .game-frame .role-choices button.is-picked { border-color: var(--gold); background: rgba(210, 176, 115, .16); }
+.role-choices b { font-size: 13px; }
+.role-choices small { color: #9d968f; font-size: 10px; }
+
+.viewport .game-frame .watch-banner {
+  position: absolute;
+  z-index: 60;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 12px;
+  border: 1px solid rgba(214, 70, 80, .7);
+  border-radius: 999px;
+  background: rgba(40, 10, 16, .92);
+  color: #ffd7da;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .5);
+}
+.viewport .game-frame .watch-banner button { display: inline-flex; align-items: center; gap: 3px; min-height: 22px; padding: 0 9px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .12); color: #fff; font-size: 9.5px; font-weight: 700; }
+.watch-lobby-body { padding: 12px 4%; display: grid; gap: 10px; overflow-y: auto; }

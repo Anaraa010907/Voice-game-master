@@ -64,9 +64,11 @@ const offersLeft = (game: MonopolyState, id: number) => MAX_OFFERS_PER_TURN - (g
 /** Digits only, so a typed amount never starts with a stuck "0". */
 const digits = (value: string) => value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 7);
 
-export default function MonopolyScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice, onProfile }: {
+export default function MonopolyScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice, onProfile, watching = false }: {
   roomCode: string; roomName: string; userId: string; isHost: boolean; seats: RoomSeat[];
   onLeave: () => void; onRematch: () => void; onNotice: NotifyFn; onProfile: (seat: number) => void;
+  /** An admin watching the table: read only, no voice. */
+  watching?: boolean;
 }) {
   const { publicView, deadline, reload } = useGame(roomCode, userId);
   const game = publicView as unknown as MonopolyState | null;
@@ -85,11 +87,11 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
 
   // Any phone nudges the server when the turn timer runs out; the server re-checks the deadline.
   useEffect(() => {
-    if (secondsLeft !== 0 || deadline === null || tickedFor.current === deadline) return;
+    if (watching || secondsLeft !== 0 || deadline === null || tickedFor.current === deadline) return;
     tickedFor.current = deadline;
     const timer = window.setTimeout(() => { void callGame('tick', { roomCode }).then(reload).catch(() => undefined); }, 300 + Math.random() * 700);
     return () => window.clearTimeout(timer);
-  }, [secondsLeft, deadline, roomCode, reload]);
+  }, [watching, secondsLeft, deadline, roomCode, reload]);
 
   useEffect(() => {
     startMusic('monopoly');
@@ -148,8 +150,7 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
     : auction ? <><b>{actor.name}</b> үнэ хаяж байна</>
       : <><b>{current.name}</b> {game.phase === 'roll' ? 'шоо хаяна' : 'ээлжээ үргэлжлүүлж байна'}</>;
 
-  return <VoiceChatProvider roomCode={roomCode} userId={userId} seats={seats} phase={game.phase === 'finished' ? 'results' : 'discussion'} alive isHost={isHost}>
-    <div className="mono">
+  const board = <div className="mono">
       <section className="mono-board" aria-label="Монгол Монополь самбар">
         {BOARD.map((tile) => {
           const tileState = game.tiles[tile.id];
@@ -196,7 +197,7 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
         <header className="mono-side-head">
           <div><span>{roomName.toUpperCase()}</span><b>{limit === null ? <>ТОЙРОГ {game.round} <small>· ДАМПУУРТАЛ</small></> : <>ТОЙРОГ {Math.min(game.round, limit)}/{limit}</>}</b></div>
           <div className="mono-timer"><Clock3 size={13} />{game.phase === 'finished' ? '—' : secondsLeft ?? '—'}</div>
-          <button type="button" className="icon-button" onClick={() => setLeaveOpen(true)} aria-label="Тоглоомоос гарах"><ArrowLeft size={15} /></button>
+          <button type="button" className="icon-button" onClick={() => watching ? onLeave() : setLeaveOpen(true)} aria-label="Тоглоомоос гарах"><ArrowLeft size={15} /></button>
         </header>
 
         <div className="mono-players">
@@ -225,8 +226,8 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
         onSend={(offer) => void send('propose', { offer }).then((sent) => { if (sent) setTrading(false); })} />}
 
       {leaveOpen && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true"><h2>Тоглоомоос гарах уу?</h2><p>Гарвал та дампуурсанд тооцогдож, бүх өмч банкинд буцна.</p><div className="modal-actions"><button className="secondary-button" onClick={() => setLeaveOpen(false)}>ҮЛДЭХ</button><button className="primary-button" onClick={onLeave}>ГАРАХ</button></div></section></div>}
-    </div>
-  </VoiceChatProvider>;
+    </div>;
+  return watching ? board : <VoiceChatProvider roomCode={roomCode} userId={userId} seats={seats} phase={game.phase === 'finished' ? 'results' : 'discussion'} alive isHost={isHost}>{board}</VoiceChatProvider>;
 }
 
 /** A player's piece on the board: their profile picture, or coloured initials, ringed in their colour. */

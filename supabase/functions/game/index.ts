@@ -730,10 +730,16 @@ function banMessage(ban: { reason: string; banned_until: string | null }) {
 class AdminTools {
   constructor(private admin: SupabaseClient, private userId: string) {}
 
-  private async requireAdmin() {
-    const { data, error } = await this.admin.from('admin_users').select('user_id').eq('user_id', this.userId).maybeSingle();
+  /** 'admin' or 'moderator'; anyone else is refused. Moderators may ban and unban, admins may do everything. */
+  private async requireStaff(adminOnly = false) {
+    const { data, error } = await this.admin.from('admin_users').select('role').eq('user_id', this.userId).maybeSingle();
     if (error) throw error;
-    if (!data) throw new GameError(403, 'Зөвхөн админ хийх боломжтой.');
+    if (!data) throw new GameError(403, 'Зөвхөн админ, модератор хийх боломжтой.');
+    if (adminOnly && data.role !== 'admin') throw new GameError(403, 'Зөвхөн админ хийх боломжтой.');
+  }
+
+  private requireAdmin() {
+    return this.requireStaff(true);
   }
 
   private target(body: Body) {
@@ -747,11 +753,11 @@ class AdminTools {
   }
 
   async ban(body: Body) {
-    await this.requireAdmin();
+    await this.requireStaff();
     const target = this.target(body);
     if (target === this.userId) throw new GameError(400, 'Өөрийгөө хаах боломжгүй.');
-    const { data: otherAdmin } = await this.admin.from('admin_users').select('user_id').eq('user_id', target).maybeSingle();
-    if (otherAdmin) throw new GameError(400, 'Админыг хаах боломжгүй.');
+    const { data: otherStaff } = await this.admin.from('admin_users').select('user_id').eq('user_id', target).maybeSingle();
+    if (otherStaff) throw new GameError(400, 'Админ, модераторыг хаах боломжгүй. Эхлээд эрхийг нь хасна уу.');
     const hours = Number(body.hours);
     if (!BAN_HOURS.includes(hours)) throw new GameError(400, 'Хаах хугацаа буруу байна.');
     const reason = (typeof body.reason === 'string' ? body.reason : '').trim().slice(0, 200);
@@ -774,7 +780,7 @@ class AdminTools {
   }
 
   async unban(body: Body) {
-    await this.requireAdmin();
+    await this.requireStaff();
     const target = this.target(body);
     const { error: authError } = await this.admin.auth.admin.updateUserById(target, { ban_duration: 'none' });
     if (authError) throw new GameError(404, 'Тоглогч олдсонгүй.');
@@ -782,6 +788,18 @@ class AdminTools {
     const { data: profile } = await this.admin.from('profiles').select('display_name').eq('id', target).maybeSingle();
     await this.log('unban', target, profile?.display_name ?? '');
     return { unbanned: true };
+  }
+
+  /** Mafia roles for an admin watching a room (the board game has nothing hidden). */
+  async watch(body: Body) {
+    await this.requireAdmin();
+    const roomCodeValue = code(body);
+    const { data: stored, error } = await this.admin.from('game_states').select('engine').eq('room_code', roomCodeValue).maybeSingle();
+    if (error) throw error;
+    const game = stored?.engine as AnyGame | null;
+    if (!game || isBoard(game)) return { roles: null };
+    const roles = Object.fromEntries(Object.entries(game.privatePlayers).map(([seat, secret]) => [seat, secret.role]));
+    return { roles };
   }
 
   async closeRoom(body: Body) {
@@ -838,6 +856,7 @@ Deno.serve(async (request) => {
       'admin-ban': (value) => tools.ban(value),
       'admin-unban': (value) => tools.unban(value),
       'admin-close-room': (value) => tools.closeRoom(value),
+      'admin-watch': (value) => tools.watch(value),
       create: (value) => server.create(value),
       join: (value) => server.join(value),
       leave: (value) => server.leave(value),

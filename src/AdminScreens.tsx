@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  ArrowLeft, Ban, Bug, Check, DoorClosed, Flag, History, Inbox, LayoutDashboard, Lightbulb, Lock, LogOut,
-  Megaphone, MessageSquare, RefreshCw, Search, Send, ShieldCheck, Undo2, Users, X,
+  ArrowLeft, Ban, Bug, Check, Coins, DoorClosed, Eye, Flag, History, Inbox, LayoutDashboard, Lightbulb, Lock, LogOut,
+  Megaphone, MessageSquare, RefreshCw, Search, Send, ShieldCheck, Undo2, UserCog, Users, X,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import { supabase } from './supabaseClient';
@@ -9,6 +9,10 @@ import { callGame, type NotifyFn } from './multiplayer';
 import { GAMES, type GameType } from './games';
 
 /* ---------- shared bits ---------- */
+
+/** Admins do everything; moderators read reports and ban. */
+export type StaffRole = 'admin' | 'moderator';
+const ROLE_LABEL: Record<StaffRole, string> = { admin: 'АДМИН', moderator: 'МОДЕРАТОР' };
 
 export type FeedbackCategory = 'idea' | 'bug' | 'report' | 'other';
 export type PlayerBan = { reason: string; banned_until: string | null };
@@ -166,28 +170,32 @@ type Tab = 'dash' | 'players' | 'feedback' | 'rooms' | 'announce' | 'log';
 type Stats = { players: number; new_today: number; rooms_live: number; rooms_playing: number; open_feedback: number; banned: number };
 type AdminPlayer = {
   id: string; display_name: string; avatar_url: string | null; email: string | null; provider: string; created_at: string;
-  last_sign_in_at: string | null; total_matches: number; wins: number; is_admin: boolean; is_banned: boolean; banned_until: string | null; ban_reason: string | null;
+  last_sign_in_at: string | null; total_matches: number; wins: number; coins: number; staff_role: StaffRole | null;
+  is_banned: boolean; banned_until: string | null; ban_reason: string | null;
 };
 type AdminFeedback = MyFeedback & { user_id: string; display_name: string; avatar_url: string | null; target_user: string | null; target_name: string | null; room_code: string | null };
 type AdminRoom = { room_code: string; name: string; game_type: string; status: string; is_private: boolean; players: number; bots: number; max_players: number; host_name: string; updated_at: string };
 type AdminAction = { id: number; admin_name: string; action: string; target: string | null; detail: string | null; created_at: string };
 
-const TABS: { key: Tab; label: string; icon: ReactNode }[] = [
+const TABS: { key: Tab; label: string; icon: ReactNode; adminOnly?: boolean }[] = [
   { key: 'dash', label: 'Самбар', icon: <LayoutDashboard size={15} /> },
   { key: 'players', label: 'Тоглогчид', icon: <Users size={15} /> },
-  { key: 'feedback', label: 'Санал хүсэлт', icon: <Inbox size={15} /> },
-  { key: 'rooms', label: 'Өрөөнүүд', icon: <DoorClosed size={15} /> },
-  { key: 'announce', label: 'Мэдэгдэл', icon: <Megaphone size={15} /> },
-  { key: 'log', label: 'Түүх', icon: <History size={15} /> },
+  { key: 'feedback', label: 'Санал, гомдол', icon: <Inbox size={15} /> },
+  { key: 'rooms', label: 'Өрөөнүүд', icon: <DoorClosed size={15} />, adminOnly: true },
+  { key: 'announce', label: 'Мэдэгдэл', icon: <Megaphone size={15} />, adminOnly: true },
+  { key: 'log', label: 'Түүх', icon: <History size={15} />, adminOnly: true },
 ];
 const BAN_CHOICES = [{ hours: 24, label: '1 өдөр' }, { hours: 72, label: '3 өдөр' }, { hours: 168, label: '7 өдөр' }, { hours: 720, label: '30 өдөр' }, { hours: 0, label: 'Бүрмөсөн' }];
 const ACTION_LABEL: Record<string, string> = {
   ban: 'Тоглогч хаасан', unban: 'Хаалт арилгасан', 'room-close': 'Өрөө хаасан', 'feedback-resolve': 'Санал шийдсэн',
   'feedback-reopen': 'Санал дахин нээсэн', announcement: 'Мэдэгдэл нийтэлсэн', 'announcement-clear': 'Мэдэгдэл авсан',
+  coins: 'Зоос өгсөн', role: 'Эрх өөрчилсөн',
 };
 const ROOM_STATUS: Record<string, string> = { lobby: 'ЛОББИ', playing: 'ТОГЛОЖ БАЙНА', finished: 'ДУУССАН' };
 
-export function AdminScreen({ onBack, notify }: { onBack: () => void; notify: NotifyFn }) {
+export function AdminScreen({ role, onBack, notify, onWatch }: { role: StaffRole; onBack: () => void; notify: NotifyFn; onWatch: (roomCode: string) => void }) {
+  const isAdmin = role === 'admin';
+  const tabs = TABS.filter((item) => isAdmin || !item.adminOnly);
   const [tab, setTab] = useState<Tab>('dash');
   const [stats, setStats] = useState<Stats | null>(null);
 
@@ -200,32 +208,32 @@ export function AdminScreen({ onBack, notify }: { onBack: () => void; notify: No
   useEffect(() => { void loadStats(); }, [loadStats, tab]);
 
   return <div className="inner-screen panel-screen admin-screen">
-    <PanelTopBar title="АДМИНЫ САМБАР" subtitle="УДИРДЛАГА" onBack={onBack}
-      trailing={<span className="admin-badge"><ShieldCheck size={13} /> АДМИН</span>} />
+    <PanelTopBar title={isAdmin ? 'АДМИНЫ САМБАР' : 'МОДЕРАТОРЫН САМБАР'} subtitle="УДИРДЛАГА" onBack={onBack}
+      trailing={<span className={`admin-badge ${isAdmin ? '' : 'is-moderator'}`}><ShieldCheck size={13} /> {ROLE_LABEL[role]}</span>} />
     <div className="admin-layout">
       <nav className="admin-tabs" aria-label="Админы хэсгүүд">
-        {TABS.map((item) => <button type="button" key={item.key} className={tab === item.key ? 'is-active' : ''} aria-current={tab === item.key ? 'page' : undefined} onClick={() => setTab(item.key)}>
+        {tabs.map((item) => <button type="button" key={item.key} className={tab === item.key ? 'is-active' : ''} aria-current={tab === item.key ? 'page' : undefined} onClick={() => setTab(item.key)}>
           {item.icon}<span>{item.label}</span>
           {item.key === 'feedback' && Boolean(stats?.open_feedback) && <b className="admin-count">{stats!.open_feedback}</b>}
         </button>)}
       </nav>
       <div className="admin-content">
-        {tab === 'dash' && <Dashboard stats={stats} onOpen={setTab} />}
-        {tab === 'players' && <PlayersTab notify={notify} onChanged={loadStats} />}
+        {tab === 'dash' && <Dashboard stats={stats} isAdmin={isAdmin} onOpen={setTab} />}
+        {tab === 'players' && <PlayersTab isAdmin={isAdmin} notify={notify} onChanged={loadStats} />}
         {tab === 'feedback' && <FeedbackTab notify={notify} onChanged={loadStats} />}
-        {tab === 'rooms' && <RoomsTab notify={notify} onChanged={loadStats} />}
-        {tab === 'announce' && <AnnounceTab notify={notify} />}
-        {tab === 'log' && <LogTab notify={notify} />}
+        {tab === 'rooms' && isAdmin && <RoomsTab notify={notify} onChanged={loadStats} onWatch={onWatch} />}
+        {tab === 'announce' && isAdmin && <AnnounceTab notify={notify} />}
+        {tab === 'log' && isAdmin && <LogTab notify={notify} />}
       </div>
     </div>
   </div>;
 }
 
-function Dashboard({ stats, onOpen }: { stats: Stats | null; onOpen: (tab: Tab) => void }) {
+function Dashboard({ stats, isAdmin, onOpen }: { stats: Stats | null; isAdmin: boolean; onOpen: (tab: Tab) => void }) {
   const tiles: { value: number | string; label: string; tab: Tab; tone?: string }[] = [
     { value: stats?.players ?? '…', label: 'Нийт тоглогч', tab: 'players' },
     { value: stats?.new_today ?? '…', label: 'Сүүлийн 24 цагт шинэ', tab: 'players' },
-    { value: stats ? `${stats.rooms_live}` : '…', label: `Нээлттэй өрөө${stats ? ` · ${stats.rooms_playing} тоглож байна` : ''}`, tab: 'rooms' },
+    { value: stats ? `${stats.rooms_live}` : '…', label: `Нээлттэй өрөө${stats ? ` · ${stats.rooms_playing} тоглож байна` : ''}`, tab: isAdmin ? 'rooms' : 'dash' },
     { value: stats?.open_feedback ?? '…', label: 'Хариулаагүй санал хүсэлт', tab: 'feedback', tone: stats?.open_feedback ? 'alert' : '' },
     { value: stats?.banned ?? '…', label: 'Хаагдсан тоглогч', tab: 'players' },
   ];
@@ -233,18 +241,23 @@ function Dashboard({ stats, onOpen }: { stats: Stats | null; onOpen: (tab: Tab) 
     <div className="admin-tiles">{tiles.map((tile) => <button type="button" key={tile.label} className={`admin-tile ${tile.tone ? `is-${tile.tone}` : ''}`} onClick={() => onOpen(tile.tab)}>
       <b>{tile.value}</b><span>{tile.label}</span></button>)}</div>
     <p className="admin-note">Тоглогч хаахад тэр нэвтэрч чадахгүй болж, сууж байсан өрөөнөөсөө гарна. Тоглож байсан тоглолтод нь ялагдал бичигдэнэ.</p>
+    <p className="admin-note">{isAdmin
+      ? 'Админ: тоглогчдод зоос өгөх, админ/модератор эрх олгох, тоглож буй өрөөг ажиглах, өрөө хаах, мэдэгдэл нийтлэх. Дэлгүүр, бэлэг танд үнэгүй.'
+      : 'Модератор: санал, гомдлыг харж хариулах, тоглогч хаах, хаалт арилгах.'}</p>
   </div>;
 }
 
-function PlayersTab({ notify, onChanged }: { notify: NotifyFn; onChanged: () => void }) {
+function PlayersTab({ isAdmin, notify, onChanged }: { isAdmin: boolean; notify: NotifyFn; onChanged: () => void }) {
   const [search, setSearch] = useState('');
   const [players, setPlayers] = useState<AdminPlayer[] | null>(null);
   const [banning, setBanning] = useState<AdminPlayer | null>(null);
+  const [giving, setGiving] = useState<AdminPlayer | null>(null);
+  const [promoting, setPromoting] = useState<AdminPlayer | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async (query = '') => {
     if (!supabase) return;
-    const { data, error } = await supabase.rpc('admin_list_players', { p_search: query, p_limit: 80 });
+    const { data, error } = await supabase.rpc('admin_find_players', { p_search: query, p_limit: 80 });
     if (error) { notify(failure(error), 'error'); return; }
     setPlayers((data as AdminPlayer[] | null) ?? []);
   }, [notify]);
@@ -262,7 +275,7 @@ function PlayersTab({ notify, onChanged }: { notify: NotifyFn; onChanged: () => 
 
   return <div className="admin-pane">
     <form className="admin-search" onSubmit={(event) => { event.preventDefault(); void load(search); }}>
-      <Search size={14} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Нэр эсвэл и-мэйлээр хайх" aria-label="Тоглогч хайх" />
+      <Search size={14} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={isAdmin ? 'Нэр эсвэл и-мэйлээр хайх' : 'Нэрээр хайх'} aria-label="Тоглогч хайх" />
       <button type="submit" className="secondary-button">ХАЙХ</button>
     </form>
     {players === null && <p className="panel-empty">Ачаалж байна…</p>}
@@ -272,18 +285,24 @@ function PlayersTab({ notify, onChanged }: { notify: NotifyFn; onChanged: () => 
         <Avatar name={player.display_name} color="rose" url={player.avatar_url} className="admin-avatar" />
         <div className="admin-row-main">
           <b>{player.display_name}
-            {player.is_admin && <span className="chip chip-gold">АДМИН</span>}
+            {player.staff_role && <span className={`chip ${player.staff_role === 'admin' ? 'chip-gold' : 'chip-blue'}`}>{ROLE_LABEL[player.staff_role]}</span>}
             {player.is_banned && <span className="chip chip-red">ХААГДСАН · {banEnd(player.banned_until)}</span>}
           </b>
-          <small>{player.email ?? 'и-мэйлгүй'} · {player.provider === 'facebook' ? 'Facebook' : 'И-мэйл'} · бүртгүүлсэн {ago(player.created_at)} · сүүлд {ago(player.last_sign_in_at)}</small>
-          <small>{player.total_matches} тоглолт · {player.wins} ялалт{player.is_banned && player.ban_reason ? ` · Шалтгаан: ${player.ban_reason}` : ''}</small>
+          <small>{isAdmin ? `${player.email ?? 'и-мэйлгүй'} · ` : ''}{player.provider === 'facebook' ? 'Facebook' : 'И-мэйл'} · бүртгүүлсэн {ago(player.created_at)} · сүүлд {ago(player.last_sign_in_at)}</small>
+          <small>{player.total_matches} тоглолт · {player.wins} ялалт · <span className="admin-coins"><Coins size={10} />{player.coins.toLocaleString('en-US')}</span>{player.is_banned && player.ban_reason ? ` · Шалтгаан: ${player.ban_reason}` : ''}</small>
         </div>
-        {!player.is_admin && (player.is_banned
-          ? <button type="button" className="secondary-button" disabled={busy} onClick={() => void unban(player)}><Undo2 size={13} /> АРИЛГАХ</button>
-          : <button type="button" className="danger-button" disabled={busy} onClick={() => setBanning(player)}><Ban size={13} /> ХААХ</button>)}
+        <span className="admin-row-actions">
+          {isAdmin && <button type="button" className="secondary-button" disabled={busy} onClick={() => setGiving(player)} title="Зоос өгөх"><Coins size={13} /> ЗООС</button>}
+          {isAdmin && <button type="button" className="secondary-button" disabled={busy} onClick={() => setPromoting(player)} title="Эрх өгөх"><UserCog size={13} /> ЭРХ</button>}
+          {!player.staff_role && (player.is_banned
+            ? <button type="button" className="secondary-button" disabled={busy} onClick={() => void unban(player)}><Undo2 size={13} /> АРИЛГАХ</button>
+            : <button type="button" className="danger-button" disabled={busy} onClick={() => setBanning(player)}><Ban size={13} /> ХААХ</button>)}
+        </span>
       </li>)}
     </ul>
     {banning && <BanDialog player={banning} onClose={() => setBanning(null)} onDone={() => { setBanning(null); void load(search); onChanged(); }} notify={notify} />}
+    {giving && <CoinsDialog player={giving} onClose={() => setGiving(null)} onDone={() => { setGiving(null); void load(search); }} notify={notify} />}
+    {promoting && <RoleDialog player={promoting} onClose={() => setPromoting(null)} onDone={() => { setPromoting(null); void load(search); }} notify={notify} />}
   </div>;
 }
 
@@ -315,6 +334,74 @@ function BanDialog({ player, onClose, onDone, notify }: { player: AdminPlayer; o
       <div className="modal-actions">
         <button type="button" className="secondary-button" onClick={onClose}>БОЛИХ</button>
         <button type="button" className="primary-button" disabled={busy} onClick={() => void submit()}><Ban size={14} /> {busy ? 'ХААЖ БАЙНА…' : 'ХААХ'}</button>
+      </div>
+    </section>
+  </div>;
+}
+
+const COIN_PRESETS = [100, 500, 1000, 5000, 10000];
+
+function CoinsDialog({ player, onClose, onDone, notify }: { player: AdminPlayer; onClose: () => void; onDone: () => void; notify: NotifyFn }) {
+  const [amount, setAmount] = useState('1000');
+  const [take, setTake] = useState(false);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const value = Number(amount || 0);
+  const submit = async () => {
+    if (!supabase || !value) return;
+    setBusy(true);
+    const { data, error } = await supabase.rpc('admin_grant_coins', { p_user: player.id, p_amount: take ? -value : value, p_reason: reason.trim() });
+    setBusy(false);
+    if (error) { notify(failure(error), 'error'); return; }
+    notify(`${player.display_name}: ${take ? '−' : '+'}${value.toLocaleString('en-US')} зоос. Одоо ${Number(data).toLocaleString('en-US')}.`, 'success');
+    onDone();
+  };
+  return <div className="game-modal-backdrop" onClick={onClose}>
+    <section className="game-modal admin-ban-modal" role="dialog" aria-modal="true" aria-labelledby="coins-title" onClick={(event) => event.stopPropagation()}>
+      <header><h2 id="coins-title"><Coins size={16} /> {player.display_name}</h2><button type="button" className="icon-button" onClick={onClose} aria-label="Хаах"><X size={15} /></button></header>
+      <p className="admin-note">Одоо {player.coins.toLocaleString('en-US')} зоостой.</p>
+      <div className="admin-choice-row" role="radiogroup" aria-label="Өгөх эсвэл хасах">
+        <button type="button" role="radio" aria-checked={!take} className={!take ? 'is-picked' : ''} onClick={() => setTake(false)}>Өгөх</button>
+        <button type="button" role="radio" aria-checked={take} className={take ? 'is-picked' : ''} onClick={() => setTake(true)}>Хасах</button>
+      </div>
+      <div className="admin-choice-row">{COIN_PRESETS.map((preset) => <button type="button" key={preset} className={value === preset ? 'is-picked' : ''} onClick={() => setAmount(String(preset))}>{preset.toLocaleString('en-US')}</button>)}</div>
+      <label className="auth-field"><span>ХЭМЖЭЭ</span><input inputMode="numeric" value={amount} onChange={(event) => setAmount(event.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 7))} /></label>
+      <label className="auth-field"><span>ШАЛТГААН (заавал биш)</span><input value={reason} maxLength={80} onChange={(event) => setReason(event.target.value)} placeholder="Жишээ нь: Тэмцээний шагнал" /></label>
+      <div className="modal-actions">
+        <button type="button" className="secondary-button" onClick={onClose}>БОЛИХ</button>
+        <button type="button" className="primary-button" disabled={busy || !value} onClick={() => void submit()}><Coins size={14} /> {take ? 'ХАСАХ' : 'ӨГӨХ'}</button>
+      </div>
+    </section>
+  </div>;
+}
+
+const ROLE_CHOICES: { value: StaffRole | null; label: string; hint: string }[] = [
+  { value: 'admin', label: 'Админ', hint: 'Бүх эрх: зоос, эрх олгох, өрөө ажиглах, хаах' },
+  { value: 'moderator', label: 'Модератор', hint: 'Санал, гомдол харах, тоглогч хаах' },
+  { value: null, label: 'Энгийн тоглогч', hint: 'Удирдах эрхгүй' },
+];
+
+function RoleDialog({ player, onClose, onDone, notify }: { player: AdminPlayer; onClose: () => void; onDone: () => void; notify: NotifyFn }) {
+  const [role, setRole] = useState<StaffRole | null>(player.staff_role);
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!supabase) return;
+    setBusy(true);
+    const { error } = await supabase.rpc('admin_set_role', { p_user: player.id, p_role: role });
+    setBusy(false);
+    if (error) { notify(failure(error), 'error'); return; }
+    notify(`${player.display_name}: ${ROLE_CHOICES.find((choice) => choice.value === role)?.label}.`, 'success');
+    onDone();
+  };
+  return <div className="game-modal-backdrop" onClick={onClose}>
+    <section className="game-modal admin-ban-modal" role="dialog" aria-modal="true" aria-labelledby="role-title" onClick={(event) => event.stopPropagation()}>
+      <header><h2 id="role-title"><UserCog size={16} /> {player.display_name}-ийн эрх</h2><button type="button" className="icon-button" onClick={onClose} aria-label="Хаах"><X size={15} /></button></header>
+      <div className="role-choices" role="radiogroup" aria-label="Эрх">{ROLE_CHOICES.map((choice) => <button type="button" role="radio" aria-checked={role === choice.value} key={choice.label}
+        className={role === choice.value ? 'is-picked' : ''} onClick={() => setRole(choice.value)}><b>{choice.label}</b><small>{choice.hint}</small></button>)}</div>
+      {player.is_banned && role && <p className="admin-note">Энэ тоглогч хаагдсан байна. Эрх өгөхөөс өмнө хаалтыг нь арилгана уу.</p>}
+      <div className="modal-actions">
+        <button type="button" className="secondary-button" onClick={onClose}>БОЛИХ</button>
+        <button type="button" className="primary-button" disabled={busy || role === player.staff_role} onClick={() => void submit()}><Check size={14} /> ХАДГАЛАХ</button>
       </div>
     </section>
   </div>;
@@ -372,7 +459,7 @@ function FeedbackTab({ notify, onChanged }: { notify: NotifyFn; onChanged: () =>
   </div>;
 }
 
-function RoomsTab({ notify, onChanged }: { notify: NotifyFn; onChanged: () => void }) {
+function RoomsTab({ notify, onChanged, onWatch }: { notify: NotifyFn; onChanged: () => void; onWatch: (roomCode: string) => void }) {
   const [rooms, setRooms] = useState<AdminRoom[] | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -406,6 +493,7 @@ function RoomsTab({ notify, onChanged }: { notify: NotifyFn; onChanged: () => vo
           <small>{GAMES[room.game_type as GameType]?.title ?? room.game_type} · эзэн {room.host_name} · {room.players} хүн{room.bots ? ` + ${room.bots} бот` : ''} / {room.max_players} · {ago(room.updated_at)}</small>
         </div>
         <span className={`chip room-${room.status}`}>{ROOM_STATUS[room.status] ?? room.status}</span>
+        <button type="button" className="primary-button admin-watch-button" onClick={() => onWatch(room.room_code)}><Eye size={13} /> ҮЗЭХ</button>
         {confirm === room.room_code
           ? <span className="admin-confirm"><button type="button" className="danger-button" disabled={busy} onClick={() => void close(room)}>ТИЙМ, ХААХ</button>
             <button type="button" className="icon-button" onClick={() => setConfirm(null)} aria-label="Болих"><X size={13} /></button></span>
