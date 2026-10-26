@@ -2708,11 +2708,40 @@
     radial-gradient(circle at 26% 86%, #f3dcff 0 1.4px, transparent 2.6px);
   animation: frame-twinkle 1.3s ease-in-out infinite alternate;
 }
+/* Each painted frame breathes in its own colour (--aura); purple by default. */
 @keyframes frame-aura {
-  0%, 100% { filter: drop-shadow(0 0 2px rgba(190, 90, 255, .4)); }
-  50% { filter: drop-shadow(0 0 8px rgba(205, 120, 255, .9)); }
+  0%, 100% { filter: drop-shadow(0 0 2px var(--aura-dim, rgba(190, 90, 255, .4))); }
+  50% { filter: drop-shadow(0 0 8px var(--aura, rgba(205, 120, 255, .9))); }
 }
 .frame-butterfly .avatar-frame.is-painted { animation-duration: 2.6s; }
+.frame-eagle-crown { --aura: rgba(255, 196, 90, .9); --aura-dim: rgba(200, 40, 50, .45); }
+.frame-gold-skull { --aura: rgba(255, 200, 100, .85); --aura-dim: rgba(160, 110, 40, .4); }
+.frame-fire-dragon, .frame-twin-serpent { --aura: rgba(255, 90, 20, .95); --aura-dim: rgba(220, 30, 10, .5); }
+.frame-fire-dragon .avatar-frame.is-painted, .frame-twin-serpent .avatar-frame.is-painted { animation-duration: 1.4s; }
+.frame-mafia-city { --aura: rgba(255, 190, 90, .75); --aura-dim: rgba(60, 90, 180, .4); }
+.frame-ice-butterfly { --aura: rgba(110, 190, 255, .95); --aura-dim: rgba(60, 120, 255, .45); }
+:is(.frame-eagle-crown, .frame-gold-skull, .frame-mafia-city) .avatar-frame.is-painted::after {
+  background:
+    radial-gradient(circle at 18% 30%, #fff 0 1.4px, transparent 2.6px),
+    radial-gradient(circle at 84% 22%, #ffe9b0 0 1.6px, transparent 2.8px),
+    radial-gradient(circle at 88% 74%, #fff 0 1.2px, transparent 2.4px),
+    radial-gradient(circle at 26% 86%, #ffe9b0 0 1.4px, transparent 2.6px);
+}
+:is(.frame-fire-dragon, .frame-twin-serpent) .avatar-frame.is-painted::after {
+  background:
+    radial-gradient(circle at 20% 24%, #ffd27a 0 1.6px, transparent 2.8px),
+    radial-gradient(circle at 80% 18%, #ff9a3c 0 1.4px, transparent 2.6px),
+    radial-gradient(circle at 90% 70%, #ffd27a 0 1.4px, transparent 2.6px),
+    radial-gradient(circle at 14% 78%, #ff9a3c 0 1.6px, transparent 2.8px);
+  animation-duration: .7s;
+}
+.frame-ice-butterfly .avatar-frame.is-painted::after {
+  background:
+    radial-gradient(circle at 18% 30%, #fff 0 1.4px, transparent 2.6px),
+    radial-gradient(circle at 84% 22%, #cdeeff 0 1.6px, transparent 2.8px),
+    radial-gradient(circle at 88% 74%, #fff 0 1.2px, transparent 2.4px),
+    radial-gradient(circle at 26% 86%, #cdeeff 0 1.4px, transparent 2.6px);
+}
 /* In tight rows (lobby seats, game cards, board rows) the painted frame is drawn smaller so it stays inside the row. */
 .viewport .game-frame :is(.player-card, .mono-player, .game-player-card, .results-player) .avatar-frame.is-painted { inset: -24%; }
 .viewport .game-frame .pcard-avatar.has-frame { margin: 14px; }

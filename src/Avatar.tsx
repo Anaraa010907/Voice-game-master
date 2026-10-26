@@ -8,6 +8,12 @@ export function initialsOf(name: string) {
 const FRAME_IMAGES: Record<string, string> = {
   'frame-rose-night': '/assets/frames/rose-night.webp',
   'frame-butterfly': '/assets/frames/butterfly.webp',
+  'frame-ice-butterfly': '/assets/frames/ice-butterfly.webp',
+  'frame-fire-dragon': '/assets/frames/fire-dragon.webp',
+  'frame-mafia-city': '/assets/frames/mafia-city.webp',
+  'frame-gold-skull': '/assets/frames/gold-skull.webp',
+  'frame-twin-serpent': '/assets/frames/twin-serpent.webp',
+  'frame-eagle-crown': '/assets/frames/eagle-crown.webp',
 };
 
 /** Avatar frames sold in the shop: CSS-animated rings plus painted ones (see the frame-* styles in theme.css). */
