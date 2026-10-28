@@ -153,7 +153,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
   const living = game.players.filter((player) => player.alive);
   const nameOf = (id: number) => game.players.find((player) => player.id === id)?.name;
   const namesOf = (ids: number[]) => ids.map(nameOf).filter((name): name is string => Boolean(name));
-  const mafiaNames = namesOf(isMafiaMember(me.role) ? me.info.mafiaTeammateIds : me.role === 'Good Informant' ? me.info.informantMafiaIds : []);
+  const mafiaNames = namesOf(isMafiaMember(me.role) ? me.info.mafiaTeammateIds : me.role === 'Good Informant' || me.role === 'Bad Informant' ? me.info.informantMafiaIds : []);
   const livingTeammates = me.info.mafiaTeammateIds.filter((id) => game.players.find((player) => player.id === id)?.alive);
   const whisperOpen = game.phase === 'Night' && currentPlayer.alive && isMafiaMember(me.role) && livingTeammates.length > 0;
   const leftPlayers = game.players.slice(0, Math.ceil(game.players.length / 2));
@@ -232,7 +232,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
     {cardOpen && <RoleCardViewer role={roleInfo(me.role)} onClose={closeCard} />}
     {privateOpen && !watching && <PrivateInfoPanel player={currentPlayer} me={me} mafiaNames={mafiaNames} namesOf={namesOf} onClose={() => setPrivateOpen(false)} />}
     {leaveDialog && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="leave-game-title"><div className="modal-symbol"><ArrowLeft size={18} /></div><h2 id="leave-game-title">Тоглоомоос гарах уу?</h2><p>Гарвал та хасагдсанд тооцогдож, энэ тоглолтод буцаж орох боломжгүй.</p><div className="modal-actions"><button className="secondary-button" onClick={() => setLeaveDialog(false)}>ҮЛДЭХ</button><button className="primary-button" onClick={onLeave}>ТОГЛООМООС ГАРАХ</button></div></section></div>}
-    {settingsOpen && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title"><div className="modal-symbol"><Settings size={18} /></div><h2 id="game-settings-title">Тоглоомын тохиргоо</h2><p>Үе шат бүр цаг дуусахад автоматаар солигдоно. Өрөөний эзэн хүлээх үеийг алгасаж болно.</p><p className="rules-line">Дүрэм: {rulesSummary(game.settings)}</p><div className="setting-list modal-volume"><VolumeControls /></div><div className="modal-fullscreen"><FullscreenToggle fullscreen={fullscreen} /></div><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>ТОГЛООМ ҮРГЭЛЖЛҮҮЛЭХ</button></div></section></div>}
+    {settingsOpen && <div className="game-modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="game-modal game-settings-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title" onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setSettingsOpen(false)} aria-label="Тохиргоо хаах"><X size={16} /></button><div className="modal-symbol"><Settings size={18} /></div><h2 id="game-settings-title">Тоглоомын тохиргоо</h2><p>Үе шат бүр цаг дуусахад автоматаар солигдоно. Өрөөний эзэн хүлээх үеийг алгасаж болно.</p><p className="rules-line">Дүрэм: {rulesSummary(game.settings)}</p><div className="setting-list modal-volume"><VolumeControls /></div><div className="modal-fullscreen"><FullscreenToggle fullscreen={fullscreen} /></div><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>ТОГЛООМ ҮРГЭЛЖЛҮҮЛЭХ</button></div></section></div>}
   </div>);
 }
 
@@ -243,7 +243,7 @@ function HostButton({ isHost, busy, label, onClick }: { isHost: boolean; busy: b
 
 function RoleReveal({ game, player, me, namesOf, roomName, isHost, busy, secondsLeft, onContinue, onReady }: { game: PublicGameView; player: PublicGamePlayer; me: PrivateGameView; namesOf: (ids: number[]) => string[]; roomName: string; isHost: boolean; busy: boolean; secondsLeft: number | null; onContinue: () => void; onReady: () => void }) {
   const role = roleInfo(me.role);
-  const roleSecret = isMafiaMember(me.role) ? `Таны мафийн хамтрагчид: ${namesOf(me.info.mafiaTeammateIds).join(', ') || 'байхгүй'}.${me.role === 'Don' ? ' Та тэднийг удирдана.' : ''}` : me.role === 'Good Informant' ? `Мафийн таних тэмдэг: ${namesOf(me.info.informantMafiaIds).join(', ') || 'идэвхтэй гишүүн алга'}.` : me.role === 'Bad Informant' ? translateMessage(me.info.badInformantObjective) : me.role === 'Jester' ? 'Зорилго: шүүх хурлаар хасагдах. Сэжигтэй харагдаарай!' : '';
+  const roleSecret = isMafiaMember(me.role) ? `Таны мафийн хамтрагчид: ${namesOf(me.info.mafiaTeammateIds).join(', ') || 'байхгүй'}.${me.role === 'Don' ? ' Та тэднийг удирдана.' : ''}` : me.role === 'Good Informant' ? `Мафийн таних тэмдэг: ${namesOf(me.info.informantMafiaIds).join(', ') || 'идэвхтэй гишүүн алга'}.` : me.role === 'Bad Informant' ? `Таны туслах мафийн гишүүд: ${namesOf(me.info.informantMafiaIds).join(', ') || 'идэвхтэй гишүүн алга'}. Тэд таныг мэдэхгүй.` : me.role === 'Jester' ? 'Зорилго: шүүх хурлаар хасагдах. Сэжигтэй харагдаарай!' : '';
   const people = game.players.filter((entry) => entry.alive && !entry.bot);
   const readyCount = people.filter((entry) => (game.readyIds ?? []).includes(entry.id)).length;
   const waitLine = `Бэлэн ${readyCount}/${people.length} · шөнө ${secondsLeft ?? '…'} секундын дараа`;
@@ -273,6 +273,7 @@ function NightPanel({ round, player, me, mafiaNames, nameOf, selectedName, locke
       {role === 'Good Informant' && <div className="night-secret"><LockKeyhole size={12} /> Таны хувийн сэжүүр: {mafiaNames.join(', ') || 'Идэвхтэй мафийн гишүүн алга.'}</div>}
       {nightRole === 'Doctor' && lastProtectedName && !submitted && <div className="night-secret"><HeartPulse size={12} /> Өчигдөр {lastProtectedName}-г хамгаалсан тул энэ шөнө өөр хүн сонгоно.</div>}
       {role === 'Old Lady with Shotgun' && <div className="night-secret"><Crosshair size={12} /> {me.shotgunSpent ? 'Таны буу аль хэдийн буудсан. Дахин хариу буудах боломжгүй.' : 'Мафи тан руу анх халдахад буугаар нэг удаа хариу буудна.'}</div>}
+      {role === 'Bad Informant' && <div className="night-secret"><Skull size={12} /> Таны туслах мафийн гишүүд: {mafiaNames.join(', ') || 'идэвхтэй гишүүн алга'}. Тэд таныг мэдэхгүй.</div>}
       {role === 'Bad Informant' && nightRole !== 'Mafia' && <div className="night-secret"><LockKeyhole size={12} /> {translateMessage(me.info.badInformantObjective)}</div>}
       {role === 'Citizen' && <div className="night-secret"><Shield size={12} /> Өглөөний тайланг анхаараарай.</div>}
       {role === 'Jester' && <div className="night-secret"><Drama size={12} /> Өдөр сэжигтэй харагдаж, шүүх хурлаар хасагдвал та ганцаараа ялна.</div>}
@@ -351,6 +352,7 @@ function PrivateInfoPanel({ player, me, mafiaNames, namesOf, onClose }: { player
     {me.role === 'Don' && <div className="private-secret-line"><b>ДОН</b><span>Довтолгооны эцсийн шийдвэр таных. Цагдаа таныг «мафи биш» гэж харна.</span></div>}
     {me.role === 'Jester' && <div className="private-secret-line"><b>НУУЦ ЗОРИЛГО</b><span>Шүүх хурлаар гэмтэй гэж хасагдвал ганцаараа ялна.</span></div>}
     {informant && <div className="private-secret-line"><b>ХУВИЙН СЭЖҮҮР</b><span>{informant}</span></div>}
+    {me.role === 'Bad Informant' && <div className="private-secret-line"><b>ТАНЫ ТУСЛАХ МАФИ</b><span>{namesOf(info.informantMafiaIds).join(', ') || 'Идэвхтэй мафийн гишүүн алга.'} Тэд таныг мэдэхгүй.</span></div>}
     {me.role === 'Bad Informant' && <div className="private-secret-line"><b>НУУЦ ЗОРИЛГО</b><span>{translateMessage(info.badInformantObjective)}</span></div>}
     {me.role === 'Detective' && notebook.length > 0 && <div className="private-secret-line detective-notebook"><b>ЦАГДААГИЙН ТЭМДЭГЛЭЛ</b>{notebook.map(([id, alignment]) => <span key={id} className={`notebook-entry is-${alignment}`}>{namesOf([Number(id)])[0] ?? '?'} — {alignment === 'mafia' ? 'мафийн талд' : 'мафи биш'}</span>)}</div>}
     {info.protectionResult && <div className="private-secret-line"><b>ХАМГААЛАЛТ · ХУВИЙН</b><span>{translateMessage(info.protectionResult)}</span></div>}

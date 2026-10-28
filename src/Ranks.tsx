@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Check, ChevronRight, Crown, Flame, History, Lock, Swords, Trophy } from 'lucide-react';
 import Avatar from './Avatar';
 import RankEmblem, { RANK_GAME_LABEL } from './RankEmblem';
-import { TitleBadge, TitlePlaque, useShopItems } from './Social';
+import { TitleBadge, TitlePlaque, useFreeShopping, useShopItems } from './Social';
 import { MAX_RANK_LEVEL, RANK_GAMES, RANK_NAMES, RANK_POINTS, RANK_THRESHOLDS, rankInfo, rankTitleKey, type RankGame } from './rankRules';
 import { supabase } from './supabaseClient';
 import type { NotifyFn } from './multiplayer';
@@ -60,6 +60,8 @@ export function RanksScreen({ userId, onBack, onPlay, notify, initialGame = 'maf
   const [view, setView] = useState<'ladder' | 'top' | 'history'>('ladder');
   const { ranks, reload } = useRanks(userId);
   const items = useShopItems();
+  /** Admins may wear any title, to try them out. */
+  const admin = useFreeShopping();
   const [owned, setOwned] = useState<string[]>([]);
   const [wearing, setWearing] = useState<string | null>(null);
   const [leaders, setLeaders] = useState<Leader[] | null>(null);
@@ -152,9 +154,9 @@ export function RanksScreen({ userId, onBack, onPlay, notify, initialGame = 'maf
           {Array.from({ length: MAX_RANK_LEVEL }, (_, index) => MAX_RANK_LEVEL - index).map((level) => {
             const key = rankTitleKey(game, level);
             const reached = info.level >= level;
-            const has = key ? owned.includes(key) : false;
+            const has = key ? admin || owned.includes(key) : false;
             const worn = key !== null && wearing === key;
-            return <div key={level} className={`rank-step ${reached ? 'is-reached' : 'is-locked'} ${info.level === level ? 'is-current' : ''}`}>
+            return <div key={level} className={`rank-step ${reached ? 'is-reached' : has ? 'is-open' : 'is-locked'} ${info.level === level ? 'is-current' : ''}`}>
               <RankEmblem game={game} level={level} className="rank-step-emblem" />
               <div className="rank-step-copy"><b>{RANK_NAMES[game][level - 1]}</b><small>{RANK_THRESHOLDS[level - 1]} оноо{info.level === level ? ' · ТА ЭНД' : ''}</small></div>
               {key ? <TitlePlaque titleKey={key} name={RANK_NAMES[game][level - 1]} size="sm" /> : <span className="rank-step-none">Цолгүй</span>}

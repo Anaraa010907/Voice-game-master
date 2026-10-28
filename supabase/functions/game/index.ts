@@ -37,8 +37,8 @@ const BOARD_TRADE_SECONDS = 30;
 const BOARD_ACTIONS = ['roll', 'buy', 'decline', 'end', 'pay-jail', 'use-card', 'build', 'sell', 'mortgage', 'unmortgage', 'bid', 'pass', 'propose', 'accept', 'reject', 'cancel-trade'];
 const TILE_ACTIONS = ['build', 'sell', 'mortgage', 'unmortgage'];
 const LISTED_LOBBY_HOURS = 6;
-/** Which games let the host fill seats with bots. Mafia bots are a testing aid: set mafia to false to remove them. */
-const BOTS_ALLOWED: Record<GameType, boolean> = { mafia: true, monopoly: true };
+/** Which games let the host fill seats with bots. Both games are played by people only for now. */
+const BOTS_ALLOWED: Record<GameType, boolean> = { mafia: false, monopoly: false };
 type Seat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null; is_bot?: boolean };
 type Body = Record<string, unknown>;
 
@@ -391,7 +391,7 @@ class GameServer {
     const seats = await this.seats(roomCodeValue);
     const minimum = MIN_SEATS[room.game_type ?? 'mafia'];
     if (seats.length < minimum) throw new GameError(409, `Тоглоом эхлүүлэхэд дор хаяж ${minimum} тоглогч хэрэгтэй.`);
-    if (room.ranked && seats.some((seat) => seat.is_bot)) throw new GameError(409, 'Рэйтинг тоглолтод бот оролцохгүй. Ботуудыг хасна уу.');
+    if ((room.ranked || !BOTS_ALLOWED[room.game_type ?? 'mafia']) && seats.some((seat) => seat.is_bot)) throw new GameError(409, 'Тоглоомд бот оролцохгүй. Ботуудыг хасна уу.');
     const notReady = seats.filter((seat) => seat.user_id !== room.host_id && !seat.ready);
     if (notReady.length) throw new GameError(409, `Бэлэн болоогүй: ${notReady.map((seat) => seat.display_name).join(', ')}`);
 

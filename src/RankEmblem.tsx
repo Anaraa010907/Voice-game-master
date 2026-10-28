@@ -6,6 +6,7 @@ export const RANK_GAME_LABEL: Record<RankGame, string> = { mafia: 'Мафи', mo
 /** Painted emblems replace the drawn ones where they exist (512px, same canvas for every rank). */
 const RANK_IMAGES: Partial<Record<RankGame, Partial<Record<number, string>>>> = {
   mafia: Object.fromEntries(Array.from({ length: MAX_RANK_LEVEL }, (_, index) => [index + 1, `/assets/ranks/mafia-${index + 1}.webp`])),
+  monopoly: Object.fromEntries(Array.from({ length: MAX_RANK_LEVEL }, (_, index) => [index + 1, `/assets/ranks/monopoly-${index + 1}.webp`])),
 };
 
 /** Metal (light, mid, dark) and enamel (centre, edge) of each rank. */

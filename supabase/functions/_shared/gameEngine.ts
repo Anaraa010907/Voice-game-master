@@ -237,9 +237,10 @@ export function createInitialGame(
       team: roleTeams[role],
       info: {
         mafiaTeammateIds: isMafiaMember(role) ? mafiaIds.filter((id) => id !== player.id) : [],
-        // "Мафийн гишүүд" on the card: the Mafia and their Don. The Bad Informant stays hidden so the
-        // Mafia side keeps one unknown piece even after the Informant speaks up.
-        informantMafiaIds: role === 'Good Informant' ? mafiaIds : [],
+        // Both informants learn who the Mafia and their Don are: the Good Informant to expose them, the
+        // Bad Informant to know whom to help. The Mafia never learn the Bad Informant, so the Mafia
+        // side keeps one hidden piece even after the Good Informant speaks up.
+        informantMafiaIds: role === 'Good Informant' || role === 'Bad Informant' ? mafiaIds : [],
         badInformantObjective: role === 'Bad Informant' ? 'Help the Mafia survive and mislead the citizens.' : '',
         investigationResult: '',
         protectionResult: '',
@@ -853,6 +854,7 @@ export function runGameEngineSelfTests() {
   require(!('role' in state.publicPlayers[1]), 'Public player data does not contain secret roles.');
   require(publicView(state).finalRoles === null, 'Roles stay hidden in the public view until the game ends.');
   require(state.privatePlayers[3].info.badInformantObjective.length > 0, 'Bad Informant receives a private objective.');
+  require(state.privatePlayers[3].info.informantMafiaIds.includes(2) && !state.privatePlayers[3].info.informantMafiaIds.includes(3), 'Bad Informant learns the Mafia members it helps.');
   require(!state.privatePlayers[2].info.mafiaTeammateIds.includes(3), 'Bad Informant identity is not automatically revealed to Mafia teammates.');
 
   state = startNight(fixed({ 1: 'Mafia', 2: 'Mafia', 3: 'Citizen', 4: 'Doctor' }));

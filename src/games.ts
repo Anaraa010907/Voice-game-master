@@ -28,7 +28,7 @@ export const GAMES: Record<GameType, GameInfo> = {
     sizes: [6, 8, 10, 12],
     defaultSize: 8,
     defaultRoomName: 'Блэкуотерын шөнө',
-    allowBots: true,
+    allowBots: false,
   },
   monopoly: {
     type: 'monopoly',
@@ -41,6 +41,6 @@ export const GAMES: Record<GameType, GameInfo> = {
     sizes: [2, 3, 4, 5, 6],
     defaultSize: 4,
     defaultRoomName: 'Талын наймаа',
-    allowBots: true,
+    allowBots: false,
   },
 };

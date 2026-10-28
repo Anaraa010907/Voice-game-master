@@ -3642,3 +3642,34 @@ button.rank-chip:active { filter: brightness(1.15); }
   .rank-step .rank-step-emblem { width: 36px; }
   .viewport .game-frame .profile-ranks .rank-chip-emblem { width: 32px; }
 }
+
+/* In-game settings: always closable. The X stays in the corner, a tap outside closes, and on a
+ * short phone screen the card scrolls instead of pushing its button off the screen. */
+.viewport .game-frame .game-settings-modal {
+  position: relative;
+  max-height: calc(100% - 8px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.viewport .game-frame .game-settings-modal .modal-close {
+  position: sticky;
+  top: 0;
+  float: right;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  margin: -6px -6px 0 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--gold-line);
+  border-radius: 50%;
+  background: rgba(10, 11, 16, .92);
+  color: #e9dcc2;
+}
+.viewport .game-frame .game-settings-modal .modal-actions { position: sticky; bottom: -18px; margin: 10px -18px -18px; padding: 10px 18px 14px; background: linear-gradient(180deg, rgba(17, 18, 25, 0), #111219 35%); }
+@media (max-height: 460px) {
+  .viewport .game-frame .game-settings-modal { padding-top: 12px; }
+  .viewport .game-frame .game-settings-modal .modal-symbol { display: none; }
+  .viewport .game-frame .game-settings-modal > p { margin: 4px 0 6px; }
+}
