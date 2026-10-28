@@ -3,6 +3,9 @@ import { useRef } from 'react';
 import { ArrowLeft, Camera, Check, ChevronRight, LoaderCircle, LockKeyhole, Shield, ShoppingBag, Sparkles, Trash2, UserRound, X } from 'lucide-react';
 import { CoinCount, TitleBadge, useShopItems } from './Social';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
+import { RankChip } from './RankEmblem';
+import { useRanks } from './Ranks';
+import { RANK_GAMES } from './rankRules';
 import { PORTRAITS } from './portraits';
 import { supabaseConfigured, type PublicProfile } from './supabaseClient';
 import { i18n } from './i18n';
@@ -18,14 +21,15 @@ export const avatarOptions = [
 
 
 
-export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, onSignOut, onSave, onPhoto, onPortrait, onShop }: {
-  profile: PublicProfile | null; loading: boolean; loadError: string; onBack: () => void; onSignIn: () => void; onSignOut: () => void; onShop: () => void;
+export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, onSignOut, onSave, onPhoto, onPortrait, onShop, onRanks }: {
+  profile: PublicProfile | null; loading: boolean; loadError: string; onBack: () => void; onSignIn: () => void; onSignOut: () => void; onShop: () => void; onRanks: () => void;
   onSave: (displayName: string, avatarKey: string) => Promise<string>;
   onPhoto: (file: File | null) => Promise<string>;
   onPortrait: (url: string) => Promise<string>;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const shopItems = useShopItems();
+  const { ranks } = useRanks(profile?.id);
   const [uploading, setUploading] = useState(false);
   const [portraitsOpen, setPortraitsOpen] = useState(false);
   const choosePortrait = async (url: string) => {
@@ -75,12 +79,13 @@ export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, o
       <section className="profile-showcase" aria-label="Аватар ба цол">
         <Avatar name={profile.display_name} color={profile.avatar_key} url={profile.avatar_url} frame={profile.frame_key} className="account-avatar" />
         {profile.title_key && <TitleBadge titleKey={profile.title_key} items={shopItems} size="hero" />}
-        {!profile.title_key && <button type="button" className="profile-title-empty" onClick={onShop}><Sparkles size={12} /> ЦОЛ СОНГОХ</button>}
+        {!profile.title_key && <button type="button" className="profile-title-empty" onClick={onRanks}><Sparkles size={12} /> ЦОЛ СОНГОХ</button>}
       </section>
       <div className="profile-main">
         <div className={`profile-identity-row ${nameplate(profile.nameplate_key).className} ${rowBorderClass(profile.border_key)}`} style={nameplate(profile.nameplate_key).style}><RowBorder borderKey={profile.border_key} /><div className="profile-identity"><div className="eyebrow left-eye">{profile.is_verified ? i18n.account.verifiedAccount : i18n.account.verificationRequired} <span className={profile.is_verified ? 'verified-led' : 'unverified-led'} /></div><h1>{profile.display_name}</h1><div className="profile-shop-row">{profile.player_no && <span className="chip profile-id">ID #{profile.player_no}</span>}<CoinCount value={profile.coins ?? null} /><button type="button" className="text-button" onClick={onShop}><ShoppingBag size={13} /> ДЭЛГҮҮР</button></div><p>{i18n.account.memberSince} {formatDate(profile.created_at)} · {profile.registration_method === 'email' ? i18n.account.emailAccount : i18n.account.phoneAccount}</p></div></div>
         {loadError && <div className="account-inline-error">{loadError}</div>}
         {message && <div className="account-inline-success"><Check size={13} /> {message}</div>}
+        <div className="profile-ranks">{RANK_GAMES.map((game) => <RankChip key={game} game={game} points={ranks?.[game].points ?? 0} onClick={onRanks} />)}</div>
         <div className="profile-data-grid"><Stat value={profile.total_matches} label={i18n.account.matches} /><Stat value={profile.wins} label={i18n.account.wins} /><Stat value={profile.losses} label={i18n.account.losses} /><Stat value={`${profile.win_rate.toFixed(1)}%`} label={i18n.account.winRate} />
         </div>
         <input ref={fileInput} type="file" accept="image/*" hidden onChange={(event) => { const file = event.target.files?.[0] ?? null; event.target.value = ''; if (file) void changePhoto(file); }} />

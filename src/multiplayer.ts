@@ -7,8 +7,8 @@ import type { PrivateGameView, PublicGameView } from './gameEngine';
 export type NoticeTone = 'info' | 'success' | 'error';
 export type NotifyFn = (text: string, tone?: NoticeTone) => void;
 
-export type RoomInfo = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type?: 'mafia' | 'monopoly'; settings?: Record<string, unknown> | null };
-export type ListedRoom = { roomCode: string; name: string; players: number; maxPlayers: number; hostName: string; joined: boolean };
+export type RoomInfo = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type?: 'mafia' | 'monopoly'; settings?: Record<string, unknown> | null; ranked?: boolean };
+export type ListedRoom = { roomCode: string; name: string; players: number; maxPlayers: number; hostName: string; joined: boolean; ranked?: boolean };
 export type RoomSeat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null; is_bot?: boolean; frame_key?: string | null; nameplate_key?: string | null; border_key?: string | null };
 
 /**
@@ -50,7 +50,7 @@ export function useRoom(roomCode: string | null) {
   const reload = useCallback(async () => {
     if (!supabase || !roomCode) return;
     const [roomResult, seatResult] = await Promise.all([
-      supabase.from('game_rooms').select('room_code,name,host_id,max_players,is_private,status,game_type,settings').eq('room_code', roomCode).maybeSingle(),
+      supabase.from('game_rooms').select('room_code,name,host_id,max_players,is_private,status,game_type,settings,ranked').eq('room_code', roomCode).maybeSingle(),
       supabase.from('game_room_players').select('*').eq('room_code', roomCode).order('seat'),
     ]);
     const failure = roomResult.error ?? seatResult.error;

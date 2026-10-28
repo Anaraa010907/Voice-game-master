@@ -12,6 +12,7 @@ import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { playSfx, startMusic } from './sfx';
 import { callGame, useCountdown, useGame, type NotifyFn, type RoomSeat } from './multiplayer';
+import { RankResultBanner } from './Ranks';
 
 const GROUP_LABEL: Record<ColorGroup, string> = {
   brown: 'Говь', sky: 'Хойд нутаг', pink: 'Баруун нутаг', orange: 'Хангай',
@@ -207,7 +208,7 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
 
         <div className="mono-actions">
           {game.phase === 'finished'
-            ? <Finished game={game} ranking={ranking} isHost={isHost} onReplay={onRematch} onLeave={onLeave} />
+            ? <>{!watching && <RankResultBanner roomCode={roomCode} userId={userId} />}<Finished game={game} ranking={ranking} isHost={isHost} onReplay={onRematch} onLeave={onLeave} /></>
             : trade
               ? <TradePanel game={game} trade={trade} me={me} busy={busy} onAction={(move) => void send(move)} />
               : auction

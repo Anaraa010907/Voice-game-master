@@ -9,6 +9,7 @@ import {
   type MonopolyAction, type MonopolySettings, type MonopolyState,
 } from '../_shared/monopolyEngine.ts';
 import { BOT_STEP_SECONDS, boardBotToMove, mafiaBotsAct, monopolyBotStep, nextBotName } from '../_shared/bots.ts';
+import { RANK_POINTS, boardRankDelta, mafiaRankDelta } from '../_shared/ranks.ts';
 import { isAllowedOrigin } from '../_shared/voiceRequest.ts';
 import type { VoicePhase } from '../_shared/voicePolicy.ts';
 
@@ -19,7 +20,7 @@ import type { VoicePhase } from '../_shared/voicePolicy.ts';
  */
 
 type GameType = 'mafia' | 'monopoly';
-type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type: GameType; settings?: Partial<MafiaSettings> | Partial<MonopolySettings> | null };
+type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type: GameType; settings?: Partial<MafiaSettings> | Partial<MonopolySettings> | null; ranked?: boolean };
 /** The stored engine also carries the match id used to record win/loss statistics exactly once. */
 type StoredGame = GameEngineState & { matchId?: string };
 type StoredBoard = MonopolyState & { matchId?: string };
@@ -143,8 +144,11 @@ function boardAction(move: string, body: Body): MonopolyAction {
 }
 
 /** Validated room rules for this kind of game. */
-function roomSettings(type: GameType, input: unknown) {
-  return type === 'monopoly' ? sanitizeMonopolySettings(input) : sanitizeMafiaSettings(input);
+function roomSettings(type: GameType, input: unknown, ranked = false) {
+  if (type === 'monopoly') return sanitizeMonopolySettings(input);
+  // Ranked Mafia always plays the standard (classic) roles; only the discussion length may change.
+  if (ranked) return sanitizeMafiaSettings({ mode: 'classic', discussion: (input as { discussion?: unknown } | null)?.discussion });
+  return sanitizeMafiaSettings(input);
 }
 
 function deadlineFor(state: AnyGame): string | null {
@@ -254,7 +258,9 @@ class GameServer {
     const maxPlayers = Number(body.maxPlayers);
     if (!ROOM_SIZES[type].includes(maxPlayers)) throw new GameError(400, 'Тоглогчийн тоо буруу байна.');
     // Public rooms appear in the room list; private rooms are joined by code only (optionally with a password).
-    const isPrivate = body.isPublic === true ? false : body.isPrivate !== false;
+    // Ranked rooms are always public: points count only at open tables with real people.
+    const ranked = body.ranked === true;
+    const isPrivate = ranked ? false : body.isPublic === true ? false : body.isPrivate !== false;
     const password = isPrivate ? text(body, 'password', 32, false) : '';
     if (password && password.length < 4) throw new GameError(400, 'Өрөөний нууц үг хамгийн багадаа 4 тэмдэгт байна.');
     const me = await this.profile();
@@ -262,7 +268,7 @@ class GameServer {
 
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const roomCodeValue = roomCode();
-      const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate, game_type: type, settings: roomSettings(type, body.settings) });
+      const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate, game_type: type, settings: roomSettings(type, body.settings, ranked), ranked });
       if (error?.code === '23505') continue;
       if (error) throw error;
       const seat: Seat = { user_id: this.userId, seat: 1, display_name: me.name, color: me.color, ready: true, avatar_url: me.url };
@@ -352,7 +358,7 @@ class GameServer {
       // Leaving a live game counts as a loss, recorded first so the final tally cannot turn it into a win.
       const { data: stored } = await this.admin.from('game_states').select('engine').eq('room_code', roomCodeValue).maybeSingle();
       const game = stored?.engine as AnyGame | null;
-      if (game && !isFinished(game)) await this.recordOutcome(this.userId, 'loss', game.matchId);
+      if (game && !isFinished(game)) await this.recordOutcome(room, this.userId, 'loss', game.matchId, RANK_POINTS.leave);
       // If the leaver was the last one the phase was waiting on, the game moves on right away.
       await this.mutate(roomCodeValue, (state) => isBoard(state) ? removeMonopolyPlayer(state, mine.seat) : progress(removePlayer(state, mine.seat)));
     }
@@ -385,6 +391,7 @@ class GameServer {
     const seats = await this.seats(roomCodeValue);
     const minimum = MIN_SEATS[room.game_type ?? 'mafia'];
     if (seats.length < minimum) throw new GameError(409, `Тоглоом эхлүүлэхэд дор хаяж ${minimum} тоглогч хэрэгтэй.`);
+    if (room.ranked && seats.some((seat) => seat.is_bot)) throw new GameError(409, 'Рэйтинг тоглолтод бот оролцохгүй. Ботуудыг хасна уу.');
     const notReady = seats.filter((seat) => seat.user_id !== room.host_id && !seat.ready);
     if (notReady.length) throw new GameError(409, `Бэлэн болоогүй: ${notReady.map((seat) => seat.display_name).join(', ')}`);
 
@@ -399,7 +406,7 @@ class GameServer {
     }));
     const engine: AnyGame = room.game_type === 'monopoly'
       ? { ...createMonopolyGame(people, secureRandom, sanitizeMonopolySettings(room.settings)), matchId: crypto.randomUUID() }
-      : { ...createInitialGame(people, undefined, secureRandom, sanitizeMafiaSettings(room.settings)), matchId: crypto.randomUUID() };
+      : { ...createInitialGame(people, undefined, secureRandom, roomSettings('mafia', room.settings, room.ranked) as MafiaSettings), matchId: crypto.randomUUID() };
     await this.admin.from('game_private').delete().eq('room_code', roomCodeValue);
     const { error } = await this.admin.from('game_states').update({ engine, version: 1, updated_at: new Date().toISOString() }).eq('room_code', roomCodeValue);
     if (error) throw error;
@@ -425,7 +432,7 @@ class GameServer {
       if (writeError) throw writeError;
       if (!written?.length) continue;
       await this.publish(roomCode, next, seats, data.version + 1, current);
-      if (isFinished(next) && !isFinished(current)) await this.recordResults(next, seats);
+      if (isFinished(next) && !isFinished(current)) await this.recordResults(roomCode, next, seats);
       return next;
     }
     throw new GameError(409, 'Олон хүсэлт зэрэг ирлээ. Дахин оролдоно уу.');
@@ -486,20 +493,27 @@ class GameServer {
     }
   }
 
-  /** Adds the win or loss to the player's profile statistics. Idempotent per match and player. */
-  async recordOutcome(userId: string, outcome: 'win' | 'loss', matchId?: string) {
+  /**
+   * Adds the win or loss to the player's statistics and, in a ranked room, moves their rank for this
+   * game by `delta` points (see _shared/ranks.ts). Idempotent per match and player.
+   */
+  async recordOutcome(room: Room, userId: string, outcome: 'win' | 'loss', matchId: string | undefined, delta: number) {
     if (!matchId) return;
-    const { error } = await this.admin.rpc('process_verified_competitive_match', {
-      p_match_id: matchId, p_user_id: userId, p_outcome: outcome, p_match_completed: true, p_match_valid: true,
+    const { error } = await this.admin.rpc('record_game_result', {
+      p_match_id: matchId, p_user_id: userId, p_game_type: room.game_type ?? 'mafia', p_room_code: room.room_code,
+      p_outcome: outcome, p_ranked: room.ranked === true, p_delta: delta,
     });
-    if (error) console.error('stats update failed', error);
+    if (error) console.error('result update failed', error);
   }
 
-  async recordResults(state: AnyGame, seats: Seat[]) {
+  async recordResults(roomCode: string, state: AnyGame, seats: Seat[]) {
+    const room = await this.room(roomCode);
     if (isBoard(state)) {
       for (const seat of seats) {
-        if (seat.is_bot || !state.players.some((entry) => entry.id === seat.seat)) continue;
-        await this.recordOutcome(seat.user_id, state.winner === seat.seat ? 'win' : 'loss', state.matchId);
+        const entry = state.players.find((candidate) => candidate.id === seat.seat);
+        if (seat.is_bot || !entry) continue;
+        const won = state.winner === seat.seat;
+        await this.recordOutcome(room, seat.user_id, won ? 'win' : 'loss', state.matchId, boardRankDelta(won, entry.bankrupt));
       }
       return;
     }
@@ -509,7 +523,8 @@ class GameServer {
       if (!secret || seat.is_bot) continue;
       // The Jester only ever wins alone; town and Mafia win as teams.
       const won = state.winner === 'Jester' ? secret.role === 'Jester' : secret.team !== 'wildcard' && (state.winner === 'Mafia') === (secret.team === 'mafia');
-      await this.recordOutcome(seat.user_id, won ? 'win' : 'loss', state.matchId);
+      const alive = state.publicPlayers.find((player) => player.id === seat.seat)?.alive ?? false;
+      await this.recordOutcome(room, seat.user_id, won ? 'win' : 'loss', state.matchId, mafiaRankDelta(won, alive));
     }
   }
 
@@ -518,11 +533,11 @@ class GameServer {
     const type = gameType(body.gameType);
     const since = new Date(Date.now() - LISTED_LOBBY_HOURS * 3600 * 1000).toISOString();
     const { data: rooms, error } = await this.admin.from('game_rooms')
-      .select('room_code,name,host_id,max_players,updated_at')
+      .select('room_code,name,host_id,max_players,updated_at,ranked')
       .eq('status', 'lobby').eq('is_private', false).eq('game_type', type).gte('updated_at', since)
       .order('updated_at', { ascending: false }).limit(50);
     if (error) throw error;
-    type ListedRow = { room_code: string; name: string; host_id: string; max_players: number };
+    type ListedRow = { room_code: string; name: string; host_id: string; max_players: number; ranked?: boolean };
     type SeatedRow = { room_code: string; user_id: string; display_name: string };
     const roomRows = (rooms ?? []) as ListedRow[];
     const codes = roomRows.map((room) => room.room_code);
@@ -537,6 +552,7 @@ class GameServer {
         name: room.name,
         players: seated.length,
         maxPlayers: room.max_players,
+        ranked: room.ranked === true,
         hostName: seated.find((player) => player.user_id === room.host_id)?.display_name ?? '—',
         joined: seated.some((player) => player.user_id === this.userId),
       };
@@ -548,7 +564,9 @@ class GameServer {
   /** Joins the public lobby closest to starting. */
   async quick(body: Body = {}) {
     const { rooms } = await this.list(body);
-    const pick = rooms.find((room) => room.players < room.maxPlayers && !room.joined);
+    // From the ranking screen a player looks for a ranked table first.
+    const open = rooms.filter((room) => room.players < room.maxPlayers && !room.joined);
+    const pick = (body.ranked === true ? open.find((room) => room.ranked) : undefined) ?? open[0];
     if (!pick) return { roomCode: null };
     return this.join({ roomCode: pick.roomCode });
   }
@@ -609,7 +627,7 @@ class GameServer {
     const room = await this.room(roomCodeValue);
     if (room.host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн дүрэм өөрчилнө.');
     if (room.status !== 'lobby') throw new GameError(409, 'Тоглоом эхэлсэн үед дүрэм өөрчлөх боломжгүй.');
-    const settings = roomSettings(room.game_type ?? 'mafia', body.settings);
+    const settings = roomSettings(room.game_type ?? 'mafia', body.settings, room.ranked === true);
     await this.touchRoom(roomCodeValue, { settings });
     return { settings };
   }
@@ -671,6 +689,7 @@ class GameServer {
     if (room.host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн бот нэмнэ.');
     if (!BOTS_ALLOWED[room.game_type ?? 'mafia']) throw new GameError(409, 'Энэ тоглоомд бот нэмэх боломжгүй.');
     if (room.status !== 'lobby') throw new GameError(409, 'Тоглоом эхэлсэн үед бот нэмэх боломжгүй.');
+    if (room.ranked) throw new GameError(409, 'Рэйтинг өрөөнд бот нэмэх боломжгүй.');
     const seats = await this.seats(roomCodeValue);
     if (seats.length >= room.max_players) throw new GameError(409, 'Өрөө дүүрсэн байна.');
     const taken = new Set(seats.map((seat) => seat.seat));

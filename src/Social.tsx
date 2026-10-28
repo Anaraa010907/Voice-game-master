@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, Bot, Check, Coins, Crown, Flag, Gem, Gift, Landmark, Search, Send, ShoppingBag, Sparkles, Trophy, UserPlus, VenetianMask, X } from 'lucide-react';
+import { ArrowLeft, Bot, Check, Coins, Crown, Flag, Gift, Landmark, Send, ShoppingBag, Sparkles, UserPlus, VenetianMask, X } from 'lucide-react';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
+import { RankChip } from './RankEmblem';
+import { RANK_GAMES, RANK_METALS, RANK_NAMES, parseRankTitle, type RankGame } from './rankRules';
 import { supabase } from './supabaseClient';
 import type { NotifyFn, RoomSeat } from './multiplayer';
 import { playSfx } from './sfx';
@@ -65,23 +67,27 @@ export function CoinCount({ value, className = '' }: { value: number | null; cla
 }
 
 /** A player's shop title, in gold. */
-/** Each title has its own colours and emblem (see .title-tier-* in theme.css). */
-const TITLE_ICONS: Record<string, typeof Sparkles> = {
-  'title-legend': Crown, 'title-don': Gem, 'title-tycoon': Landmark, 'title-detective': Search, 'title-shadow': VenetianMask,
-};
 const ICON_SIZE = { sm: 11, lg: 14, hero: 17 } as const;
 
-/** A title as an ornate plaque: emblem, name in metal letters, and a gleam that runs across it. */
+/**
+ * A title as an ornate plaque: emblem, name in metal letters, and a gleam that runs across it.
+ * Titles are won in ranked play; the plaque takes the metal of the rank that unlocked it
+ * (see .title-metal-* in theme.css) and the game's emblem, a crown for the top ranks.
+ */
 export function TitlePlaque({ titleKey, name, size = 'sm' }: { titleKey: string; name: string; size?: 'sm' | 'lg' | 'hero' }) {
-  const Icon = TITLE_ICONS[titleKey] ?? Sparkles;
-  return <span className={`title-badge is-${size} title-tier-${titleKey.replace(/^title-/, '')}`} title={name}>
+  const rank = parseRankTitle(titleKey);
+  const Icon = !rank ? Sparkles : rank.level >= 8 ? Crown : rank.game === 'mafia' ? VenetianMask : Landmark;
+  const tone = rank ? `title-metal-${RANK_METALS[rank.level - 1]}` : `title-tier-${titleKey.replace(/^title-/, '')}`;
+  return <span className={`title-badge is-${size} ${tone}`} title={name}>
     <i className="tb-emblem" aria-hidden="true"><Icon size={ICON_SIZE[size]} /></i><span className="tb-name">{name}</span>
   </span>;
 }
 
 export function TitleBadge({ titleKey, items, size = 'sm' }: { titleKey?: string | null; items: ShopItem[]; size?: 'sm' | 'lg' | 'hero' }) {
-  const title = titleKey ? items.find((item) => item.key === titleKey) : null;
-  return title ? <TitlePlaque titleKey={title.key} name={title.name} size={size} /> : null;
+  if (!titleKey) return null;
+  const rank = parseRankTitle(titleKey);
+  const name = rank ? RANK_NAMES[rank.game][rank.level - 1] : items.find((item) => item.key === titleKey)?.name;
+  return name ? <TitlePlaque titleKey={titleKey} name={name} size={size} /> : null;
 }
 
 /* ---------- live gifts at the table ---------- */
@@ -167,10 +173,10 @@ type Card = {
   id: string; display_name: string; avatar_url: string | null; avatar_key: string; frame_key: string | null; title_key: string | null; nameplate_key?: string | null; border_key?: string | null;
   rank_name: string; rank_points: number; total_matches: number; wins: number; win_rate: number; best_win_streak: number;
   created_at: string; gift_total: number; gifts: { gift_key: string; count: number }[];
+  ranks?: { game_type: RankGame; points: number; wins: number; matches: number }[];
 };
 
 const REPORT_REASONS = ['Доромжилсон, хараасан', 'Хуурсан, луйвардсан', 'Тоглоомыг зориуд эвдсэн', 'Зохисгүй нэр, зураг', 'Бусад'];
-const RANK_LABEL: Record<string, string> = { Rookie: 'Шинэ тоглогч', Bronze: 'Хүрэл', Silver: 'Мөнгө', Gold: 'Алт', Platinum: 'Платин', Diamond: 'Алмаз', Master: 'Мастер' };
 
 /** Sends a frame, nameplate or gift to a friend outside a room. Returns '' or the error. */
 export async function sendFriendGift(to: string, item: ShopItem) {
@@ -259,7 +265,7 @@ export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, not
         <div className="pcard-name">
           <h2>{name}{isMe && <small>ЧИ</small>}</h2>
           <TitleBadge titleKey={card?.title_key} items={items} size="lg" />
-          {card && <span className="pcard-rank"><Trophy size={11} /> {RANK_LABEL[card.rank_name] ?? card.rank_name} · {card.rank_points} оноо</span>}
+          {card && <div className="pcard-ranks">{RANK_GAMES.map((game) => <RankChip key={game} game={game} points={card.ranks?.find((entry) => entry.game_type === game)?.points ?? 0} />)}</div>}
           {isBot && <span className="pcard-rank">Бот тоглогч · дасгалын ширээнд</span>}
         </div>
       </div>
@@ -319,7 +325,7 @@ function PlatePreview({ plateKey, borderKey, me, large = false }: { plateKey: st
 type Owned = { item_key: string };
 type Me = { coins: number; frame_key: string | null; title_key: string | null; nameplate_key?: string | null; border_key?: string | null; avatar_url: string | null; avatar_key: string; display_name: string; bonus_claimed_at: string | null };
 
-const TABS: { key: ShopKind; label: string }[] = [{ key: 'frame', label: 'Аватар хүрээ' }, { key: 'nameplate', label: 'Нэрийн хавтан' }, { key: 'border', label: 'Нэрийн хүрээ' }, { key: 'gift', label: 'Бэлэг' }, { key: 'title', label: 'Цол' }];
+const TABS: { key: ShopKind; label: string }[] = [{ key: 'frame', label: 'Аватар хүрээ' }, { key: 'nameplate', label: 'Нэрийн хавтан' }, { key: 'border', label: 'Нэрийн хүрээ' }, { key: 'gift', label: 'Бэлэг' }];
 
 export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: NotifyFn }) {
   const items = useShopItems();

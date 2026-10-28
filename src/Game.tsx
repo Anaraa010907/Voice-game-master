@@ -19,6 +19,7 @@ import { QUICK_REPLIES, useQuickReplies } from './quickReplies';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
 import { useLongPress } from './Social';
 import { VolumeControls } from './VolumeControls';
+import { RankResultBanner } from './Ranks';
 
 function roleInfo(name: RoleName) {
   return roles.find((item) => item.name === name)!;
@@ -201,7 +202,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
 
   const withVoice = (content: ReactNode) => watching ? <>{content}</> : <VoiceChatProvider roomCode={roomCode} userId={userId} seats={seats} phase={voicePhase} alive={currentPlayer.alive} isHost={isHost}>{content}</VoiceChatProvider>;
 
-  if (game.phase === 'Results') return withVoice(<ResultsScreen game={game} me={me} roomName={roomName} isHost={isHost && !watching} watching={Boolean(watching)} onReplay={onRematch} onMenu={onLeave} />);
+  if (game.phase === 'Results') return withVoice(<ResultsScreen game={game} me={me} roomName={roomName} roomCode={roomCode} userId={userId} isHost={isHost && !watching} watching={Boolean(watching)} onReplay={onRematch} onMenu={onLeave} />);
 
   return withVoice(<div className={`core-game ${game.phase === 'Night' ? 'is-night' : ''} stage-${game.phase === 'Night' ? 'night' : game.phase === 'Voting' ? 'vote' : 'day'}`}>
     <header className="core-game-topbar">
@@ -380,7 +381,7 @@ function MatchRecap({ game, onClose }: { game: PublicGameView; onClose: () => vo
   </section></div>;
 }
 
-function ResultsScreen({ game, me, roomName, isHost, watching = false, onReplay, onMenu }: { game: PublicGameView; me: PrivateGameView; roomName: string; isHost: boolean; watching?: boolean; onReplay: () => void; onMenu: () => void }) {
+function ResultsScreen({ game, me, roomName, roomCode, userId, isHost, watching = false, onReplay, onMenu }: { game: PublicGameView; me: PrivateGameView; roomName: string; roomCode: string; userId: string; isHost: boolean; watching?: boolean; onReplay: () => void; onMenu: () => void }) {
   const [recapOpen, setRecapOpen] = useState(false);
   const headline = game.winner === 'Citizens' ? i18n.game.results.citizensWin : game.winner === 'Mafia' ? i18n.game.results.mafiaWin : game.winner === 'Jester' ? i18n.game.results.jesterWin : i18n.game.results.draw;
   // The Jester only wins alone; town and Mafia win as teams.
@@ -394,5 +395,5 @@ function ResultsScreen({ game, me, roomName, isHost, watching = false, onReplay,
     `${nights.reduce((total, entry) => total + (entry.kind === 'night' ? entry.investigations.length : 0), 0)} шалгалт`,
     `${history.filter((entry) => entry.kind === 'day' && entry.accusedId !== null).length} шүүх хурал`,
   ];
-  return <main className="game-results-screen"><div className="results-glow" /><div className="results-heading"><span>ЭЭЛЖ {String(game.round).padStart(2, '0')} · {roomName.toUpperCase()}</span><h1>{headline}</h1><p>{watching ? 'Админ ажиглагч · тоглолт дууслаа.' : game.winner === 'Jester' ? (iWon ? 'Та бүгдийг хуурч ганцаараа яллаа!' : 'Алиа таныг хуурчээ.') : iWon ? 'Таны баг яллаа!' : 'Таны баг энэ удаа ялагдлаа.'}</p>{history.length > 0 && <p className="results-stats">{stats.join(' · ')}</p>}</div><div className="results-player-list">{game.players.map((player) => { const roleName = game.finalRoles?.[player.id]; const role = roleName ? roleInfo(roleName) : null; return <div className={`results-player ${!player.alive ? 'is-dead' : ''}`} key={player.id}><Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}><VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar><span className="results-name">{player.name}{player.id === me.seat && <small>ЧИ</small>}</span>{role && <span className={`team-tag ${role.team}`}>{translateRole(role.name)}</span>}<span className="results-status">{player.alive ? 'АМЬД' : 'ХАСАГДСАН'}</span></div>; })}</div><div className="results-actions"><button className="secondary-button" onClick={onMenu}><ArrowLeft size={14} /> {i18n.game.results.mainMenu}</button>{(game.history?.length ?? 0) > 0 && <button className="secondary-button" onClick={() => setRecapOpen(true)}><Info size={14} /> ТОГЛОЛТЫН ТҮҮХ</button>}{isHost ? <button className="primary-button" onClick={onReplay}>{i18n.game.results.playAgain} <ChevronRight size={15} /></button> : <span className="discussion-wait">Эзэн шинэ тоглолт эхлүүлэхийг хүлээж байна</span>}</div>{recapOpen && <MatchRecap game={game} onClose={() => setRecapOpen(false)} />}</main>;
+  return <main className="game-results-screen"><div className="results-glow" /><div className="results-heading"><span>ЭЭЛЖ {String(game.round).padStart(2, '0')} · {roomName.toUpperCase()}</span><h1>{headline}</h1><p>{watching ? 'Админ ажиглагч · тоглолт дууслаа.' : game.winner === 'Jester' ? (iWon ? 'Та бүгдийг хуурч ганцаараа яллаа!' : 'Алиа таныг хуурчээ.') : iWon ? 'Таны баг яллаа!' : 'Таны баг энэ удаа ялагдлаа.'}</p>{history.length > 0 && <p className="results-stats">{stats.join(' · ')}</p>}{!watching && <RankResultBanner roomCode={roomCode} userId={userId} />}</div><div className="results-player-list">{game.players.map((player) => { const roleName = game.finalRoles?.[player.id]; const role = roleName ? roleInfo(roleName) : null; return <div className={`results-player ${!player.alive ? 'is-dead' : ''}`} key={player.id}><Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}><VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar><span className="results-name">{player.name}{player.id === me.seat && <small>ЧИ</small>}</span>{role && <span className={`team-tag ${role.team}`}>{translateRole(role.name)}</span>}<span className="results-status">{player.alive ? 'АМЬД' : 'ХАСАГДСАН'}</span></div>; })}</div><div className="results-actions"><button className="secondary-button" onClick={onMenu}><ArrowLeft size={14} /> {i18n.game.results.mainMenu}</button>{(game.history?.length ?? 0) > 0 && <button className="secondary-button" onClick={() => setRecapOpen(true)}><Info size={14} /> ТОГЛОЛТЫН ТҮҮХ</button>}{isHost ? <button className="primary-button" onClick={onReplay}>{i18n.game.results.playAgain} <ChevronRight size={15} /></button> : <span className="discussion-wait">Эзэн шинэ тоглолт эхлүүлэхийг хүлээж байна</span>}</div>{recapOpen && <MatchRecap game={game} onClose={() => setRecapOpen(false)} />}</main>;
 }
