@@ -19,6 +19,9 @@ const FRAME_IMAGES: Record<string, string> = {
 /** Nameplates: a wide picture behind the player's name; the decoration sits on the right, the name on the dark left. */
 const NAMEPLATE_IMAGES: Record<string, string> = {
   'plate-ice-crystal': '/assets/nameplates/ice-crystal.webp',
+  'plate-royal-crown': '/assets/nameplates/royal-crown.webp',
+  'plate-skull-king': '/assets/nameplates/skull-king.webp',
+  'plate-fire-dragon': '/assets/nameplates/fire-dragon.webp',
 };
 
 /** Class and style that put the player's nameplate behind a row (see .has-nameplate in theme.css). */

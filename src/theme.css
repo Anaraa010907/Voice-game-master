@@ -3116,6 +3116,9 @@
   pointer-events: none;
 }
 @keyframes plate-sheen { 0% { background-position: 120% 0; } 60%, 100% { background-position: -120% 0; } }
+/* Gold and fire plates catch a warm light instead of the icy one. */
+:is(.plate-royal-crown, .plate-skull-king)::after { background-image: linear-gradient(105deg, transparent 40%, rgba(255, 214, 140, .18) 50%, transparent 60%); }
+.plate-fire-dragon::after { background-image: linear-gradient(105deg, transparent 40%, rgba(255, 140, 60, .2) 50%, transparent 60%); animation-duration: 3.8s; }
 .viewport .game-frame .has-nameplate :is(.player-name, .game-player-copy b, .mono-player-copy b, .pcard-name h2) { text-shadow: 0 1px 3px rgba(0, 0, 0, .9); }
 /* Whatever sits on the bright right side (status, money, votes) gets a dark pill so it stays readable. */
 .viewport .game-frame .has-nameplate :is(.player-status, .mono-player-money, .player-vote-count, .player-vote-status) {
@@ -3438,7 +3441,7 @@
 
 /* The drawn emblem: light rays turn slowly, the top rank burns, a gleam crosses the shield. */
 .rank-crest { display: block; width: 48px; height: auto; aspect-ratio: 156 / 160; overflow: visible; flex: none; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .55)) drop-shadow(0 0 6px var(--m-glow, transparent)); }
-img.rank-crest { object-fit: contain; }
+img.rank-crest { aspect-ratio: 1; object-fit: contain; }
 .rank-crest .em-rays { transform-box: fill-box; transform-origin: center; animation: frame-spin 26s linear infinite; }
 .rank-crest .em-flames { transform-box: fill-box; transform-origin: 50% 70%; animation: em-burn 1.6s ease-in-out infinite; }
 @keyframes em-burn { 0%, 100% { transform: scale(1, 1); opacity: .85; } 35% { transform: scale(1.04, 1.09); opacity: 1; } 65% { transform: scale(.98, 1.04); opacity: .9; } }
