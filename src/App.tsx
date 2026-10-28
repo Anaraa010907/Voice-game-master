@@ -16,14 +16,15 @@ import { FriendsScreen, InviteFriendsModal, useFriends, useMessageToasts, type F
 import { supabase, supabaseConfigured, type PublicProfile } from './supabaseClient';
 import { i18n, translateMessage } from './i18n';
 import { removeProfilePhoto, uploadProfilePhoto } from './avatarUpload';
-import Avatar, { nameplate } from './Avatar';
+import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
 import { callGame, useRoom, type ListedRoom, type NoticeTone, type NotifyFn, type RoomSeat } from './multiplayer';
 import { GAMES, type GameType } from './games';
 import MonopolyScreen from './Monopoly';
 import { MafiaRulesCard, MafiaRulesEditor } from './MafiaRules';
 import { BoardRulesCard, ROUND_OPTIONS, roundsLabel } from './BoardRules';
 import { motionReduced, setMotionReduced } from './motion';
-import { musicEnabled, setMusicEnabled, setSfxEnabled, sfxEnabled, startMusic, wakeMusic } from './sfx';
+import { startMusic, wakeMusic } from './sfx';
+import { VolumeControls } from './VolumeControls';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { FullscreenToggle, useFullscreen, type FullscreenState } from './fullscreen';
 
@@ -658,8 +659,9 @@ function AdminWatch({ roomCode, userId, notify, fullscreen, onExit }: { roomCode
 
 function SeatCard({ seat, isHost, isMe, onRemoveBot, busy, onProfile }: { seat: RoomSeat; isHost: boolean; isMe: boolean; onRemoveBot?: () => void; busy?: boolean; onProfile: () => void }) {
   const plate = nameplate(seat.nameplate_key);
-  return <div className={`player-card compact-card is-tappable ${seat.ready || isHost ? 'player-ready' : ''} ${seat.is_bot ? 'is-bot' : ''} ${plate.className}`} style={plate.style} role="button" tabIndex={0}
+  return <div className={`player-card compact-card is-tappable ${seat.ready || isHost ? 'player-ready' : ''} ${seat.is_bot ? 'is-bot' : ''} ${plate.className} ${rowBorderClass(seat.border_key)}`} style={plate.style} role="button" tabIndex={0}
     onClick={onProfile} onKeyDown={(event) => { if (event.key === 'Enter') onProfile(); }} aria-label={`${seat.display_name} — профайл`}>
+    <RowBorder borderKey={seat.border_key} />
     <Avatar name={seat.is_bot ? seat.display_name.replace(/ \(бот\)$/, '') : seat.display_name} color={seat.color} url={seat.avatar_url} frame={seat.frame_key}>{isHost && <i title="Өрөөний эзэн"><Crown size={11} /></i>}{seat.is_bot ? <i className="bot-badge" title="Бот"><Bot size={11} /></i> : <VoiceAvatarIndicator name={seat.display_name} identity={seat.user_id} />}</Avatar>
     <div className="player-name">{seat.display_name}{isMe && <small>ЧИ</small>}</div>
     <div className={`player-status ${seat.ready || isHost ? 'online' : ''}`}>{isHost ? 'ЭЗЭН' : seat.is_bot ? 'БОТ' : seat.ready ? 'БЭЛЭН' : 'ХҮЛЭЭЖ БАЙНА'}</div>
@@ -733,10 +735,8 @@ function RoleGallery({ onBack }: { onBack: () => void }) {
 }
 
 function Settings({ onBack, onProfile, onAuth, signedIn }: { onBack: () => void; onProfile: () => void; onAuth: () => void; signedIn: boolean }) {
-  const [sound, setSound] = useState(sfxEnabled());
-  const [music, setMusic] = useState(musicEnabled());
   const [reduceMotion, setReduceMotion] = useState(motionReduced());
-  return <div className="inner-screen simple-screen"><TopBar title="ТОХИРГОО" subtitle="ТОХИРГОО" onBack={onBack} /><div className="settings-content">  <div className="settings-intro"><div className="eyebrow left-eye">ӨӨРТӨӨ ТОХИРУУЛ</div><h1>Уур амьсгалаа <i>сонго.</i></h1></div><div className="setting-list"><SettingRow icon={<Radio size={17} />} title="Дууны эффект" detail="Хотын дуу чимээ болон тоглоомын эффект" checked={sound} onToggle={() => { setSfxEnabled(!sound); setSound(!sound); }} /><SettingRow icon={<Radio size={17} />} title="Дэвсгэр хөгжим" detail="Цэс болон тоглоом дундах аялгуу" checked={music} onToggle={() => { setMusicEnabled(!music); setMusic(!music); }} /><SettingRow icon={<WandSparkles size={17} />} title="Хөдөлгөөнийг багасгах" detail="Анивчих эффект, хөдөлгөөнт шилжилтийг унтраах" checked={reduceMotion} onToggle={() => { setMotionReduced(!reduceMotion); setReduceMotion(!reduceMotion); }} /><SettingsLink icon={<UserRound size={17} />} label="Профайл" detail={signedIn ? 'Нэр болон аватар засах' : 'Бүртгэлээ харахын тулд нэвтэрнэ үү'} onClick={onProfile} /><SettingsLink icon={<LockKeyhole size={17} />} label={signedIn ? 'Гарах' : 'Нэвтрэх / бүртгэл үүсгэх'} detail={signedIn ? 'Supabase бүртгэлээс гарах' : 'Бүртгэлийн боломжийг нээх'} onClick={onAuth} /></div><span className="settings-version">MAFIA: SHADOWS <i>•</i> ХУВИЛБАР 0.1.0</span></div></div>;
+  return <div className="inner-screen simple-screen"><TopBar title="ТОХИРГОО" subtitle="ТОХИРГОО" onBack={onBack} /><div className="settings-content">  <div className="settings-intro"><div className="eyebrow left-eye">ӨӨРТӨӨ ТОХИРУУЛ</div><h1>Уур амьсгалаа <i>сонго.</i></h1></div><div className="setting-list"><VolumeControls /><SettingRow icon={<WandSparkles size={17} />} title="Хөдөлгөөнийг багасгах" detail="Анивчих эффект, хөдөлгөөнт шилжилтийг унтраах" checked={reduceMotion} onToggle={() => { setMotionReduced(!reduceMotion); setReduceMotion(!reduceMotion); }} /><SettingsLink icon={<UserRound size={17} />} label="Профайл" detail={signedIn ? 'Нэр болон аватар засах' : 'Бүртгэлээ харахын тулд нэвтэрнэ үү'} onClick={onProfile} /><SettingsLink icon={<LockKeyhole size={17} />} label={signedIn ? 'Гарах' : 'Нэвтрэх / бүртгэл үүсгэх'} detail={signedIn ? 'Supabase бүртгэлээс гарах' : 'Бүртгэлийн боломжийг нээх'} onClick={onAuth} /></div><span className="settings-version">MAFIA: SHADOWS <i>•</i> ХУВИЛБАР 0.1.0</span></div></div>;
 }
 
 function SettingsLink({ icon, label, detail, onClick }: { icon: ReactNode; label: string; detail: string; onClick: () => void }) {

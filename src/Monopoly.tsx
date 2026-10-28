@@ -8,7 +8,7 @@ import {
   minimumBid, mortgageInterest, mortgageValue, netWorth, ownsGroup, rentFor, roundLimit, unmortgageCost,
   type AuctionState, type ColorGroup, type MonopolyPlayer, type MonopolyState, type Tile, type TradeOffer, type TradeProposal,
 } from './monopolyEngine';
-import Avatar, { nameplate } from './Avatar';
+import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { playSfx, startMusic } from './sfx';
 import { callGame, useCountdown, useGame, type NotifyFn, type RoomSeat } from './multiplayer';
@@ -202,7 +202,7 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
 
         <div className="mono-players">
           {game.players.map((entry) => <PlayerRow key={entry.id} entry={entry} game={game} color={ownerColor(game, entry.id, mySeat)} isTurn={entry.id === turnId && game.phase !== 'finished'} isMe={entry.id === mySeat}
-            frame={seats.find((seat) => seat.seat === entry.id)?.frame_key} plateKey={seats.find((seat) => seat.seat === entry.id)?.nameplate_key} onProfile={() => onProfile(entry.id)} />)}
+            frame={seats.find((seat) => seat.seat === entry.id)?.frame_key} plateKey={seats.find((seat) => seat.seat === entry.id)?.nameplate_key} borderKey={seats.find((seat) => seat.seat === entry.id)?.border_key} onProfile={() => onProfile(entry.id)} />)}
         </div>
 
         <div className="mono-actions">
@@ -265,11 +265,12 @@ function Die({ value, index }: { value: number; index: number }) {
   return <span className={`mono-die ${value ? 'is-rolled' : 'is-empty'} die-${index}`}>{Array.from({ length: 9 }, (_, cell) => <i key={cell} className={(pips[value] ?? []).includes(cell + 1) ? 'on' : ''} />)}</span>;
 }
 
-function PlayerRow({ entry, game, color, isTurn, isMe, frame, plateKey, onProfile }: { entry: MonopolyPlayer; game: MonopolyState; color?: string; isTurn: boolean; isMe: boolean; frame?: string | null; plateKey?: string | null; onProfile: () => void }) {
+function PlayerRow({ entry, game, color, isTurn, isMe, frame, plateKey, borderKey, onProfile }: { entry: MonopolyPlayer; game: MonopolyState; color?: string; isTurn: boolean; isMe: boolean; frame?: string | null; plateKey?: string | null; borderKey?: string | null; onProfile: () => void }) {
   const owned = game.tiles.filter((tileState) => tileState.owner === entry.id).length;
   const plate = nameplate(plateKey);
-  return <div className={`mono-player is-tappable ${isTurn ? 'is-turn' : ''} ${entry.bankrupt ? 'is-bankrupt' : ''} ${plate.className}`} style={{ ...ownerStyle(color), ...plate.style }} role="button" tabIndex={0}
+  return <div className={`mono-player is-tappable ${isTurn ? 'is-turn' : ''} ${entry.bankrupt ? 'is-bankrupt' : ''} ${plate.className} ${rowBorderClass(borderKey)}`} style={{ ...ownerStyle(color), ...plate.style }} role="button" tabIndex={0}
     onClick={onProfile} onKeyDown={(event) => { if (event.key === 'Enter') onProfile(); }} aria-label={`${entry.name} — профайл`}>
+    <RowBorder borderKey={borderKey} />
     <Avatar name={entry.name} color={entry.color} url={entry.avatarUrl} initials={entry.initials} frame={frame}>{entry.host && <i><Crown size={9} /></i>}<VoiceAvatarIndicator name={entry.name} seat={entry.id} /></Avatar>
     <span className="mono-player-copy"><b>{entry.name}{isMe && <small>ЧИ</small>}</b><span>{entry.bankrupt ? 'ДАМПУУРСАН' : `${entry.inJail ? 'ШОРОНД' : BOARD[entry.position].short} · ${owned} газар`}{!entry.bankrupt && (entry.jailCards?.length ?? 0) > 0 && <i className="mono-jail-card" title="Шоронгоос гарах карт"><KeyRound size={9} />{entry.jailCards!.length}</i>}</span></span>
     <span className="mono-player-money">{entry.bankrupt ? '—' : money(entry.money)}</span>

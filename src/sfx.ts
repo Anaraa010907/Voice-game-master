@@ -2,14 +2,48 @@
 export type Sfx = 'roll' | 'step' | 'buy' | 'turn' | 'night' | 'morning' | 'vote' | 'death' | 'win' | 'click' | 'reveal';
 
 const KEY = 'night-table:sfx';
+const SFX_VOLUME_KEY = 'night-table:sfx-volume';
+const MUSIC_VOLUME_KEY = 'night-table:music-volume';
 let context: AudioContext | null = null;
-let enabled = (() => { try { return localStorage.getItem(KEY) !== 'off'; } catch { return true; } })();
 
-export const sfxEnabled = () => enabled;
+/** Stored 0–100 volume; an old on/off setting of "off" reads as 0. */
+function readVolume(key: string, legacyKey: string) {
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved !== null && Number.isFinite(Number(saved))) return Math.max(0, Math.min(100, Number(saved)));
+    return localStorage.getItem(legacyKey) === 'off' ? 0 : 80;
+  } catch { return 80; }
+}
+function storeVolume(key: string, value: number) {
+  try { localStorage.setItem(key, String(value)); } catch { /* storage may be unavailable */ }
+}
+/** 0–100 slider value → gain, on a curve so the low end is still fine-grained. */
+const gainOf = (volume: number) => Math.pow(volume / 100, 1.6);
+
+let sfxVolume = readVolume(SFX_VOLUME_KEY, KEY);
+let sfxBus: GainNode | null = null;
+
+export const sfxEnabled = () => sfxVolume > 0;
+export const getSfxVolume = () => sfxVolume;
+export function setSfxVolume(value: number) {
+  sfxVolume = Math.max(0, Math.min(100, Math.round(value)));
+  storeVolume(SFX_VOLUME_KEY, sfxVolume);
+  if (sfxBus && context) sfxBus.gain.setTargetAtTime(gainOf(sfxVolume) * 1.25, context.currentTime, 0.02);
+}
+/** Kept for older callers: on restores 80, off mutes. */
 export function setSfxEnabled(value: boolean) {
-  enabled = value;
-  try { localStorage.setItem(KEY, value ? 'on' : 'off'); } catch { /* storage may be unavailable */ }
+  setSfxVolume(value ? Math.max(sfxVolume, 80) : 0);
   if (value) playSfx('click');
+}
+
+/** Effects go through one gain node, so the volume slider scales them all. */
+function effectsOut(c: AudioContext) {
+  if (!sfxBus) {
+    sfxBus = c.createGain();
+    sfxBus.gain.value = gainOf(sfxVolume) * 1.25;
+    sfxBus.connect(c.destination);
+  }
+  return sfxBus;
 }
 
 function ctx() {
@@ -31,7 +65,7 @@ function tone(c: AudioContext, start: number, freq: number, length: number, type
   gain.gain.setValueAtTime(0.0001, start);
   gain.gain.exponentialRampToValueAtTime(volume, start + 0.01);
   gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
-  osc.connect(gain).connect(c.destination);
+  osc.connect(gain).connect(effectsOut(c));
   osc.start(start);
   osc.stop(start + length + 0.02);
 }
@@ -48,12 +82,12 @@ function noise(c: AudioContext, start: number, length: number, volume = 0.12, fr
   filter.frequency.value = freq;
   gain.gain.setValueAtTime(volume, start);
   gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
-  source.connect(filter).connect(gain).connect(c.destination);
+  source.connect(filter).connect(gain).connect(effectsOut(c));
   source.start(start);
 }
 
 export function playSfx(name: Sfx) {
-  if (!enabled) return;
+  if (sfxVolume <= 0) return;
   try {
     const c = ctx();
     if (!c) return;
@@ -82,7 +116,9 @@ export function playSfx(name: Sfx) {
 
 export type MusicTheme = 'menu' | 'mafia' | 'monopoly';
 const MUSIC_KEY = 'night-table:music';
-let musicOn = (() => { try { return localStorage.getItem(MUSIC_KEY) !== 'off'; } catch { return true; } })();
+let musicVolume = readVolume(MUSIC_VOLUME_KEY, MUSIC_KEY);
+let musicOn = musicVolume > 0;
+let musicBus: GainNode | null = null;
 let theme: MusicTheme | null = null;
 let playing: MusicTheme | null = null;
 let timer: number | null = null;
@@ -91,10 +127,20 @@ let nextBeat = 0;
 let beat = 0;
 
 export const musicEnabled = () => musicOn;
+export const getMusicVolume = () => musicVolume;
+/** 0 stops the music; anything else (re)starts the current theme at that loudness. */
+export function setMusicVolume(value: number) {
+  musicVolume = Math.max(0, Math.min(100, Math.round(value)));
+  storeVolume(MUSIC_VOLUME_KEY, musicVolume);
+  const wasOn = musicOn;
+  musicOn = musicVolume > 0;
+  if (musicBus && context) musicBus.gain.setTargetAtTime(gainOf(musicVolume) * 1.6, context.currentTime, 0.05);
+  if (!musicOn) halt();
+  else if (!wasOn && theme) startMusic(theme);
+}
+/** Kept for older callers: on restores 80, off mutes. */
 export function setMusicEnabled(value: boolean) {
-  musicOn = value;
-  try { localStorage.setItem(MUSIC_KEY, value ? 'on' : 'off'); } catch { /* storage may be unavailable */ }
-  if (value && theme) startMusic(theme); else halt();
+  setMusicVolume(value ? Math.max(musicVolume, 80) : 0);
 }
 
 // Generative loops: A minor pentatonic for the night game, D major pentatonic (a steppe-song feel) for the board game.
@@ -228,7 +274,12 @@ export function startMusic(next: MusicTheme) {
     delay.delayTime.value = next === 'menu' ? 60 / MENU.bpm * 0.75 : 0.42;
     feedback.gain.value = 0.28;
     wet.gain.value = 0.35;
-    master.connect(filter).connect(c.destination);
+    if (!musicBus) {
+      musicBus = c.createGain();
+      musicBus.gain.value = gainOf(musicVolume) * 1.6;
+      musicBus.connect(c.destination);
+    }
+    master.connect(filter).connect(musicBus);
     master.connect(delay);
     delay.connect(feedback).connect(delay);
     delay.connect(wet).connect(filter);

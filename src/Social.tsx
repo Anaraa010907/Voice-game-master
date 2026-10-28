@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, Bot, Check, Coins, Flag, Gift, Send, ShoppingBag, Sparkles, Trophy, UserPlus, X } from 'lucide-react';
-import Avatar, { nameplate } from './Avatar';
+import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
 import { supabase } from './supabaseClient';
 import type { NotifyFn, RoomSeat } from './multiplayer';
 import { playSfx } from './sfx';
 
 /* ---------- shop catalogue ---------- */
 
-export type ShopKind = 'gift' | 'frame' | 'title' | 'nameplate';
+export type ShopKind = 'gift' | 'frame' | 'title' | 'nameplate' | 'border';
 export type ShopItem = { key: string; kind: ShopKind; name: string; description: string; icon: string; price: number; sort: number };
 
 let catalogue: Promise<ShopItem[]> | null = null;
@@ -113,8 +113,8 @@ export function GiftLayer({ roomCode }: { roomCode: string }) {
 
 /* ---------- choosing a gift ---------- */
 
-type GiftTab = 'gift' | 'frame' | 'nameplate';
-const GIFT_TABS: { key: GiftTab; label: string }[] = [{ key: 'gift', label: 'Бэлэг' }, { key: 'frame', label: 'Хүрээ' }, { key: 'nameplate', label: 'Нэрийн хавтан' }];
+type GiftTab = 'gift' | 'frame' | 'nameplate' | 'border';
+const GIFT_TABS: { key: GiftTab; label: string }[] = [{ key: 'gift', label: 'Бэлэг' }, { key: 'frame', label: 'Хүрээ' }, { key: 'nameplate', label: 'Нэрийн хавтан' }, { key: 'border', label: 'Нэрийн хүрээ' }];
 
 /**
  * The gift grid. Frames and nameplates (given to a friend to keep) are offered only outside a game;
@@ -139,6 +139,7 @@ export function GiftPicker({ targetName, allowCosmetics, busy, note, onBack, onS
       {item.kind === 'gift' && <span className="gift-icon">{item.icon}</span>}
       {item.kind === 'frame' && <Avatar name={item.name} color="rose" frame={item.key} className="gift-frame-preview" />}
       {item.kind === 'nameplate' && <span className={`gift-plate-preview ${nameplate(item.key).className}`} style={nameplate(item.key).style} />}
+      {item.kind === 'border' && <span className={`gift-plate-preview gift-border-preview ${rowBorderClass(item.key)}`}><RowBorder borderKey={item.key} /></span>}
       <b>{item.name}</b><small>{free ? 'ҮНЭГҮЙ' : <><Coins size={10} />{item.price}</>}</small></button>)}</div>
     <p className="pcard-note">{tab === 'gift' ? note : 'Найз тань энэ барааг өөрийн болгож авна. Аль хэдийн байгаа бол илгээгдэхгүй.'}</p>
     <div className="modal-actions"><button type="button" className="primary-button" disabled={busy || !choice} onClick={() => choice && onSend(choice)}>
@@ -149,7 +150,7 @@ export function GiftPicker({ targetName, allowCosmetics, busy, note, onBack, onS
 /* ---------- a player's card at the table ---------- */
 
 type Card = {
-  id: string; display_name: string; avatar_url: string | null; avatar_key: string; frame_key: string | null; title_key: string | null; nameplate_key?: string | null;
+  id: string; display_name: string; avatar_url: string | null; avatar_key: string; frame_key: string | null; title_key: string | null; nameplate_key?: string | null; border_key?: string | null;
   rank_name: string; rank_points: number; total_matches: number; wins: number; win_rate: number; best_win_streak: number;
   created_at: string; gift_total: number; gifts: { gift_key: string; count: number }[];
 };
@@ -236,7 +237,8 @@ export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, not
     </>;
   } else {
     body = <>
-      <div className={`pcard-hero ${nameplate(card?.nameplate_key ?? seat.nameplate_key).className}`} style={nameplate(card?.nameplate_key ?? seat.nameplate_key).style}>
+      <div className={`pcard-hero ${nameplate(card?.nameplate_key ?? seat.nameplate_key).className} ${rowBorderClass(card?.border_key ?? seat.border_key)}`} style={nameplate(card?.nameplate_key ?? seat.nameplate_key).style}>
+        <RowBorder borderKey={card?.border_key ?? seat.border_key} />
         <Avatar name={name} color={card?.avatar_key ?? seat.color} url={card?.avatar_url ?? seat.avatar_url} frame={card?.frame_key ?? seat.frame_key} className="pcard-avatar">
           {isBot && <i className="bot-badge"><Bot size={12} /></i>}
         </Avatar>
@@ -291,18 +293,19 @@ export function useLongPress(onLongPress: () => void, delay = 450) {
 /* ---------- shop ---------- */
 
 /** How a nameplate looks behind my own name, as it will in a lobby seat or a game row. */
-function PlatePreview({ plateKey, me, large = false }: { plateKey: string; me: { display_name: string; avatar_url: string | null; avatar_key: string; frame_key: string | null } | null; large?: boolean }) {
+function PlatePreview({ plateKey, borderKey, me, large = false }: { plateKey: string | null; borderKey?: string; me: { display_name: string; avatar_url: string | null; avatar_key: string; frame_key: string | null } | null; large?: boolean }) {
   const plate = nameplate(plateKey);
-  return <span className={`plate-preview ${large ? 'is-large' : ''} ${plate.className}`} style={plate.style}>
+  return <span className={`plate-preview ${large ? 'is-large' : ''} ${plate.className} ${rowBorderClass(borderKey)}`} style={plate.style}>
+    <RowBorder borderKey={borderKey} />
     <Avatar name={me?.display_name ?? 'Би'} color={me?.avatar_key ?? 'rose'} url={me?.avatar_url} />
     <b>{me?.display_name ?? 'Таны нэр'}</b>
   </span>;
 }
 
 type Owned = { item_key: string };
-type Me = { coins: number; frame_key: string | null; title_key: string | null; nameplate_key?: string | null; avatar_url: string | null; avatar_key: string; display_name: string; bonus_claimed_at: string | null };
+type Me = { coins: number; frame_key: string | null; title_key: string | null; nameplate_key?: string | null; border_key?: string | null; avatar_url: string | null; avatar_key: string; display_name: string; bonus_claimed_at: string | null };
 
-const TABS: { key: ShopKind; label: string }[] = [{ key: 'frame', label: 'Аватар хүрээ' }, { key: 'nameplate', label: 'Нэрийн хавтан' }, { key: 'gift', label: 'Бэлэг' }, { key: 'title', label: 'Цол' }];
+const TABS: { key: ShopKind; label: string }[] = [{ key: 'frame', label: 'Аватар хүрээ' }, { key: 'nameplate', label: 'Нэрийн хавтан' }, { key: 'border', label: 'Нэрийн хүрээ' }, { key: 'gift', label: 'Бэлэг' }, { key: 'title', label: 'Цол' }];
 
 export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: NotifyFn }) {
   const items = useShopItems();
@@ -317,7 +320,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
     if (!supabase) return;
     const { data: auth } = await supabase.auth.getSession();
     const id = auth.session?.user.id;
-    const profileQuery = supabase.from('profiles').select('coins,frame_key,title_key,nameplate_key,avatar_url,avatar_key,display_name,bonus_claimed_at');
+    const profileQuery = supabase.from('profiles').select('coins,frame_key,title_key,nameplate_key,border_key,avatar_url,avatar_key,display_name,bonus_claimed_at');
     const [profile, mine] = await Promise.all([
       (id ? profileQuery.eq('id', id) : profileQuery).maybeSingle(),
       supabase.from('player_items').select('item_key'),
@@ -340,7 +343,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
 
   const bonusReady = !me?.bonus_claimed_at || Date.now() - new Date(me.bonus_claimed_at).getTime() > 20 * 3600_000;
   const shown = items.filter((item) => item.kind === tab);
-  const equippedKey = tab === 'frame' ? me?.frame_key : tab === 'title' ? me?.title_key : tab === 'nameplate' ? me?.nameplate_key : null;
+  const equippedKey = tab === 'frame' ? me?.frame_key : tab === 'title' ? me?.title_key : tab === 'nameplate' ? me?.nameplate_key : tab === 'border' ? me?.border_key : null;
 
   return <div className="inner-screen panel-screen shop-screen">
     <header className="top-bar panel-top-bar">
@@ -366,6 +369,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
               {item.kind === 'gift' && <span className="gift-icon is-floating">{item.icon}</span>}
               {item.kind === 'title' && <span className="title-badge is-large"><Sparkles size={12} />{item.name}</span>}
               {item.kind === 'nameplate' && <PlatePreview plateKey={item.key} me={me} />}
+              {item.kind === 'border' && <PlatePreview plateKey={me?.nameplate_key ?? null} borderKey={item.key} me={me} />}
             </button>
             <b>{item.name}</b>
             <small>{item.description}</small>
@@ -387,6 +391,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
         {preview.kind === 'gift' && <div className="gift-preview"><div className="gift-burst" aria-hidden="true">{Array.from({ length: 12 }, (_, index) => <i key={index} style={{ ['--i' as string]: index }} />)}</div><div className="gift-big">{preview.icon}</div></div>}
         {preview.kind === 'title' && <span className="title-badge is-large"><Sparkles size={14} />{preview.name}</span>}
         {preview.kind === 'nameplate' && <PlatePreview plateKey={preview.key} me={me} large />}
+        {preview.kind === 'border' && <PlatePreview plateKey={me?.nameplate_key ?? null} borderKey={preview.key} me={me} large />}
         <h2>{preview.name}</h2><p>{preview.description}</p>
         <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setPreview(null)}>ХААХ</button></div>
       </section>

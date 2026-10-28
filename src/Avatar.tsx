@@ -27,6 +27,16 @@ export function nameplate(key: string | null | undefined): { className: string; 
   return image ? { className: `has-nameplate ${key}`, style: { ['--plate' as string]: `url("${image}")` } as CSSProperties } : { className: '', style: {} };
 }
 
+/** Name borders: a shining ring around a player's whole row (see .row-border in theme.css). */
+export const BORDER_KEYS = ['border-gold', 'border-neon', 'border-ice', 'border-fire', 'border-ruby', 'border-royal'];
+
+/** The animated border, placed as the first child of a row; the row gets `has-row-border`. */
+export function RowBorder({ borderKey }: { borderKey: string | null | undefined }) {
+  if (!borderKey || !BORDER_KEYS.includes(borderKey)) return null;
+  return <span className={`row-border ${borderKey}`} aria-hidden="true"><i /></span>;
+}
+export const rowBorderClass = (key: string | null | undefined) => (key && BORDER_KEYS.includes(key) ? 'has-row-border' : '');
+
 /** Avatar frames sold in the shop: CSS-animated rings plus painted ones (see the frame-* styles in theme.css). */
 export const FRAME_KEYS = ['frame-gold', 'frame-neon', 'frame-ice', 'frame-fire', 'frame-blood', 'frame-royal', ...Object.keys(FRAME_IMAGES)];
 

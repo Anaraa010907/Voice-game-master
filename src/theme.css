@@ -2923,3 +2923,146 @@
 .viewport .game-frame .friend-gift .pcard-note { margin: 0; color: #8f8a8e; font-size: 10.5px; }
 .viewport .game-frame .friend-gift .modal-actions { display: flex; justify-content: flex-end; }
 .viewport .game-frame .friend-gift .modal-actions .primary-button { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---------- Role cards turned over by hand ---------- */
+.flip-card { position: relative; width: 100%; height: 100%; perspective: 1400px; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.flip-card.is-dragging { cursor: grabbing; }
+.flip-card-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .55s cubic-bezier(.2, .9, .25, 1.15); will-change: transform; }
+.flip-card.is-dragging .flip-card-inner { transition: none; }
+.flip-card-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.flip-card-front { transform: rotateY(180deg); }
+.flip-card-face > .role-card-artwork { width: 100%; height: 100%; }
+/* A light sweep across the card as it turns. */
+.flip-card-face::after {
+  content: '';
+  position: absolute;
+  inset: 4% 1%;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 240, 210, .28) 50%, transparent 65%) no-repeat;
+  background-size: 300% 100%;
+  background-position: calc(var(--shine, 0) * 300% - 100%) 0;
+  mix-blend-mode: screen;
+}
+.flip-card.is-face-down .flip-card-back { animation: card-wiggle 2.6s ease-in-out 1.6s infinite; }
+@keyframes card-wiggle { 0%, 70%, 100% { transform: rotateZ(0); } 76% { transform: rotateZ(-1.6deg); } 82% { transform: rotateZ(1.6deg); } 88% { transform: rotateZ(-.8deg); } }
+
+/* The intro card drops in face down; the player turns it. */
+.viewport .game-frame .role-intro-card { animation: intro-drop .9s cubic-bezier(.2, .8, .25, 1) .45s both; transform-style: flat; }
+@keyframes intro-drop { 0% { transform: translateY(-40px) scale(.55); opacity: 0; } 40% { opacity: 1; } 100% { transform: none; opacity: 1; } }
+.viewport .game-frame .role-intro.is-revealed .role-intro-card .role-card-frame { filter: drop-shadow(0 0 12px color-mix(in srgb, var(--team) 70%, transparent)) drop-shadow(0 18px 36px rgba(0, 0, 0, .7)); }
+.viewport .game-frame .role-intro { cursor: default; }
+.viewport .game-frame .role-intro.is-revealed { cursor: pointer; }
+.viewport .game-frame .role-intro-copy { min-height: 54px; align-content: center; }
+
+.flip-hint { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border: 1px solid var(--gold-line); border-radius: 999px; background: rgba(12, 12, 18, .82); color: #f1e3c4; font-size: 11.5px; transition: opacity .3s; }
+.flip-hint svg { color: var(--gold-bright); animation: hand-swipe 1.6s ease-in-out infinite; }
+.flip-hint.is-hidden { opacity: 0; }
+@keyframes hand-swipe { 0%, 100% { transform: translateX(-4px) rotate(-8deg); } 50% { transform: translateX(6px) rotate(8deg); } }
+
+/* The viewer: card in the middle, hint or the role's ability underneath. */
+.viewport .game-frame .my-role-viewer .card-viewer-card { box-shadow: none; }
+.viewport .game-frame .my-role-viewer .flip-hint { z-index: 1; }
+.viewport .game-frame .my-role-card .card-back-art { width: 100%; height: 100%; }
+.viewport .game-frame .my-role-card .my-role-label { font-size: 6.5px; text-align: center; }
+
+/* ---------- Volume sliders (Settings and in-game settings) ---------- */
+.viewport .game-frame .volume-row { height: auto; min-height: 58px; flex-wrap: wrap; row-gap: 4px; padding-top: 6px; padding-bottom: 6px; }
+.viewport .game-frame .volume-row .setting-copy { flex: 1 1 150px; min-width: 0; }
+.viewport .game-frame .volume-mute { flex: none; background: transparent; cursor: pointer; border-radius: 8px; }
+.viewport .game-frame .volume-row.is-muted .volume-mute { color: #8f8a8e; border-color: rgba(255, 255, 255, .15); }
+.volume-control { flex: 1 1 260px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.viewport .game-frame .volume-step { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--gold-line); border-radius: 50%; background: rgba(12, 14, 20, .8); color: var(--gold-bright); }
+.viewport .game-frame .volume-step:disabled { opacity: .35; }
+.volume-track { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--gold); }
+.volume-track > svg { flex: none; }
+.viewport .game-frame .volume-track input[type='range'] {
+  --level: 50%;
+  flex: 1;
+  min-width: 60px;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.viewport .game-frame .volume-track input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #8f6d3c, #f1d79a var(--level), rgba(255, 255, 255, .12) var(--level));
+}
+.viewport .game-frame .volume-track input[type='range']::-moz-range-track { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, .12); }
+.viewport .game-frame .volume-track input[type='range']::-moz-range-progress { height: 6px; border-radius: 999px; background: linear-gradient(90deg, #8f6d3c, #f1d79a); }
+.viewport .game-frame .volume-track input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -7px;
+  border: 2px solid #fff4e0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffe6a8, #c9963f);
+  box-shadow: 0 0 10px rgba(241, 215, 154, .6), 0 2px 6px rgba(0, 0, 0, .6);
+}
+.viewport .game-frame .volume-track input[type='range']::-moz-range-thumb { width: 18px; height: 18px; border: 2px solid #fff4e0; border-radius: 50%; background: #d9a94e; }
+.volume-value { flex: none; min-width: 38px; color: #f1e3c4; font-size: 12px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.viewport .game-frame .modal-volume { margin: 6px 0 8px; text-align: left; border-top: 1px solid rgba(255, 255, 255, .08); }
+.viewport .game-frame .modal-volume .setting-row { min-height: 0; }
+.viewport .game-frame .modal-volume .setting-copy small { display: none; }
+
+/* ---------- Name borders: a shining ring around the player's row ----------
+ * .row-border sits over the row's edge (inset glow); its <i> is masked to a thin ring in which a large
+ * conic gradient turns, so bright highlights keep running round the border. */
+.has-row-border { position: relative; isolation: isolate; }
+.viewport .game-frame .has-row-border { border-color: transparent !important; }
+.row-border {
+  --rb-glow: rgba(241, 215, 154, .45);
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 12px var(--rb-glow), 0 0 10px var(--rb-glow);
+  animation: rb-pulse 2.4s ease-in-out infinite;
+}
+.row-border > i {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  padding: 2px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.row-border > i::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(160%, 260px);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: var(--rb-colors);
+  animation: rb-spin 3.2s linear infinite;
+}
+@keyframes rb-spin { to { rotate: 1turn; } }
+@keyframes rb-pulse { 0%, 100% { opacity: .8; } 50% { opacity: 1; } }
+
+.border-gold { --rb-glow: rgba(241, 215, 154, .5); --rb-colors: conic-gradient(#7a5a2c, #f1d79a 8%, #fffaf0 12%, #f1d79a 16%, #7a5a2c 30%, #b58a46 45%, #7a5a2c 55%, #f1d79a 62%, #fffaf0 66%, #f1d79a 70%, #7a5a2c 85%); }
+.border-neon { --rb-glow: rgba(255, 43, 214, .45); --rb-colors: conic-gradient(#00f0ff, #7b5cff 20%, #ff2bd6 35%, #fff 40%, #ff2bd6 45%, #7b5cff 60%, #00f0ff 75%, #fff 80%, #00f0ff 85%); }
+.border-neon > i::before { animation-duration: 2.2s; }
+.border-ice { --rb-glow: rgba(127, 211, 255, .5); --rb-colors: conic-gradient(#4aa3d4, #c9f1ff 10%, #fff 13%, #7fd3ff 20%, #2d6f9e 40%, #7fd3ff 55%, #fff 60%, #c9f1ff 66%, #4aa3d4 80%); }
+.border-ice > i::before { animation-duration: 4.5s; }
+.border-fire { --rb-glow: rgba(255, 110, 20, .55); --rb-colors: conic-gradient(#ff3d00, #ffb300 12%, #fff3c4 16%, #ff6d00 25%, #a31500 40%, #ff6d00 55%, #ffd54f 65%, #ff3d00 80%); }
+.border-fire > i::before { animation-duration: 1.6s; }
+.border-fire { animation-duration: .9s; }
+.border-ruby { --rb-glow: rgba(224, 40, 70, .5); --rb-colors: conic-gradient(#5a0614, #ff4d6d 12%, #ffe1e6 16%, #b8303f 24%, #3a050c 45%, #b8303f 60%, #ffe1e6 66%, #ff4d6d 72%, #5a0614 88%); }
+.border-royal { --rb-glow: rgba(255, 209, 102, .5); --rb-colors: conic-gradient(#ff4d6d, #ffd166, #06d6a0, #4cc9f0, #9b5de5, #ff4d6d); }
+.border-royal > i::before { animation: rb-spin 2s linear infinite, frame-hue 5s linear infinite; }
+.border-royal > i { padding: 2.5px; }
+
+/* Previews in the shop and gift picker. */
+.viewport .game-frame .plate-preview { position: relative; }
+.viewport .game-frame .gift-border-preview { position: relative; background: rgba(12, 14, 20, .9); border-radius: 8px; }

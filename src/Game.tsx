@@ -16,8 +16,9 @@ import { callGame, useCountdown, useGame, type NotifyFn, type RoomSeat } from '.
 import { playSfx, startMusic } from './sfx';
 import GhostVoice from './GhostVoice';
 import { QUICK_REPLIES, useQuickReplies } from './quickReplies';
-import Avatar, { nameplate } from './Avatar';
+import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
 import { useLongPress } from './Social';
+import { VolumeControls } from './VolumeControls';
 
 function roleInfo(name: RoleName) {
   return roles.find((item) => item.name === name)!;
@@ -37,16 +38,17 @@ function NightIcon({ role, size = 19 }: { role: RoleName; size?: number }) {
   return <Shield {...iconProps} />;
 }
 
-function GamePlayerCard({ player, isCurrent, selected, selectable, voteCount, voteTargetName, runoff, finalRole, bubble, frame, plateKey, onSelect, onProfile }: {
+function GamePlayerCard({ player, isCurrent, selected, selectable, voteCount, voteTargetName, runoff, finalRole, bubble, frame, plateKey, borderKey, onSelect, onProfile }: {
   player: PublicGamePlayer; isCurrent: boolean; selected: boolean; selectable: boolean; voteCount?: number; voteTargetName?: string; runoff?: boolean; finalRole?: RoleName; bubble?: string;
-  frame?: string | null; plateKey?: string | null; onSelect: () => void; onProfile: () => void;
+  frame?: string | null; plateKey?: string | null; borderKey?: string | null; onSelect: () => void; onProfile: () => void;
 }) {
   const plate = nameplate(plateKey);
   const shownRole = player.revealedRole ?? finalRole;
   // Tap picks a target while one can be picked, otherwise opens the profile; a long press always opens it.
   const press = useLongPress(onProfile);
   const tap = () => { if (press.fired.current) { press.fired.current = false; return; } if (selectable) onSelect(); else onProfile(); };
-  return <button type="button" className={`game-player-card ${isCurrent ? 'is-current' : ''} ${selected ? 'is-selected' : ''} ${!player.alive ? 'is-dead' : ''} ${runoff ? 'is-runoff' : ''} ${selectable ? '' : 'is-locked'} ${plate.className}`} style={plate.style} onClick={tap} {...press.handlers} aria-pressed={selected}>
+  return <button type="button" className={`game-player-card ${isCurrent ? 'is-current' : ''} ${selected ? 'is-selected' : ''} ${!player.alive ? 'is-dead' : ''} ${runoff ? 'is-runoff' : ''} ${selectable ? '' : 'is-locked'} ${plate.className} ${rowBorderClass(borderKey)}`} style={plate.style} onClick={tap} {...press.handlers} aria-pressed={selected}>
+    <RowBorder borderKey={borderKey} />
     <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials} frame={frame}>{player.host && <i><Crown size={10} /></i>}<VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
     <span className="game-player-copy"><b>{player.name}{isCurrent && <small>ЧИ</small>}</b><span className={`${player.alive ? 'alive-label' : 'dead-label'} ${finalRole && roleInfo(finalRole).team === 'mafia' ? 'spectator-mafia' : ''}`}>{player.alive ? (runoff ? 'ДАВТАН САНАЛД' : finalRole ? `АМЬД · ${translateRole(finalRole).toUpperCase()}` : 'АМЬД') : shownRole ? `ХАСАГДСАН · ${translateRole(shownRole).toUpperCase()}` : 'ХАСАГДСАН'}</span></span>
     {voteCount !== undefined && <span className="player-vote-count">{voteCount} <small>САНАЛ</small></span>}
@@ -186,7 +188,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
     if (game.phase === 'Night' && canChooseNightTarget(player)) setNightSelection(player.id);
     if (game.phase === 'Voting' && canSelectForVote(player)) setVoteSelection(player.id);
   };
-  const renderPlayer = (player: PublicGamePlayer) => <GamePlayerCard key={player.id} player={player} isCurrent={player.id === me.seat} selected={game.phase === 'Night' ? nightSelection === player.id : voteSelection === player.id} selectable={game.phase === 'Night' ? canChooseNightTarget(player) : canSelectForVote(player)} voteCount={game.voteCountsOpen ? game.voteCounts[String(player.id)] : undefined} voteTargetName={player.voteTargetId === null ? undefined : nameOf(player.voteTargetId)} runoff={inRunoff(player)} finalRole={game.finalRoles?.[player.id] ?? me.spectatorRoles?.[player.id]} bubble={quick.bubbles[player.id]?.text} frame={seats.find((seat) => seat.seat === player.id)?.frame_key} plateKey={seats.find((seat) => seat.seat === player.id)?.nameplate_key} onSelect={() => select(player)} onProfile={() => onProfile(player.id)} />;
+  const renderPlayer = (player: PublicGamePlayer) => <GamePlayerCard key={player.id} player={player} isCurrent={player.id === me.seat} selected={game.phase === 'Night' ? nightSelection === player.id : voteSelection === player.id} selectable={game.phase === 'Night' ? canChooseNightTarget(player) : canSelectForVote(player)} voteCount={game.voteCountsOpen ? game.voteCounts[String(player.id)] : undefined} voteTargetName={player.voteTargetId === null ? undefined : nameOf(player.voteTargetId)} runoff={inRunoff(player)} finalRole={game.finalRoles?.[player.id] ?? me.spectatorRoles?.[player.id]} bubble={quick.bubbles[player.id]?.text} frame={seats.find((seat) => seat.seat === player.id)?.frame_key} plateKey={seats.find((seat) => seat.seat === player.id)?.nameplate_key} borderKey={seats.find((seat) => seat.seat === player.id)?.border_key} onSelect={() => select(player)} onProfile={() => onProfile(player.id)} />;
 
   const confirmNight = async () => {
     if (nightSelection === null) return onNotice(translateMessage('Select a living target first.'));
@@ -229,7 +231,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
     {cardOpen && <RoleCardViewer role={roleInfo(me.role)} onClose={closeCard} />}
     {privateOpen && !watching && <PrivateInfoPanel player={currentPlayer} me={me} mafiaNames={mafiaNames} namesOf={namesOf} onClose={() => setPrivateOpen(false)} />}
     {leaveDialog && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="leave-game-title"><div className="modal-symbol"><ArrowLeft size={18} /></div><h2 id="leave-game-title">Тоглоомоос гарах уу?</h2><p>Гарвал та хасагдсанд тооцогдож, энэ тоглолтод буцаж орох боломжгүй.</p><div className="modal-actions"><button className="secondary-button" onClick={() => setLeaveDialog(false)}>ҮЛДЭХ</button><button className="primary-button" onClick={onLeave}>ТОГЛООМООС ГАРАХ</button></div></section></div>}
-    {settingsOpen && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title"><div className="modal-symbol"><Settings size={18} /></div><h2 id="game-settings-title">Тоглоомын тохиргоо</h2><p>Үе шат бүр цаг дуусахад автоматаар солигдоно. Өрөөний эзэн хүлээх үеийг алгасаж болно.</p><p className="rules-line">Дүрэм: {rulesSummary(game.settings)}</p><div className="modal-fullscreen"><FullscreenToggle fullscreen={fullscreen} /></div><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>ТОГЛООМ ҮРГЭЛЖЛҮҮЛЭХ</button></div></section></div>}
+    {settingsOpen && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title"><div className="modal-symbol"><Settings size={18} /></div><h2 id="game-settings-title">Тоглоомын тохиргоо</h2><p>Үе шат бүр цаг дуусахад автоматаар солигдоно. Өрөөний эзэн хүлээх үеийг алгасаж болно.</p><p className="rules-line">Дүрэм: {rulesSummary(game.settings)}</p><div className="setting-list modal-volume"><VolumeControls /></div><div className="modal-fullscreen"><FullscreenToggle fullscreen={fullscreen} /></div><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>ТОГЛООМ ҮРГЭЛЖЛҮҮЛЭХ</button></div></section></div>}
   </div>);
 }
 
