@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useRef } from 'react';
-import { ArrowLeft, Camera, Check, ChevronRight, LoaderCircle, LockKeyhole, Shield, ShoppingBag, Trash2, UserRound, X } from 'lucide-react';
+import { ArrowLeft, Camera, Check, ChevronRight, LoaderCircle, LockKeyhole, Shield, ShoppingBag, Sparkles, Trash2, UserRound, X } from 'lucide-react';
 import { CoinCount, TitleBadge, useShopItems } from './Social';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
 import { PORTRAITS } from './portraits';
@@ -72,12 +72,29 @@ export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, o
 
   return <div className="inner-screen account-screen"><AccountTopBar title={i18n.account.yourFile.toUpperCase()} subtitle={i18n.account.playerProfile.toUpperCase()} onBack={onBack} trailing={profile && <button className="account-signout-link" onClick={onSignOut}>{i18n.account.signOut}</button>} />
     {!supabaseConfigured ? <BackendSetupNotice /> : loading ? <LoadingState label={i18n.account.loadingAccount} /> : !profile ? <AccountEmpty title={i18n.account.profileWaiting} detail={loadError || i18n.account.profileDetail} action={i18n.account.signInAction} onAction={onSignIn} /> : <div className="account-body profile-body">
-      <div className={`profile-identity-row ${nameplate(profile.nameplate_key).className} ${rowBorderClass(profile.border_key)}`} style={nameplate(profile.nameplate_key).style}><RowBorder borderKey={profile.border_key} /><div className="profile-photo-block"><Avatar name={profile.display_name} color={profile.avatar_key} url={profile.avatar_url} frame={profile.frame_key} className="account-avatar" /><input ref={fileInput} type="file" accept="image/*" hidden onChange={(event) => { const file = event.target.files?.[0] ?? null; event.target.value = ''; if (file) void changePhoto(file); }} /><div className="profile-photo-actions"><button type="button" className="secondary-button" disabled={uploading} onClick={() => fileInput.current?.click()}>{uploading ? <LoaderCircle size={13} className="voice-spinner" /> : <Camera size={13} />}{uploading ? 'ХУУЛЖ БАЙНА…' : 'ЗУРАГ'}</button><button type="button" className="secondary-button" disabled={uploading} onClick={() => setPortraitsOpen(true)}><UserRound size={13} />ПОРТРЕТ</button>{profile.avatar_url && <button type="button" className="text-button" disabled={uploading} onClick={() => void changePhoto(null)} aria-label="Зураг устгах"><Trash2 size={13} /></button>}</div></div><div className="profile-identity"><div className="eyebrow left-eye">{profile.is_verified ? i18n.account.verifiedAccount : i18n.account.verificationRequired} <span className={profile.is_verified ? 'verified-led' : 'unverified-led'} /></div><h1>{profile.display_name}</h1><div className="profile-shop-row">{profile.player_no && <span className="chip profile-id">ID #{profile.player_no}</span>}<TitleBadge titleKey={profile.title_key} items={shopItems} /><CoinCount value={profile.coins ?? null} /><button type="button" className="text-button" onClick={onShop}><ShoppingBag size={13} /> ДЭЛГҮҮР</button></div><p>{i18n.account.memberSince} {formatDate(profile.created_at)} · {profile.registration_method === 'email' ? i18n.account.emailAccount : i18n.account.phoneAccount}</p></div></div>
-      {loadError && <div className="account-inline-error">{loadError}</div>}
-      {message && <div className="account-inline-success"><Check size={13} /> {message}</div>}
-      <div className="profile-data-grid"><Stat value={profile.total_matches} label={i18n.account.matches} /><Stat value={profile.wins} label={i18n.account.wins} /><Stat value={profile.losses} label={i18n.account.losses} /><Stat value={`${profile.win_rate.toFixed(1)}%`} label={i18n.account.winRate} />
+      <section className="profile-showcase" aria-label="Аватар ба цол">
+        <Avatar name={profile.display_name} color={profile.avatar_key} url={profile.avatar_url} frame={profile.frame_key} className="account-avatar" />
+        {profile.title_key && <TitleBadge titleKey={profile.title_key} items={shopItems} size="hero" />}
+        {!profile.title_key && <button type="button" className="profile-title-empty" onClick={onShop}><Sparkles size={12} /> ЦОЛ СОНГОХ</button>}
+      </section>
+      <div className="profile-main">
+        <div className={`profile-identity-row ${nameplate(profile.nameplate_key).className} ${rowBorderClass(profile.border_key)}`} style={nameplate(profile.nameplate_key).style}><RowBorder borderKey={profile.border_key} /><div className="profile-identity"><div className="eyebrow left-eye">{profile.is_verified ? i18n.account.verifiedAccount : i18n.account.verificationRequired} <span className={profile.is_verified ? 'verified-led' : 'unverified-led'} /></div><h1>{profile.display_name}</h1><div className="profile-shop-row">{profile.player_no && <span className="chip profile-id">ID #{profile.player_no}</span>}<CoinCount value={profile.coins ?? null} /><button type="button" className="text-button" onClick={onShop}><ShoppingBag size={13} /> ДЭЛГҮҮР</button></div><p>{i18n.account.memberSince} {formatDate(profile.created_at)} · {profile.registration_method === 'email' ? i18n.account.emailAccount : i18n.account.phoneAccount}</p></div></div>
+        {loadError && <div className="account-inline-error">{loadError}</div>}
+        {message && <div className="account-inline-success"><Check size={13} /> {message}</div>}
+        <div className="profile-data-grid"><Stat value={profile.total_matches} label={i18n.account.matches} /><Stat value={profile.wins} label={i18n.account.wins} /><Stat value={profile.losses} label={i18n.account.losses} /><Stat value={`${profile.win_rate.toFixed(1)}%`} label={i18n.account.winRate} />
+        </div>
+        <input ref={fileInput} type="file" accept="image/*" hidden onChange={(event) => { const file = event.target.files?.[0] ?? null; event.target.value = ''; if (file) void changePhoto(file); }} />
+        {editing ? <form className="profile-edit-form" onSubmit={saveProfile}><label className="auth-field"><span>{i18n.account.displayNameLabel}</span><input value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={24} /></label>{error && <p className="form-error" role="alert">{error}</p>}<div className="account-actions"><button type="button" className="secondary-button" onClick={() => { setEditing(false); setError(''); }}>{i18n.account.cancel}</button><button type="submit" className="primary-button" disabled={saving}>{saving ? 'ХАДГАЛЖ БАЙНА…' : i18n.account.saveProfile} <Check size={14} /></button></div></form>
+          : <div className="profile-footer">
+            <div className="profile-photo-actions" role="group" aria-label="Профайл зураг">
+              <button type="button" className="secondary-button" disabled={uploading} onClick={() => fileInput.current?.click()}>{uploading ? <LoaderCircle size={13} className="voice-spinner" /> : <Camera size={13} />}{uploading ? 'ХУУЛЖ БАЙНА…' : 'ЗУРАГ ОРУУЛАХ'}</button>
+              <button type="button" className="secondary-button" disabled={uploading} onClick={() => setPortraitsOpen(true)}><UserRound size={13} />ПОРТРЕТ</button>
+              {profile.avatar_url && <button type="button" className="text-button" disabled={uploading} onClick={() => void changePhoto(null)} aria-label="Зураг устгах" title="Зураг устгах"><Trash2 size={13} /></button>}
+            </div>
+            <button className="secondary-button" onClick={() => { setEditing(true); setMessage(''); }}>{i18n.account.editProfile} <ChevronRight size={14} /></button>
+          </div>}
+        <p className="profile-note"><Shield size={11} /> {i18n.account.profileNote}</p>
       </div>
-      {editing ? <form className="profile-edit-form" onSubmit={saveProfile}><label className="auth-field"><span>{i18n.account.displayNameLabel}</span><input value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={24} /></label>{error && <p className="form-error" role="alert">{error}</p>}<div className="account-actions"><button type="button" className="secondary-button" onClick={() => { setEditing(false); setError(''); }}>{i18n.account.cancel}</button><button type="submit" className="primary-button" disabled={saving}>{saving ? 'ХАДГАЛЖ БАЙНА…' : i18n.account.saveProfile} <Check size={14} /></button></div></form> : <div className="profile-footer"><span><Shield size={13} /> {i18n.account.profileNote}</span><button className="secondary-button" onClick={() => { setEditing(true); setMessage(''); }}>{i18n.account.editProfile} <ChevronRight size={14} /></button></div>}
     </div>}
     {portraitsOpen && profile && <div className="game-modal-backdrop" onClick={() => setPortraitsOpen(false)}>
       <section className="game-modal portrait-picker" role="dialog" aria-modal="true" aria-labelledby="portrait-title" onClick={(event) => event.stopPropagation()}>
@@ -87,7 +104,7 @@ export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, o
           <span className="avatar has-photo" style={{ backgroundImage: `url("${portrait.url}")` }} role="img" aria-label={portrait.label} />
           <small>{portrait.label}</small>{profile.avatar_url === portrait.url && <i><Check size={12} /></i>}
         </button>)}</div>
-        <p>Сонгосон зураг тань лобби, тоглоомын ширээн дээр бусдад харагдана. Өөрийн зургаа «ЗУРАГ» товчоор оруулж болно.</p>
+        <p>Сонгосон зураг тань лобби, тоглоомын ширээн дээр бусдад харагдана. Өөрийн зургаа «ЗУРАГ ОРУУЛАХ» товчоор оруулж болно.</p>
       </section>
     </div>}
   </div>;

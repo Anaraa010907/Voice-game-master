@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, Bot, Check, Coins, Flag, Gift, Send, ShoppingBag, Sparkles, Trophy, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, Bot, Check, Coins, Crown, Flag, Gem, Gift, Landmark, Search, Send, ShoppingBag, Sparkles, Trophy, UserPlus, VenetianMask, X } from 'lucide-react';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
 import { supabase } from './supabaseClient';
 import type { NotifyFn, RoomSeat } from './multiplayer';
@@ -65,9 +65,23 @@ export function CoinCount({ value, className = '' }: { value: number | null; cla
 }
 
 /** A player's shop title, in gold. */
-export function TitleBadge({ titleKey, items }: { titleKey?: string | null; items: ShopItem[] }) {
+/** Each title has its own colours and emblem (see .title-tier-* in theme.css). */
+const TITLE_ICONS: Record<string, typeof Sparkles> = {
+  'title-legend': Crown, 'title-don': Gem, 'title-tycoon': Landmark, 'title-detective': Search, 'title-shadow': VenetianMask,
+};
+const ICON_SIZE = { sm: 11, lg: 14, hero: 17 } as const;
+
+/** A title as an ornate plaque: emblem, name in metal letters, and a gleam that runs across it. */
+export function TitlePlaque({ titleKey, name, size = 'sm' }: { titleKey: string; name: string; size?: 'sm' | 'lg' | 'hero' }) {
+  const Icon = TITLE_ICONS[titleKey] ?? Sparkles;
+  return <span className={`title-badge is-${size} title-tier-${titleKey.replace(/^title-/, '')}`} title={name}>
+    <i className="tb-emblem" aria-hidden="true"><Icon size={ICON_SIZE[size]} /></i><span className="tb-name">{name}</span>
+  </span>;
+}
+
+export function TitleBadge({ titleKey, items, size = 'sm' }: { titleKey?: string | null; items: ShopItem[]; size?: 'sm' | 'lg' | 'hero' }) {
   const title = titleKey ? items.find((item) => item.key === titleKey) : null;
-  return title ? <span className="title-badge"><Sparkles size={10} />{title.name}</span> : null;
+  return title ? <TitlePlaque titleKey={title.key} name={title.name} size={size} /> : null;
 }
 
 /* ---------- live gifts at the table ---------- */
@@ -244,7 +258,7 @@ export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, not
         </Avatar>
         <div className="pcard-name">
           <h2>{name}{isMe && <small>ЧИ</small>}</h2>
-          <TitleBadge titleKey={card?.title_key} items={items} />
+          <TitleBadge titleKey={card?.title_key} items={items} size="lg" />
           {card && <span className="pcard-rank"><Trophy size={11} /> {RANK_LABEL[card.rank_name] ?? card.rank_name} · {card.rank_points} оноо</span>}
           {isBot && <span className="pcard-rank">Бот тоглогч · дасгалын ширээнд</span>}
         </div>
@@ -367,7 +381,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
             <button type="button" className="shop-visual" onClick={() => setPreview(item)} aria-label={`${item.name} харах`}>
               {item.kind === 'frame' && <Avatar name={me?.display_name ?? 'Би'} color={me?.avatar_key ?? 'rose'} url={me?.avatar_url} frame={item.key} className="shop-avatar" />}
               {item.kind === 'gift' && <span className="gift-icon is-floating">{item.icon}</span>}
-              {item.kind === 'title' && <span className="title-badge is-large"><Sparkles size={12} />{item.name}</span>}
+              {item.kind === 'title' && <TitlePlaque titleKey={item.key} name={item.name} size="lg" />}
               {item.kind === 'nameplate' && <PlatePreview plateKey={item.key} me={me} />}
               {item.kind === 'border' && <PlatePreview plateKey={me?.nameplate_key ?? null} borderKey={item.key} me={me} />}
             </button>
@@ -389,7 +403,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
       <section className="game-modal shop-preview" role="dialog" aria-modal="true" aria-label={preview.name} onClick={(event) => event.stopPropagation()}>
         {preview.kind === 'frame' && <Avatar name={me?.display_name ?? 'Би'} color={me?.avatar_key ?? 'rose'} url={me?.avatar_url} frame={preview.key} className="shop-avatar is-preview" />}
         {preview.kind === 'gift' && <div className="gift-preview"><div className="gift-burst" aria-hidden="true">{Array.from({ length: 12 }, (_, index) => <i key={index} style={{ ['--i' as string]: index }} />)}</div><div className="gift-big">{preview.icon}</div></div>}
-        {preview.kind === 'title' && <span className="title-badge is-large"><Sparkles size={14} />{preview.name}</span>}
+        {preview.kind === 'title' && <TitlePlaque titleKey={preview.key} name={preview.name} size="hero" />}
         {preview.kind === 'nameplate' && <PlatePreview plateKey={preview.key} me={me} large />}
         {preview.kind === 'border' && <PlatePreview plateKey={me?.nameplate_key ?? null} borderKey={preview.key} me={me} large />}
         <h2>{preview.name}</h2><p>{preview.description}</p>

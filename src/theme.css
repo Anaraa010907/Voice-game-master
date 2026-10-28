@@ -729,6 +729,80 @@
   box-shadow: 0 0 0 3px rgba(0, 0, 0, .6), 0 0 26px rgba(210, 176, 115, .35);
 }
 
+/* The profile is two columns: a showcase with the big framed avatar and the title plaque,
+ * and the details (name, stats, photo and edit buttons) beside it. */
+.viewport .game-frame .profile-body {
+  display: grid;
+  grid-template-columns: minmax(210px, 33%) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+}
+.viewport .game-frame .profile-showcase {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 10px 10px 16px;
+  border: 1px solid var(--gold-line);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(226, 192, 132, .2), transparent 58%),
+    linear-gradient(180deg, rgba(22, 21, 28, .94), rgba(8, 9, 14, .96));
+  box-shadow: var(--panel-shadow), inset 0 0 40px rgba(0, 0, 0, .55);
+  overflow: hidden;
+}
+.viewport .game-frame .profile-showcase::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: 150%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: conic-gradient(from 0deg, transparent 0 8%, rgba(255, 220, 150, .07) 10% 14%, transparent 16% 33%, rgba(255, 220, 150, .06) 35% 39%, transparent 41% 58%, rgba(255, 220, 150, .07) 60% 64%, transparent 66% 83%, rgba(255, 220, 150, .06) 85% 89%, transparent 91%);
+  animation: frame-spin 40s linear infinite;
+  pointer-events: none;
+}
+.viewport .game-frame .profile-showcase { --av: clamp(86px, 31svh, 210px); }
+.viewport .game-frame .profile-showcase .account-avatar { width: var(--av); height: var(--av); margin: 14px; font-size: calc(var(--av) * .36); }
+.viewport .game-frame .profile-showcase .account-avatar.has-frame { margin: calc(var(--av) * .2); border-color: transparent; }
+.viewport .game-frame .profile-showcase .account-avatar:has(> .is-painted) { margin: calc(var(--av) * .42) 0 calc(var(--av) * .37); }
+.viewport .game-frame .profile-showcase .title-badge { max-width: 100%; }
+.viewport .game-frame .profile-title-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  border: 1px dashed rgba(226, 192, 132, .5);
+  border-radius: 999px;
+  background: rgba(10, 11, 16, .6);
+  color: #cbb48a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+}
+.viewport .game-frame .profile-main { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 9px; }
+.viewport .game-frame .profile-main .profile-identity-row { display: flex; align-items: center; min-height: 118px; padding: 12px 16px; }
+.viewport .game-frame .profile-main .profile-identity { flex: 1; min-width: 0; }
+.viewport .game-frame .profile-main .profile-identity h1 { margin: 4px 0 6px; }
+.viewport .game-frame .profile-main .profile-footer { flex-wrap: wrap; padding: 7px 10px; }
+.viewport .game-frame .profile-main .profile-photo-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.viewport .game-frame .profile-main .profile-footer .secondary-button { height: 30px; padding: 0 11px; display: inline-flex; align-items: center; gap: 6px; font-size: 10px; white-space: nowrap; }
+.viewport .game-frame .profile-main .profile-footer .text-button { height: 30px; padding: 0 8px; }
+.viewport .game-frame .profile-note { display: flex; align-items: center; gap: 6px; margin: 0; padding: 0 4px; color: #8c868b; font-size: 9px; }
+.viewport .game-frame .profile-note svg { flex: none; color: #b49a68; }
+@media (max-height: 380px), (max-width: 760px) {
+  .viewport .game-frame .profile-body { grid-template-columns: minmax(176px, 31%) minmax(0, 1fr); gap: 9px; }
+  .viewport .game-frame .profile-showcase { gap: 9px; padding: 6px 6px 12px; }
+  .viewport .game-frame .profile-showcase .title-badge.is-hero { --tb-h: 34px; --tb-font: 13.5px; --tb-pad: 15px; --tb-notch: 11px; }
+  .viewport .game-frame .profile-main { gap: 7px; }
+  .viewport .game-frame .profile-main .profile-identity-row { padding: 9px 12px; }
+  .viewport .game-frame .profile-main .profile-footer .secondary-button { height: 27px; padding: 0 8px; font-size: 9px; }
+}
+
 .viewport .game-frame .account-stat {
   border: 1px solid var(--gold-line);
   border-radius: 10px;
@@ -2427,12 +2501,10 @@
 @keyframes frame-spin { to { transform: rotate(1turn); } }
 @keyframes frame-spin-back { to { transform: rotate(-1turn); } }
 @keyframes frame-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
-@keyframes frame-twinkle { 0% { opacity: .2; } 100% { opacity: 1; } }
-@keyframes frame-flicker { 0% { opacity: .65; } 100% { opacity: 1; } }
 @keyframes frame-hue { to { filter: hue-rotate(360deg); } }
 
 .frame-gold .avatar-frame::before { background: conic-gradient(#8f6d3c, #f1d79a, #fffaf0, #d2b073, #8f6d3c, #f1d79a, #8f6d3c); }
-.frame-gold .avatar-frame::after { box-shadow: 0 0 9px 1px rgba(241, 215, 154, .55); animation: frame-pulse 2.4s ease-in-out infinite; }
+.frame-gold .avatar-frame::after { box-shadow: 0 0 9px 1px rgba(241, 215, 154, .55); }
 
 .frame-neon .avatar-frame::before { background: conic-gradient(#00f0ff, #ff2bd6, #7b5cff, #00f0ff, #ff2bd6, #00f0ff); animation-duration: 2.2s; }
 .frame-neon .avatar-frame::after { animation: neon-glow 1.6s ease-in-out infinite alternate; }
@@ -2443,15 +2515,7 @@
 
 .frame-ice .avatar-frame::before { background: conic-gradient(#e8fbff, #7fd3ff, #ffffff, #4aa3d4, #c9f1ff, #e8fbff); animation-duration: 6s; }
 .frame-ice .avatar-frame::after {
-  inset: -6%;
-  background:
-    radial-gradient(circle at 14% 24%, #fff 0 1.6px, transparent 2.6px),
-    radial-gradient(circle at 86% 30%, #fff 0 1.3px, transparent 2.3px),
-    radial-gradient(circle at 72% 90%, #e6fbff 0 1.6px, transparent 2.6px),
-    radial-gradient(circle at 22% 84%, #fff 0 1.1px, transparent 2px),
-    radial-gradient(circle at 50% 2%, #fff 0 1.3px, transparent 2.3px);
   box-shadow: 0 0 9px rgba(127, 211, 255, .55);
-  animation: frame-twinkle 1.4s ease-in-out infinite alternate;
 }
 
 .frame-fire .avatar-frame::before { background: conic-gradient(#ff3d00, #ffb300, #ff6d00, #ffd54f, #ff3d00, #ff8f00, #ff3d00); animation-duration: 1.6s; }
@@ -2461,7 +2525,7 @@
   -webkit-mask: radial-gradient(closest-side, transparent 74%, #000 84%, transparent 100%);
   mask: radial-gradient(closest-side, transparent 74%, #000 84%, transparent 100%);
   filter: blur(1.5px);
-  animation: frame-spin-back 2.1s linear infinite, frame-flicker .35s ease-in-out infinite alternate;
+  animation: frame-spin-back 2.1s linear infinite;
 }
 
 .frame-blood .avatar-frame::before { background: conic-gradient(#3a050c, #b8303f, #ff5a6a, #6e1622, #3a050c, #b8303f, #3a050c); animation-duration: 5s; }
@@ -2484,15 +2548,92 @@
     radial-gradient(circle at 50% 97%, #fff 0 1.8px, transparent 3px),
     radial-gradient(circle at 3% 50%, #fff6c8 0 1.5px, transparent 2.6px);
   box-shadow: 0 0 11px rgba(255, 209, 102, .55);
-  animation: frame-spin-back 4s linear infinite, frame-twinkle .9s ease-in-out infinite alternate;
+  animation: frame-spin-back 4s linear infinite;
 }
 
 /* ---------- Coins, titles, tappable players ---------- */
 
 .coin-count { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border: 1px solid rgba(255, 209, 102, .45); border-radius: 999px; background: rgba(60, 44, 10, .55); color: #ffd979; font-size: 11px; font-weight: 700; white-space: nowrap; }
 .coin-count.is-big { padding: 4px 12px; font-size: 13px; }
-.title-badge { display: inline-flex; align-items: center; gap: 4px; color: var(--gold-bright); font-family: var(--display); font-style: italic; font-size: 12px; letter-spacing: .3px; text-shadow: 0 0 10px rgba(241, 215, 154, .35); }
-.title-badge.is-large { font-size: 17px; }
+/* Titles: an ornate plaque with a medallion, metal letters and a gleam that runs across it.
+ * Each title has its own metal and enamel (title-tier-*); "Домогт тоглогч" gets a flowing border. */
+.title-badge {
+  --tb-hi: #fff4cf; --tb-mid: #e3b660; --tb-lo: #8a5a1c;
+  --tb-bg1: #2a1d0c; --tb-bg2: #120c05; --tb-glow: rgba(255, 196, 90, .45);
+  --tb-h: 22px; --tb-pad: 11px; --tb-font: 10.5px; --tb-notch: 7px; --tb-edge: 1.5px;
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: var(--tb-h);
+  padding: 0 calc(var(--tb-pad) + 2px) 0 calc(var(--tb-notch) - 1px);
+  filter: drop-shadow(0 0 5px var(--tb-glow));
+  vertical-align: middle;
+}
+.title-badge::before,
+.title-badge::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  clip-path: polygon(var(--tb-notch) 0, calc(100% - var(--tb-notch)) 0, 100% 50%, calc(100% - var(--tb-notch)) 100%, var(--tb-notch) 100%, 0 50%);
+}
+.title-badge::before { inset: 0; background: linear-gradient(180deg, var(--tb-hi), var(--tb-mid) 45%, var(--tb-lo)); }
+.title-badge::after {
+  inset: var(--tb-edge);
+  background:
+    linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, .2) 48%, rgba(255, 255, 255, .05) 54%, transparent 62%) 160% 0 / 260% 100% no-repeat,
+    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, .12), transparent 60%),
+    linear-gradient(180deg, var(--tb-bg1), var(--tb-bg2));
+  animation: tb-gleam 4.2s ease-in-out infinite;
+}
+@keyframes tb-gleam { 0%, 30% { background-position: 160% 0, 0 0, 0 0; } 75%, 100% { background-position: -60% 0, 0 0, 0 0; } }
+.title-badge .tb-emblem {
+  all: unset;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: calc(var(--tb-h) - 6px);
+  height: calc(var(--tb-h) - 6px);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--tb-hi), var(--tb-mid) 55%, var(--tb-lo));
+  color: var(--tb-bg2);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .45), 0 0 6px var(--tb-glow);
+}
+.title-badge .tb-emblem svg { width: 62%; height: 62%; stroke-width: 2.4; }
+.title-badge .tb-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--display);
+  font-size: var(--tb-font);
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  line-height: 1.25;
+  color: transparent;
+  background: linear-gradient(180deg, #fff 0%, var(--tb-hi) 25%, var(--tb-mid) 60%, var(--tb-lo) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .85));
+}
+.title-badge.is-lg { --tb-h: 30px; --tb-pad: 15px; --tb-font: 13px; --tb-notch: 10px; --tb-edge: 2px; gap: 8px; }
+.title-badge.is-hero { --tb-h: 40px; --tb-pad: 20px; --tb-font: 16.5px; --tb-notch: 14px; --tb-edge: 2px; gap: 10px; filter: drop-shadow(0 0 9px var(--tb-glow)) drop-shadow(0 4px 10px rgba(0, 0, 0, .6)); }
+.title-badge.is-hero .tb-emblem { box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .5), 0 0 10px var(--tb-glow); }
+
+.title-tier-legend { --tb-bg1: #3d1352; --tb-bg2: #1b0712; --tb-glow: rgba(255, 160, 60, .65); }
+.title-tier-legend::before {
+  background: linear-gradient(90deg, #fff1c4, #ffb347, #ff5e3a, #c04cff, #ffb347, #fff1c4) 0 0 / 300% 100%;
+  animation: tb-flow 3.5s linear infinite;
+}
+@keyframes tb-flow { to { background-position: 300% 0; } }
+.title-tier-don { --tb-bg1: #4d0e16; --tb-bg2: #1a0508; --tb-glow: rgba(230, 70, 80, .5); }
+.title-tier-tycoon { --tb-bg1: #0f3d2c; --tb-bg2: #04140e; --tb-glow: rgba(90, 210, 150, .45); }
+.title-tier-detective { --tb-hi: #f6f9ff; --tb-mid: #aebccd; --tb-lo: #4d5a6b; --tb-bg1: #12253f; --tb-bg2: #070d18; --tb-glow: rgba(120, 170, 255, .45); }
+.title-tier-shadow { --tb-hi: #f1e8ff; --tb-mid: #a993cc; --tb-lo: #4a3a63; --tb-bg1: #221636; --tb-bg2: #0b0712; --tb-glow: rgba(165, 120, 235, .45); }
+@media (prefers-reduced-motion: reduce) { .title-badge::before, .title-badge::after { animation: none; } }
 .viewport .game-frame :is(.player-card.is-tappable, .mono-player.is-tappable) { cursor: pointer; }
 .viewport .game-frame .mono-player.is-tappable:active, .viewport .game-frame .player-card.is-tappable:active { filter: brightness(1.15); }
 .game-player-card.is-locked { cursor: pointer; }
@@ -2523,7 +2664,7 @@
 
 .viewport .game-frame .pcard-close { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; min-height: 0; }
 .pcard-hero { display: flex; align-items: center; gap: 16px; padding-right: 28px; }
-.viewport .game-frame .pcard-avatar { width: 64px; height: 64px; font-size: 22px; flex: none; margin: 6px; }
+.viewport .game-frame .pcard-avatar { width: 80px; height: 80px; font-size: 26px; flex: none; margin: 6px; }
 .pcard-name { min-width: 0; display: grid; gap: 3px; }
 .viewport .game-frame .pcard-name h2 { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 22px; line-height: 1.1; overflow-wrap: anywhere; }
 .pcard-name h2 small { padding: 1px 6px; border: 1px solid var(--gold-line); border-radius: 999px; color: var(--gold); font-family: inherit; font-size: 9px; letter-spacing: 1px; }
@@ -2668,7 +2809,12 @@
 .shop-card > small { min-height: 26px; color: #8f8a8e; font-size: 9.5px; line-height: 1.35; }
 .viewport .game-frame .shop-visual { display: grid; place-items: center; width: 100%; height: 78px; border: 0; background: radial-gradient(circle, rgba(210, 176, 115, .12), transparent 65%); }
 .viewport .game-frame .shop-avatar { width: 52px; height: 52px; font-size: 18px; }
-.viewport .game-frame .shop-avatar.is-preview { width: 110px; height: 110px; font-size: 36px; margin: 18px auto 8px; }
+.viewport .game-frame .shop-avatar.is-preview { width: 130px; height: 130px; font-size: 42px; margin: 26px auto 18px; }
+.shop-grid.kind-frame { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
+.shop-grid.kind-title { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+.viewport .game-frame .shop-grid.kind-title .shop-visual { grid-template-columns: minmax(0, 1fr); justify-items: center; padding: 0 6px; }
+.viewport .game-frame .shop-grid.kind-frame .shop-visual { height: 152px; background: radial-gradient(circle, rgba(210, 176, 115, .16), transparent 62%); }
+.viewport .game-frame .shop-grid.kind-frame .shop-avatar { width: 82px; height: 82px; font-size: 28px; }
 .gift-icon.is-floating { font-size: 40px; animation: gift-float 2.6s ease-in-out infinite; }
 @keyframes gift-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px) rotate(-4deg); } }
 .shop-price { display: inline-flex; align-items: center; gap: 4px; color: #ffd979; font-size: 12px; font-weight: 700; }
@@ -2686,66 +2832,262 @@
   .shop-grid { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 7px; }
   .viewport .game-frame .shop-visual { height: 64px; }
   .viewport .game-frame .shop-avatar { width: 44px; height: 44px; }
+  .shop-grid.kind-frame { grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); }
+  .viewport .game-frame .shop-grid.kind-frame .shop-visual { height: 136px; }
+  .viewport .game-frame .shop-grid.kind-frame .shop-avatar { width: 74px; height: 74px; }
+  .viewport .game-frame .shop-avatar.is-preview { width: 112px; height: 112px; }
   .viewport .game-frame .pcard { gap: 8px; padding: 12px 14px; }
-  .viewport .game-frame .pcard-avatar { width: 54px; height: 54px; }
+  .viewport .game-frame .pcard-avatar { width: 66px; height: 66px; }
   .pcard-stats b { font-size: 16px; }
 }
 
 /* Painted frames (images): the picture's hole is half its width, so it is drawn 1.8× the avatar,
- * leaving the ring just over the avatar's edge. A soft aura breathes and a few sparks twinkle. */
+ * leaving the ring just over the avatar's edge. A soft aura breathes in the frame's own colour. */
 .avatar-frame.is-painted {
   inset: -40%;
   background: center / contain no-repeat;
-  animation: frame-aura 3.2s ease-in-out infinite;
+  animation: frame-aura 4s ease-in-out infinite;
 }
-.avatar-frame.is-painted::before { display: none; }
-.avatar-frame.is-painted::after {
-  inset: 12%;
-  background:
-    radial-gradient(circle at 18% 30%, #fff 0 1.4px, transparent 2.6px),
-    radial-gradient(circle at 84% 22%, #f3dcff 0 1.6px, transparent 2.8px),
-    radial-gradient(circle at 88% 74%, #fff 0 1.2px, transparent 2.4px),
-    radial-gradient(circle at 26% 86%, #f3dcff 0 1.4px, transparent 2.6px);
-  animation: frame-twinkle 1.3s ease-in-out infinite alternate;
-}
-/* Each painted frame breathes in its own colour (--aura); purple by default. */
+.avatar-frame.is-painted::before, .avatar-frame.is-painted::after { display: none; }
 @keyframes frame-aura {
   0%, 100% { filter: drop-shadow(0 0 2px var(--aura-dim, rgba(190, 90, 255, .4))); }
-  50% { filter: drop-shadow(0 0 8px var(--aura, rgba(205, 120, 255, .9))); }
+  50% { filter: drop-shadow(0 0 7px var(--aura, rgba(205, 120, 255, .85))); }
 }
-.frame-butterfly .avatar-frame.is-painted { animation-duration: 2.6s; }
 .frame-eagle-crown { --aura: rgba(255, 196, 90, .9); --aura-dim: rgba(200, 40, 50, .45); }
 .frame-gold-skull { --aura: rgba(255, 200, 100, .85); --aura-dim: rgba(160, 110, 40, .4); }
-.frame-fire-dragon, .frame-twin-serpent { --aura: rgba(255, 90, 20, .95); --aura-dim: rgba(220, 30, 10, .5); }
-.frame-fire-dragon .avatar-frame.is-painted, .frame-twin-serpent .avatar-frame.is-painted { animation-duration: 1.4s; }
 .frame-mafia-city { --aura: rgba(255, 190, 90, .75); --aura-dim: rgba(60, 90, 180, .4); }
 .frame-ice-butterfly { --aura: rgba(110, 190, 255, .95); --aura-dim: rgba(60, 120, 255, .45); }
-:is(.frame-eagle-crown, .frame-gold-skull, .frame-mafia-city) .avatar-frame.is-painted::after {
-  background:
-    radial-gradient(circle at 18% 30%, #fff 0 1.4px, transparent 2.6px),
-    radial-gradient(circle at 84% 22%, #ffe9b0 0 1.6px, transparent 2.8px),
-    radial-gradient(circle at 88% 74%, #fff 0 1.2px, transparent 2.4px),
-    radial-gradient(circle at 26% 86%, #ffe9b0 0 1.4px, transparent 2.6px);
-}
-:is(.frame-fire-dragon, .frame-twin-serpent) .avatar-frame.is-painted::after {
-  background:
-    radial-gradient(circle at 20% 24%, #ffd27a 0 1.6px, transparent 2.8px),
-    radial-gradient(circle at 80% 18%, #ff9a3c 0 1.4px, transparent 2.6px),
-    radial-gradient(circle at 90% 70%, #ffd27a 0 1.4px, transparent 2.6px),
-    radial-gradient(circle at 14% 78%, #ff9a3c 0 1.6px, transparent 2.8px);
-  animation-duration: .7s;
-}
-.frame-ice-butterfly .avatar-frame.is-painted::after {
-  background:
-    radial-gradient(circle at 18% 30%, #fff 0 1.4px, transparent 2.6px),
-    radial-gradient(circle at 84% 22%, #cdeeff 0 1.6px, transparent 2.8px),
-    radial-gradient(circle at 88% 74%, #fff 0 1.2px, transparent 2.4px),
-    radial-gradient(circle at 26% 86%, #cdeeff 0 1.4px, transparent 2.6px);
+/* Fire frames glow unevenly and upward, like a real blaze. */
+:is(.frame-fire-dragon, .frame-twin-serpent) .avatar-frame.is-painted { animation: frame-aura-fire 1.7s linear infinite; }
+@keyframes frame-aura-fire {
+  0%, 100% { filter: drop-shadow(0 -1px 3px rgba(255, 80, 10, .65)); }
+  22% { filter: drop-shadow(0 -3px 7px rgba(255, 130, 20, .95)); }
+  41% { filter: drop-shadow(0 -2px 4px rgba(255, 60, 0, .75)); }
+  68% { filter: drop-shadow(0 -4px 8px rgba(255, 160, 40, .95)); }
+  84% { filter: drop-shadow(0 -2px 5px rgba(255, 90, 10, .8)); }
 }
 /* In tight rows (lobby seats, game cards, board rows) the painted frame is drawn smaller so it stays inside the row. */
 .viewport .game-frame :is(.player-card, .mono-player, .game-player-card, .results-player) .avatar-frame.is-painted { inset: -24%; }
+
+/* ---------- Frame motion: every frame moves in its own way ----------
+ * Particles are <i class="fx fx-KIND"> inside .avatar-frame (see FRAME_FX in Avatar.tsx). The frame box
+ * is a size container, so 1cqw is 1% of the frame and the motion scales with the avatar. */
+.avatar-frame { container-type: size; }
+.avatar .avatar-frame > i.fx {
+  all: unset;
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: calc(var(--s, 3) * 1cqw);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  pointer-events: none;
+  opacity: 0;
+  animation-duration: var(--dur, 3s);
+  animation-delay: var(--delay, 0s);
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+.avatar .avatar-frame > i.fx::before { content: ''; position: absolute; inset: 0; }
+
+/* Fire: embers fly up off the flames. */
+.avatar .avatar-frame > i.fx-ember {
+  border-radius: 50%;
+  background: radial-gradient(circle, #fffbe0 0 18%, #ffc24a 36%, rgba(255, 96, 0, .6) 56%, transparent 72%);
+  animation-name: fx-rise;
+  animation-timing-function: ease-out;
+}
+@keyframes fx-rise {
+  0% { transform: translate(0, 0) scale(.5); opacity: 0; }
+  12% { transform: translate(calc(var(--sway) * .2cqw), calc(var(--rise) * -.1cqw)) scale(1); opacity: 1; }
+  55% { transform: translate(calc(var(--sway) * -.4cqw), calc(var(--rise) * -.55cqw)) scale(.8); opacity: .9; }
+  100% { transform: translate(calc(var(--sway) * 1cqw), calc(var(--rise) * -1cqw)) scale(.25); opacity: 0; }
+}
+/* Fire: a bright copy of the painted flames licks upward and fades, again and again. */
+.avatar .avatar-frame > i.fx-flame {
+  left: 0; top: 0; width: 100%; height: 100%;
+  translate: none;
+  background: var(--frame-img) center / contain no-repeat;
+  filter: brightness(1.7) saturate(1.5);
+  -webkit-mask: radial-gradient(closest-side, transparent 70%, #000 84%);
+  mask: radial-gradient(closest-side, transparent 70%, #000 84%);
+  transform-origin: 50% 75%;
+  animation-name: fx-flame;
+  animation-timing-function: ease-out;
+}
+@keyframes fx-flame {
+  0% { transform: translateY(0) scale(1); opacity: 0; }
+  30% { opacity: .55; }
+  100% { transform: translateY(-7cqw) scale(1.04, 1.1); opacity: 0; }
+}
+
+/* Snow, petals, gold dust: drift down the outside of the ring, swaying side to side. */
+.avatar .avatar-frame > :is(i.fx-snow, i.fx-petal, i.fx-dust) { animation-name: fx-fall; animation-timing-function: ease-in-out; }
+@keyframes fx-fall {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+  12% { opacity: 1; }
+  30% { transform: translate(calc(var(--sway) * 1cqw), calc(var(--fall) * .3cqw)) rotate(110deg); }
+  65% { transform: translate(calc(var(--sway) * -.8cqw), calc(var(--fall) * .65cqw)) rotate(230deg); opacity: .95; }
+  100% { transform: translate(calc(var(--sway) * .3cqw), calc(var(--fall) * 1cqw)) rotate(360deg); opacity: 0; }
+}
+.avatar .avatar-frame > i.fx-snow { border-radius: 50%; background: radial-gradient(circle, #fff 0 24%, rgba(214, 240, 255, .85) 40%, transparent 70%); }
+.avatar .avatar-frame > i.fx-snow:nth-of-type(2n) {
+  width: calc(var(--s) * 1.7cqw);
+  border-radius: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-10 -10 20 20'%3E%3Cg stroke='%23fff' stroke-width='1.4' stroke-linecap='round' fill='none'%3E%3Cpath id='a' d='M0-9V9M-2.6-6.6 0-4l2.6-2.6M-2.6 6.6 0 4l2.6 2.6'/%3E%3Cuse href='%23a' transform='rotate(60)'/%3E%3Cuse href='%23a' transform='rotate(120)'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat;
+  filter: drop-shadow(0 0 2px #8fd4ff);
+}
+.avatar .avatar-frame > i.fx-dust { border-radius: 50%; background: radial-gradient(circle, #fffbe8 0 22%, #ffd36b 44%, transparent 70%); }
+.frame-butterfly .avatar-frame > i.fx-dust { background: radial-gradient(circle, #fff 0 22%, #e8adff 44%, transparent 70%); }
+.avatar .avatar-frame > i.fx-petal::before {
+  inset: 0 14%;
+  border-radius: 80% 0 80% 0;
+  background: linear-gradient(135deg, #ffd6ff 0%, #c74cec 45%, #5c0d84 100%);
+  box-shadow: 0 0 3px rgba(220, 120, 255, .6);
+  animation: fx-tumble 1.7s ease-in-out var(--delay) infinite alternate;
+}
+@keyframes fx-tumble {
+  0% { transform: rotateX(0deg) rotateY(15deg) rotate(0deg); }
+  50% { transform: rotateX(65deg) rotateY(-30deg) rotate(25deg); }
+  100% { transform: rotateX(10deg) rotateY(65deg) rotate(-20deg); }
+}
+
+/* Butterflies: flap their wings and flutter in loops beside the frame. */
+.avatar .avatar-frame > i.fx-butterfly { opacity: 1; aspect-ratio: 40 / 32; animation-name: fx-flutter; animation-timing-function: ease-in-out; }
+.avatar .avatar-frame > i.fx-butterfly::before {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 32'%3E%3Cdefs%3E%3CradialGradient id='w' r='.75'%3E%3Cstop offset='0' stop-color='%23fff'/%3E%3Cstop offset='.3' stop-color='%23ecc2ff'/%3E%3Cstop offset='.75' stop-color='%239a3cf0'/%3E%3Cstop offset='1' stop-color='%234b0f86'/%3E%3C/radialGradient%3E%3C/defs%3E%3Cg fill='url(%23w)' stroke='%23f7e0ff' stroke-width='.6'%3E%3Cpath d='M20 15C16 4 6-1 2.5 3.5 0 7 3 13 9 15.5 4.5 17 2.5 22 5 26.5 8 31 15 27 19.5 18Z'/%3E%3Cpath d='M20 15C24 4 34-1 37.5 3.5 40 7 37 13 31 15.5 35.5 17 37.5 22 35 26.5 32 31 25 27 20.5 18Z'/%3E%3C/g%3E%3Cpath d='M20 9v15' stroke='%232b0a45' stroke-width='1.6' stroke-linecap='round'/%3E%3Cpath d='M20 9.5 17.5 5M20 9.5 22.5 5' stroke='%232b0a45' stroke-width='.7' fill='none'/%3E%3C/svg%3E") center / contain no-repeat;
+  filter: drop-shadow(0 0 3px rgba(214, 140, 255, .9));
+  animation: fx-flap .3s ease-in-out infinite alternate;
+}
+.frame-ice-butterfly .avatar-frame > i.fx-butterfly::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 32'%3E%3Cdefs%3E%3CradialGradient id='w' r='.75'%3E%3Cstop offset='0' stop-color='%23fff'/%3E%3Cstop offset='.3' stop-color='%23c6edff'/%3E%3Cstop offset='.75' stop-color='%233a9bff'/%3E%3Cstop offset='1' stop-color='%230d3d8f'/%3E%3C/radialGradient%3E%3C/defs%3E%3Cg fill='url(%23w)' stroke='%23e2f6ff' stroke-width='.6'%3E%3Cpath d='M20 15C16 4 6-1 2.5 3.5 0 7 3 13 9 15.5 4.5 17 2.5 22 5 26.5 8 31 15 27 19.5 18Z'/%3E%3Cpath d='M20 15C24 4 34-1 37.5 3.5 40 7 37 13 31 15.5 35.5 17 37.5 22 35 26.5 32 31 25 27 20.5 18Z'/%3E%3C/g%3E%3Cpath d='M20 9v15' stroke='%23082448' stroke-width='1.6' stroke-linecap='round'/%3E%3Cpath d='M20 9.5 17.5 5M20 9.5 22.5 5' stroke='%23082448' stroke-width='.7' fill='none'/%3E%3C/svg%3E");
+  filter: drop-shadow(0 0 3px rgba(120, 200, 255, .95));
+}
+@keyframes fx-flap { 0% { transform: scaleX(1); } 100% { transform: scaleX(.3); } }
+@keyframes fx-flutter {
+  0% { transform: translate(0, 0) rotate(-12deg); }
+  20% { transform: translate(calc(var(--w) * .9cqw), calc(var(--w) * -.5cqw)) rotate(14deg); }
+  40% { transform: translate(calc(var(--w) * .4cqw), calc(var(--w) * -1.1cqw)) rotate(-4deg); }
+  60% { transform: translate(calc(var(--w) * -.6cqw), calc(var(--w) * -.7cqw)) rotate(-22deg); }
+  80% { transform: translate(calc(var(--w) * -.8cqw), calc(var(--w) * .1cqw)) rotate(-6deg); }
+  100% { transform: translate(0, 0) rotate(-12deg); }
+}
+
+/* Blood moon: drops gather under the ring and fall. */
+.avatar .avatar-frame > i.fx-drip {
+  aspect-ratio: 3 / 4;
+  border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+  background: radial-gradient(circle at 38% 34%, #ffb3ba 0 14%, #d0182b 42%, #6b0010 100%);
+  transform-origin: 50% 0;
+  animation-name: fx-drip;
+  animation-timing-function: ease-in;
+}
+@keyframes fx-drip {
+  0% { transform: translateY(0) scale(.15); opacity: 0; }
+  12% { opacity: 1; }
+  50% { transform: translateY(calc(var(--fall) * .06cqw)) scale(.9, 1.15); }
+  62% { transform: translateY(calc(var(--fall) * .16cqw)) scale(.85, 1.35); opacity: 1; }
+  100% { transform: translateY(calc(var(--fall) * 1cqw)) scale(.7, 1.6); opacity: 0; }
+}
+
+/* Eagle crown: golden feathers float down from the wings, rocking as they fall. */
+.avatar .avatar-frame > i.fx-feather {
+  width: calc(var(--s) * .45cqw);
+  aspect-ratio: 14 / 40;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 40'%3E%3Cdefs%3E%3ClinearGradient id='f' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%238a5a16'/%3E%3Cstop offset='.5' stop-color='%23ffe3a0'/%3E%3Cstop offset='1' stop-color='%23b07a26'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath fill='url(%23f)' d='M7 1C12 8 13.5 18 11 27 9.5 32 8 35 7 39 6 35 4.5 32 3 27 .5 18 2 8 7 1Z'/%3E%3Cpath d='M7 4V39' stroke='%236b4410' stroke-width='.8'/%3E%3Cpath d='M7 12 3.5 9M7 17 3 14M7 22 3 19.5M7 12l3.5-3M7 17l4-3M7 22l4-2.5' stroke='%237a4f14' stroke-width='.5' fill='none'/%3E%3C/svg%3E") center / contain no-repeat;
+  filter: brightness(1.15) drop-shadow(0 0 2px rgba(255, 220, 140, .95)) drop-shadow(0 1px 1px rgba(0, 0, 0, .7));
+  animation-name: fx-feather;
+  animation-timing-function: ease-in-out;
+}
+@keyframes fx-feather {
+  0% { transform: translate(0, 0) rotate(-40deg); opacity: 0; }
+  10% { opacity: 1; }
+  25% { transform: translate(calc(var(--sway) * 1cqw), calc(var(--fall) * .22cqw)) rotate(35deg); }
+  50% { transform: translate(calc(var(--sway) * -.3cqw), calc(var(--fall) * .5cqw)) rotate(-35deg); }
+  75% { transform: translate(calc(var(--sway) * .8cqw), calc(var(--fall) * .76cqw)) rotate(30deg); opacity: .95; }
+  100% { transform: translate(calc(var(--sway) * -.1cqw), calc(var(--fall) * 1cqw)) rotate(-25deg); opacity: 0; }
+}
+
+/* Mafia city: smoke curls up from the cigar, the car's headlights glow and sweep. */
+.avatar .avatar-frame > i.fx-smoke {
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(232, 229, 242, .7) 0, rgba(195, 190, 210, .38) 40%, transparent 70%);
+  animation-name: fx-smoke;
+  animation-timing-function: ease-out;
+}
+@keyframes fx-smoke {
+  0% { transform: translate(0, 0) scale(.25); opacity: 0; }
+  15% { opacity: .85; }
+  55% { transform: translate(calc(var(--sway) * 1cqw), calc(var(--rise) * -.55cqw)) scale(1.3); opacity: .5; }
+  100% { transform: translate(calc(var(--sway) * -.5cqw), calc(var(--rise) * -1cqw)) scale(2.4); opacity: 0; }
+}
+.avatar .avatar-frame > i.fx-beam {
+  border-radius: 50%;
+  background: radial-gradient(circle, #fffdf0 0 6%, rgba(255, 220, 130, .6) 20%, transparent 58%);
+  animation-name: fx-headlight;
+  animation-timing-function: ease-in-out;
+}
+.avatar .avatar-frame > i.fx-beam::before {
+  inset: 46% -70%;
+  border-radius: 50%;
+  background: linear-gradient(90deg, transparent, rgba(255, 238, 190, .9), transparent);
+  animation: fx-flare var(--dur) ease-in-out var(--delay) infinite;
+}
+@keyframes fx-headlight { 0%, 100% { transform: scale(.8); opacity: .65; } 50% { transform: scale(1.12); opacity: 1; } }
+@keyframes fx-flare { 0%, 100% { transform: rotate(-12deg) scaleX(.7); } 50% { transform: rotate(10deg) scaleX(1.15); } }
+
+/* Gold skull: the eye sockets smoulder red. */
+.avatar .avatar-frame > i.fx-eye {
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffe9b0 0 12%, #ff3a2a 34%, rgba(255, 30, 0, .35) 52%, transparent 72%);
+  animation-name: fx-eye;
+  animation-timing-function: ease-in-out;
+}
+@keyframes fx-eye { 0%, 100% { transform: scale(.6); opacity: .3; } 50% { transform: scale(1.15); opacity: 1; } }
+
+/* Neon and royal rings: little stars ride around the ring. */
+.avatar .avatar-frame > i.fx-star {
+  left: 50%; top: 50%;
+  opacity: 1;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-10 -10 20 20'%3E%3Cpath fill='%23fff' d='M0-10C1-3 3-1 10 0 3 1 1 3 0 10-1 3-3 1-10 0-3-1-1-3 0-10Z'/%3E%3C/svg%3E") center / contain no-repeat;
+  filter: drop-shadow(0 0 3px #ffe9a8);
+  animation-name: fx-orbit;
+  animation-timing-function: linear;
+}
+.frame-neon .avatar-frame > i.fx-star { filter: drop-shadow(0 0 3px #00f0ff) drop-shadow(0 0 2px #ff2bd6); }
+@keyframes fx-orbit {
+  from { transform: rotate(var(--a)) translateX(calc(var(--orbit) * 1cqw)) rotate(0deg); }
+  to { transform: rotate(calc(var(--a) + 360deg)) translateX(calc(var(--orbit) * 1cqw)) rotate(540deg); }
+}
+
+/* Gold and jewels: a gleam of light runs across the painted metal now and then. */
+.avatar .avatar-frame > i.fx-glint {
+  left: 0; top: 0; width: 100%; height: 100%;
+  translate: none;
+  opacity: 1;
+  overflow: hidden;
+  -webkit-mask: var(--frame-img) center / contain no-repeat;
+  mask: var(--frame-img) center / contain no-repeat;
+}
+.avatar .avatar-frame > i.fx-glint::before {
+  inset: -10% auto -10% 0;
+  width: 13%;
+  background: linear-gradient(90deg, transparent, rgba(255, 249, 225, .7) 50%, transparent);
+  transform: translateX(-150%) skewX(-20deg);
+  animation: fx-glint var(--dur) ease-in-out var(--delay) infinite;
+}
+@keyframes fx-glint { 0%, 20% { transform: translateX(-200%) skewX(-20deg); } 64%, 100% { transform: translateX(900%) skewX(-20deg); } }
+
+/* Tight rows show fewer particles; reduced motion shows none. */
+.viewport .game-frame :is(.player-card, .mono-player, .game-player-card, .results-player, .friend-row) .avatar .avatar-frame > i.fx:nth-of-type(n+6) { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .avatar .avatar-frame > i.fx { display: none; }
+  .avatar-frame, .avatar-frame::before, .avatar-frame::after { animation: none !important; }
+}
 .viewport .game-frame .pcard-avatar.has-frame { margin: 14px; }
-.viewport .game-frame .shop-avatar.is-preview.has-frame { margin: 44px auto 40px; }
+.viewport .game-frame .pcard-avatar:has(> .is-painted) { margin: 22px 26px 22px 22px; }
+.viewport .game-frame .shop-avatar.is-preview.has-frame { margin: 30px auto 24px; }
+.viewport .game-frame .shop-avatar.is-preview:has(> .is-painted) { margin: 54px auto 48px; }
 
 /* ---------- Nameplates: a picture behind the player's name ----------
  * The art is drawn as a layer under the row's content; its decorated right side shows and the
@@ -2916,7 +3258,7 @@
 
 /* Gift picker: frames and nameplates */
 .gift-tabs { margin-top: -2px; }
-.viewport .game-frame .gift-grid .gift-frame-preview { width: 30px; height: 30px; margin: 6px 0 4px; font-size: 10px; }
+.viewport .game-frame .gift-grid .gift-frame-preview { width: 40px; height: 40px; margin: 10px 0 8px; font-size: 13px; }
 .viewport .game-frame .gift-grid .gift-frame-preview .avatar-frame.is-painted { inset: -34%; }
 .gift-plate-preview { display: block; width: 100%; height: 30px; border-radius: 6px; margin-bottom: 2px; }
 .gift-grid.kind-nameplate { grid-template-columns: repeat(2, minmax(0, 1fr)); }
