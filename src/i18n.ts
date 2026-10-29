@@ -491,6 +491,7 @@ export const translateMessage = (message: string): string => {
     'No attack came for the player you guarded.': 'Таны хамгаалсан хүн рүү энэ шөнө халдлага гараагүй.',
     'The Jester fooled the town and wins alone.': 'Алиа хотынхныг хуурч, ганцаараа яллаа!',
     'The Night has already begun.': 'Шөнө аль хэдийн эхэлсэн.',
+    'Nothing to wait for now.': 'Одоо хүлээх зүйл алга.',
   };
   if (map[message]) return map[message];
   const investigation = message.match(/^(.+) is (aligned with|not aligned with) the Mafia\.$/);

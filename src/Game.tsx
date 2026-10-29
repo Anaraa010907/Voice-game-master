@@ -175,6 +175,12 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, ranked 
     }
   };
   const hostSkip = () => { void send('tick', { skip: true }); };
+  // Ranked: no host skip. Each step ends when the clock runs out or when every living player taps done.
+  const people = game.players.filter((entry) => entry.alive && !entry.bot);
+  const doneCount = people.filter((entry) => (game.readyIds ?? []).includes(entry.id)).length;
+  const doneBar = ranked && !watching
+    ? <DoneBar alive={currentPlayer.alive} done={me.readyForNight} count={doneCount} total={people.length} busy={busy} onDone={() => { void send('done'); }} />
+    : null;
 
   const canChooseNightTarget = (target: PublicGamePlayer) => {
     if (!target.alive || !currentPlayer.alive || game.phase !== 'Night' || me.nightAction.submitted || !me.nightRole) return false;
@@ -221,9 +227,9 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, ranked 
           <div className="crime-stage-art" aria-hidden="true"><div className="crime-window" /><div className="crime-light" /><div className="crime-table" /></div>
           <div className="crime-stage-label"><span><i /> {roomName.toUpperCase()} · {roomCode}</span>{me.spectatorRoles && <span className="spectator-tag">АЖИГЛАГЧ · БҮХ ДҮР ХАРАГДАНА</span>}</div>
           {game.phase === 'Night' && <NightPanel round={game.round} player={currentPlayer} me={me} mafiaNames={mafiaNames} nameOf={nameOf} selectedName={nightSelection === null ? undefined : nameOf(nightSelection)} lockedName={me.nightAction.targetId === null ? undefined : nameOf(me.nightAction.targetId)} lastProtectedName={me.lastProtectedId === null ? undefined : nameOf(me.lastProtectedId)} busy={busy} onConfirm={confirmNight} onCancel={() => setNightSelection(null)} />}
-          {game.phase === 'Morning' && <MorningPanel round={game.round} report={game.morningReport} winner={game.winner} isHost={canSkip} busy={busy} onContinue={hostSkip} />}
-          {game.phase === 'Discussion' && <DiscussionPanel round={game.round} alive={currentPlayer.alive} watching={Boolean(watching)} isHost={canSkip} busy={busy} onVote={hostSkip} onPrivate={() => setPrivateOpen((open) => !open)} />}
-          {game.phase === 'Voting' && <VotingPanel game={game} me={me} alive={currentPlayer.alive} voteSelection={voteSelection} voteConfirmOpen={voteConfirmOpen} isHost={canSkip} busy={busy} nameOf={nameOf} onSkip={() => setVoteSelection('skip')} onReview={() => voteSelection === null ? onNotice(translateMessage('Choose a living player or Skip Vote.')) : setVoteConfirmOpen(true)} onSubmit={submitVote} onCancel={() => { setVoteConfirmOpen(false); setVoteSelection(null); }} onNext={hostSkip} onVerdict={giveVerdict} />}
+          {game.phase === 'Morning' && <MorningPanel round={game.round} report={game.morningReport} winner={game.winner} isHost={canSkip} busy={busy} onContinue={hostSkip} doneBar={doneBar} />}
+          {game.phase === 'Discussion' && <DiscussionPanel round={game.round} alive={currentPlayer.alive} watching={Boolean(watching)} isHost={canSkip} busy={busy} onVote={hostSkip} doneBar={doneBar} onPrivate={() => setPrivateOpen((open) => !open)} />}
+          {game.phase === 'Voting' && <VotingPanel game={game} me={me} alive={currentPlayer.alive} voteSelection={voteSelection} voteConfirmOpen={voteConfirmOpen} isHost={canSkip} busy={busy} nameOf={nameOf} onSkip={() => setVoteSelection('skip')} onReview={() => voteSelection === null ? onNotice(translateMessage('Choose a living player or Skip Vote.')) : setVoteConfirmOpen(true)} onSubmit={submitVote} onCancel={() => { setVoteConfirmOpen(false); setVoteSelection(null); }} onNext={hostSkip} doneBar={doneBar} onVerdict={giveVerdict} />}
           {quickOpen && <div className="quick-replies" aria-label="Хурдан хариулт">{QUICK_REPLIES.map((text) => <button type="button" key={text} onClick={() => quick.send(text)}>{text}</button>)}</div>}
         </section>
         <aside className="game-player-list game-player-list-right"><div className="game-list-heading">{i18n.game.stillInIt} <span>{String(living.length).padStart(2, '0')}</span></div>{rightPlayers.map(renderPlayer)}{!watching && <><MyRoleCard role={roleInfo(me.role)} dead={!currentPlayer.alive} onOpen={() => setCardOpen(true)} /><button className="private-info-button" onClick={() => setPrivateOpen((open) => !open)}><LockKeyhole size={13} /> {i18n.game.privateInfo}</button></>}</aside>
@@ -234,7 +240,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, ranked 
     {cardOpen && <RoleCardViewer role={roleInfo(me.role)} onClose={closeCard} />}
     {privateOpen && !watching && <PrivateInfoPanel player={currentPlayer} me={me} mafiaNames={mafiaNames} namesOf={namesOf} onClose={() => setPrivateOpen(false)} />}
     {leaveDialog && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="leave-game-title"><div className="modal-symbol"><ArrowLeft size={18} /></div><h2 id="leave-game-title">Тоглоомоос гарах уу?</h2><p>Гарвал та хасагдсанд тооцогдож, энэ тоглолтод буцаж орох боломжгүй.</p><div className="modal-actions"><button className="secondary-button" onClick={() => setLeaveDialog(false)}>ҮЛДЭХ</button><button className="primary-button" onClick={onLeave}>ТОГЛООМООС ГАРАХ</button></div></section></div>}
-    {settingsOpen && <div className="game-modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="game-modal game-settings-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title" onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setSettingsOpen(false)} aria-label="Тохиргоо хаах"><X size={16} /></button><div className="modal-symbol"><Settings size={18} /></div><h2 id="game-settings-title">Тоглоомын тохиргоо</h2><p>{ranked ? 'Рэйтинг тоглолт: үе шат бүр тогтмол цагаар явагдана, алгасах боломжгүй.' : 'Үе шат бүр цаг дуусахад автоматаар солигдоно. Өрөөний эзэн хүлээх үеийг алгасаж болно.'}</p><p className="rules-line">Дүрэм: {rulesSummary(game.settings)}</p><div className="setting-list modal-volume"><VolumeControls /></div><div className="modal-fullscreen"><FullscreenToggle fullscreen={fullscreen} /></div><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>ТОГЛООМ ҮРГЭЛЖЛҮҮЛЭХ</button></div></section></div>}
+    {settingsOpen && <div className="game-modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="game-modal game-settings-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title" onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setSettingsOpen(false)} aria-label="Тохиргоо хаах"><X size={16} /></button><div className="modal-symbol"><Settings size={18} /></div><h2 id="game-settings-title">Тоглоомын тохиргоо</h2><p>{ranked ? 'Рэйтинг тоглолт: үе шат цаг дуусахад, эсвэл бүх тоглогч «БОЛСОН» дарахад солигдоно.' : 'Үе шат бүр цаг дуусахад автоматаар солигдоно. Өрөөний эзэн хүлээх үеийг алгасаж болно.'}</p><p className="rules-line">Дүрэм: {rulesSummary(game.settings)}</p><div className="setting-list modal-volume"><VolumeControls /></div><div className="modal-fullscreen"><FullscreenToggle fullscreen={fullscreen} /></div><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>ТОГЛООМ ҮРГЭЛЖЛҮҮЛЭХ</button></div></section></div>}
   </div>);
 }
 
@@ -287,18 +293,25 @@ function NightPanel({ round, player, me, mafiaNames, nameOf, selectedName, locke
   </div>;
 }
 
-function MorningPanel({ round, report, winner, isHost, busy, onContinue }: { round: number; report: string; winner: PublicGameView['winner']; isHost: boolean; busy: boolean; onContinue: () => void }) {
+/** Ranked: "done" for the current step, with how many are done. The clock still ends it anyway. */
+function DoneBar({ alive, done, count, total, busy, onDone }: { alive: boolean; done: boolean; count: number; total: number; busy: boolean; onDone: () => void }) {
+  if (!alive) return <div className="action-locked done-bar"><Clock3 size={12} /> Цаг дуусахад эсвэл бүгд «БОЛСОН» дарахад үргэлжилнэ · {count}/{total}</div>;
+  if (done) return <div className="action-locked done-bar"><Check size={13} /> Та бэлэн · {count}/{total} · бусдыг хүлээж байна</div>;
+  return <div className="done-bar-row"><button className="primary-button done-button" disabled={busy} onClick={onDone}><Check size={14} /> БОЛСОН</button><span className="done-count">{count}/{total} бэлэн · бүгд дарвал дараагийн шат эхэлнэ</span></div>;
+}
+
+function MorningPanel({ round, report, winner, isHost, busy, onContinue, doneBar }: { round: number; report: string; winner: PublicGameView['winner']; isHost: boolean; busy: boolean; onContinue: () => void; doneBar?: ReactNode }) {
   const headline = report.includes('No Mafia attack') ? 'Шөнө тайван өнгөрлөө.' : report.includes('shotgun answered') ? 'Харанхуйд буун дуу гарав.' : report.includes('No one was eliminated') || report.includes('stopped') ? 'Халдлага няцаагдлаа.' : 'Хотод хохирогч гарлаа.';
-  return <div className="phase-panel morning-panel"><div className="morning-seal"><Sun size={21} /></div><div className="morning-kicker">ӨГЛӨӨНИЙ ТАЙЛАН · ЭЭЛЖ {round}</div><h2>{headline}</h2><p className="morning-report-text">{translateMessage(report)}</p><HostButton isHost={isHost} busy={busy} label={winner ? 'ҮР ДҮНГ ҮЗЭХ' : 'ХЭЛЭЛЦҮҮЛЭГ НЭЭХ'} onClick={onContinue} /></div>;
+  return <div className="phase-panel morning-panel"><div className="morning-seal"><Sun size={21} /></div><div className="morning-kicker">ӨГЛӨӨНИЙ ТАЙЛАН · ЭЭЛЖ {round}</div><h2>{headline}</h2><p className="morning-report-text">{translateMessage(report)}</p>{doneBar ?? <HostButton isHost={isHost} busy={busy} label={winner ? 'ҮР ДҮНГ ҮЗЭХ' : 'ХЭЛЭЛЦҮҮЛЭГ НЭЭХ'} onClick={onContinue} />}</div>;
 }
 
-function DiscussionPanel({ round, alive, isHost, busy, watching = false, onVote, onPrivate }: { round: number; alive: boolean; isHost: boolean; busy: boolean; watching?: boolean; onVote: () => void; onPrivate: () => void }) {
-  return <div className="phase-panel discussion-panel"><div className="discussion-head"><div><small>ӨДӨР {round} · ХЭЛЭЛЦҮҮЛЭГ</small><h2>Юу харсан бэ?</h2></div><Mic size={19} /></div><p>{watching ? 'Тоглогчид хэлэлцэж байна. Та админаар ажиглаж байгаа тул бүх дүр харагдана.' : alive ? 'Микрофоноо асаагаад сэжүүрээ хуваалцаарай. Хэн худлаа ярьж байна вэ?' : 'Та хасагдсан тул сонсох боломжтой, ярих боломжгүй.'}</p><div className="discussion-actions">{!watching && <button className="secondary-button" onClick={onPrivate}><LockKeyhole size={13} /> НУУЦ МЭДЭЭЛЭЛ</button>}{isHost ? <button className="primary-button" disabled={busy} onClick={onVote}>САНАЛ ХУРААЛТ НЭЭХ <Vote size={14} /></button> : <span className="discussion-wait">Цаг дуусахад санал хураалт эхэлнэ</span>}</div></div>;
+function DiscussionPanel({ round, alive, isHost, busy, watching = false, onVote, onPrivate, doneBar }: { round: number; alive: boolean; isHost: boolean; busy: boolean; watching?: boolean; onVote: () => void; onPrivate: () => void; doneBar?: ReactNode }) {
+  return <div className="phase-panel discussion-panel"><div className="discussion-head"><div><small>ӨДӨР {round} · ХЭЛЭЛЦҮҮЛЭГ</small><h2>Юу харсан бэ?</h2></div><Mic size={19} /></div><p>{watching ? 'Тоглогчид хэлэлцэж байна. Та админаар ажиглаж байгаа тул бүх дүр харагдана.' : alive ? 'Микрофоноо асаагаад сэжүүрээ хуваалцаарай. Хэн худлаа ярьж байна вэ?' : 'Та хасагдсан тул сонсох боломжтой, ярих боломжгүй.'}</p><div className="discussion-actions">{!watching && <button className="secondary-button" onClick={onPrivate}><LockKeyhole size={13} /> НУУЦ МЭДЭЭЛЭЛ</button>}{doneBar ? null : isHost ? <button className="primary-button" disabled={busy} onClick={onVote}>САНАЛ ХУРААЛТ НЭЭХ <Vote size={14} /></button> : <span className="discussion-wait">Цаг дуусахад санал хураалт эхэлнэ</span>}</div>{doneBar}</div>;
 }
 
-function VotingPanel({ game, me, alive, voteSelection, voteConfirmOpen, isHost, busy, nameOf, onSkip, onReview, onSubmit, onCancel, onNext, onVerdict }: {
+function VotingPanel({ game, me, alive, voteSelection, voteConfirmOpen, isHost, busy, nameOf, onSkip, onReview, onSubmit, onCancel, onNext, onVerdict, doneBar }: {
   game: PublicGameView; me: PrivateGameView; alive: boolean; voteSelection: VoteChoice; voteConfirmOpen: boolean; isHost: boolean; busy: boolean; nameOf: (id: number) => string | undefined;
-  onSkip: () => void; onReview: () => void; onSubmit: () => void; onCancel: () => void; onNext: () => void; onVerdict: (choice: 'guilty' | 'innocent') => void;
+  onSkip: () => void; onReview: () => void; onSubmit: () => void; onCancel: () => void; onNext: () => void; onVerdict: (choice: 'guilty' | 'innocent') => void; doneBar?: ReactNode;
 }) {
   if (game.trial && !game.votesRevealed) return <TrialPanel game={game} me={me} alive={alive} busy={busy} nameOf={nameOf} onVerdict={onVerdict} />;
   const totals = Object.entries(game.voteCounts).sort((left, right) => right[1] - left[1]);
@@ -318,7 +331,7 @@ function VotingPanel({ game, me, alive, voteSelection, voteConfirmOpen, isHost, 
       {game.trial && game.trial.guilty !== null
         ? <div className="vote-count-list verdict-count-list"><div><span>ГЭМТЭЙ</span><b>{game.trial.guilty}</b></div><div><span>ГЭМГҮЙ</span><b>{game.trial.innocent}</b></div></div>
         : <div className="vote-count-list">{totals.map(([key, count]) => <div key={key}><span>{key === 'skip' ? 'САНАЛ АЛГАСАХ' : nameOf(Number(key)) ?? 'Үл мэдэгдэх'}</span><b>{count}</b></div>)}</div>}
-      <HostButton isHost={isHost} busy={busy} label={game.winner ? 'ҮР ДҮНГ ҮЗЭХ' : 'ДАРААХ ШӨНӨ'} onClick={onNext} />
+      {doneBar ?? <HostButton isHost={isHost} busy={busy} label={game.winner ? 'ҮР ДҮНГ ҮЗЭХ' : 'ДАРААХ ШӨНӨ'} onClick={onNext} />}
     </>}
     {voteConfirmOpen && !game.votesRevealed && alive && !me.vote.submitted && <div className="vote-confirm-card"><div><small>САНАЛАА БАТЛАХ</small><p>{voteSelection === 'skip' ? 'Саналаа алгасах уу?' : `${selectedName ?? 'Энэ тоглогч'}-г хасах санал өгөх үү?`}</p></div><div><button className="secondary-button" onClick={onCancel}>БОЛИХ</button><button className="primary-button" disabled={busy} onClick={onSubmit}>САНАЛ ИЛГЭЭХ <Check size={13} /></button></div></div>}
   </div>;

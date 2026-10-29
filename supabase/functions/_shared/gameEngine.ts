@@ -132,8 +132,13 @@ export type GameEngineState = {
   history?: HistoryEntry[];
   /** Room rules for this match (older saved games: classic). */
   settings?: MafiaSettings;
-  /** Role Reveal: players who tapped "ready". The Night starts once every living person has. */
+  /**
+   * Players who tapped "done" in the current waiting step (role reveal, morning report, discussion,
+   * revealed ballot). Once every living person has, the step ends early. `readyStep` names the step
+   * the list belongs to, so it empties itself when the game moves on.
+   */
   readyIds?: number[];
+  readyStep?: string;
   winner: WinningTeam;
 };
 
@@ -275,18 +280,51 @@ export function createInitialGame(
   };
 }
 
-/** Role Reveal: a player has read their card. Bots are always ready. */
+/**
+ * The steps that only wait for people (nobody has to act): reading the role card, the morning
+ * report, the discussion and the revealed ballot. Each can end early once everyone is done.
+ */
+export function waitStep(state: Pick<GameEngineState, 'phase' | 'round' | 'votesRevealed'>): string | null {
+  if (state.phase === 'Role Reveal') return 'reveal';
+  if (state.phase === 'Morning') return `morning-${state.round}`;
+  if (state.phase === 'Discussion') return `discussion-${state.round}`;
+  if (state.phase === 'Voting' && state.votesRevealed) return `ballot-${state.round}`;
+  return null;
+}
+
+/** Who is done with the current waiting step. */
+export function readyNow(state: GameEngineState): number[] {
+  const step = waitStep(state);
+  if (!step) return [];
+  // Games saved before readyStep existed only ever waited at the role reveal.
+  if (state.readyStep === step || (state.readyStep === undefined && step === 'reveal')) return state.readyIds ?? [];
+  return [];
+}
+
+/** A living player is done with the current waiting step. Bots never hold anyone up. */
+export function markReady(state: GameEngineState, playerId: number): EngineResult {
+  const step = waitStep(state);
+  if (!step) return { state, error: 'Nothing to wait for now.' };
+  if (!state.publicPlayers.some((player) => player.id === playerId && player.alive)) return { state, error: 'Eliminated players cannot act.' };
+  const ready = readyNow(state);
+  if (ready.includes(playerId)) return { state };
+  return { state: { ...state, readyIds: [...ready, playerId], readyStep: step } };
+}
+
+export function allReady(state: GameEngineState): boolean {
+  if (!waitStep(state)) return false;
+  const ready = readyNow(state);
+  return state.publicPlayers.every((player) => !player.alive || player.bot || ready.includes(player.id));
+}
+
+/** Role Reveal: a player has read their card. */
 export function markRevealReady(state: GameEngineState, playerId: number): EngineResult {
   if (state.phase !== 'Role Reveal') return { state, error: 'The Night has already begun.' };
-  if (!state.publicPlayers.some((player) => player.id === playerId && player.alive)) return { state, error: 'Eliminated players cannot act.' };
-  const ready = state.readyIds ?? [];
-  if (ready.includes(playerId)) return { state };
-  return { state: { ...state, readyIds: [...ready, playerId] } };
+  return markReady(state, playerId);
 }
 
 export function allRevealReady(state: GameEngineState): boolean {
-  const ready = state.readyIds ?? [];
-  return state.phase === 'Role Reveal' && state.publicPlayers.every((player) => !player.alive || player.bot || ready.includes(player.id));
+  return state.phase === 'Role Reveal' && allReady(state);
 }
 
 export function getWinner(state: Pick<GameEngineState, 'publicPlayers' | 'privatePlayers'>): WinningTeam {
@@ -737,7 +775,7 @@ export function publicView(state: GameEngineState) {
       ? state.publicPlayers.map((player) => ({ ...player, voteStatus: player.voteStatus === 'revealed' ? 'hidden' as const : player.voteStatus, voteTargetId: null }))
       : state.publicPlayers,
     settings: state.settings ?? DEFAULT_MAFIA_SETTINGS,
-    readyIds: state.phase === 'Role Reveal' ? state.readyIds ?? [] : [],
+    readyIds: readyNow(state),
     morningReport: state.morningReport,
     publicEventLog: state.publicEventLog,
     voteCounts: state.votesRevealed || state.trial ? state.voteCounts : {},
@@ -780,7 +818,8 @@ export function privateView(state: GameEngineState, playerId: number) {
     lastProtectedId: secret.lastProtectedId,
     knownAlignment: secret.knownAlignment,
     shotgunSpent: secret.shotgunSpent,
-    readyForNight: (state.readyIds ?? []).includes(playerId),
+    /** Done with the current waiting step (the name dates from when only the role reveal waited). */
+    readyForNight: readyNow(state).includes(playerId),
     /** Night only, for the Mafia: which target each known teammate has locked (null = not yet). */
     teamTargets: state.phase === 'Night' && nightRoleOf(state, playerId) === 'Mafia'
       ? Object.fromEntries(secret.info.mafiaTeammateIds
@@ -1006,6 +1045,17 @@ export function runGameEngineSelfTests() {
   require(!allRevealReady(state), 'The Night waits for people who have not read their card.');
   for (const id of [1, 2, 3]) state = markRevealReady(state, id).state;
   require(allRevealReady(state) && privateView(state, 1)?.readyForNight === true, 'Everyone ready lets the Night start.');
+  // The same "done" works in the morning, the discussion and after the ballot, and resets each step.
+  const morning = { ...state, phase: 'Morning' as const, round: 2 };
+  require(!allReady(morning) && readyNow(morning).length === 0, 'Readiness does not carry over to the next step.');
+  let waiting: GameEngineState = morning;
+  for (const id of state.publicPlayers.filter((player) => player.alive && !player.bot).map((player) => player.id)) {
+    require(!allReady(waiting), 'The morning waits until everyone is done.');
+    waiting = markReady(waiting, id).state;
+  }
+  require(allReady(waiting), 'Everyone done ends the morning early.');
+  require(!allReady({ ...waiting, phase: 'Discussion' }), 'The discussion starts with nobody done.');
+  require(Boolean(markReady({ ...waiting, phase: 'Night' }, 1).error), 'Nobody can skip the Night by tapping done.');
 
   return 'Game engine self-tests passed.';
 }

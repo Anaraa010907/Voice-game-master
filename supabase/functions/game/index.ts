@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import {
-  MIN_PLAYERS, allNightActionsSubmitted, allRevealReady, allVerdictsSubmitted, allVotesSubmitted, createInitialGame, finishDay, markRevealReady,
+  MIN_PLAYERS, allNightActionsSubmitted, allReady, allVerdictsSubmitted, allVotesSubmitted, createInitialGame, finishDay, markReady, markRevealReady,
   openDiscussion, privateView, publicView, recordVerdict, recordVote, removePlayer, resolveNight, resolveTrial, resolveVoting, sanitizeMafiaSettings,
   startNight, startVoting, submitNightAction, type GameEngineState, type MafiaSettings, type Verdict, type VoteChoice,
 } from '../_shared/gameEngine.ts';
@@ -198,7 +198,8 @@ function advance(state: GameEngineState): GameEngineState {
 
 /** Skips waiting when everyone who must act already has. */
 function settle(state: GameEngineState): GameEngineState {
-  if (state.phase === 'Role Reveal' && allRevealReady(state)) return advance(state);
+  // Role card read, morning report, discussion, revealed ballot: everyone tapped done.
+  if (allReady(state)) return advance(state);
   if (state.phase === 'Night' && !state.nightResolved && allNightActionsSubmitted(state)) return advance(state);
   if (state.phase === 'Voting' && !state.votesRevealed && (state.trial ? allVerdictsSubmitted(state) : allVotesSubmitted(state))) return advance(state);
   return state;
@@ -623,6 +624,21 @@ class GameServer {
     return { ok: true };
   }
 
+  /** A player is done with the current waiting step; once everyone is, the game moves on. */
+  async done(body: Body) {
+    const roomCodeValue = code(body);
+    const { mine } = await this.requireSeat(roomCodeValue);
+    let failure = '';
+    await this.mutate(roomCodeValue, (state) => {
+      if (isBoard(state)) return state;
+      const result = markReady(state, mine.seat);
+      failure = result.error ?? '';
+      return result.error ? state : progress(result.state);
+    });
+    if (failure) throw new GameError(409, failure);
+    return { ok: true };
+  }
+
   /** Host-only, in the lobby: the room rules (Mafia: mode, roles, reveal, ballots, discussion; board game: round limit). */
   async settings(body: Body) {
     const roomCodeValue = code(body);
@@ -899,6 +915,7 @@ Deno.serve(async (request) => {
       vote: (value) => server.vote(value),
       verdict: (value) => server.verdict(value),
       'reveal-ready': (value) => server.revealReady(value),
+      done: (value) => server.done(value),
       settings: (value) => server.settings(value),
       tick: (value) => server.tick(value),
       rematch: (value) => server.rematch(value),

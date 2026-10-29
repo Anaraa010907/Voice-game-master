@@ -3818,3 +3818,9 @@ button.rank-chip:active { filter: brightness(1.15); }
   .viewport .game-frame .game-settings-modal > p { margin: 4px 0 6px; }
 }
 .chat-expiry-note { display: flex; justify-content: center; align-items: center; gap: 5px; margin: 2px auto 6px; padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, .05); color: #8f8a8e; font-size: 9.5px; list-style: none; }
+
+/* Ranked Mafia: "done" for the current step. */
+.viewport .game-frame .done-bar-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 10px; margin-top: 10px; }
+.viewport .game-frame .done-button { min-height: 32px; padding: 0 16px; display: inline-flex; align-items: center; gap: 6px; }
+.viewport .game-frame .done-count { color: #a9a29a; font-size: 9.5px; }
+.viewport .game-frame .done-bar { justify-content: center; }

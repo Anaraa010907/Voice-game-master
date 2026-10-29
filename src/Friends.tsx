@@ -6,8 +6,12 @@ import type { NotifyFn } from './multiplayer';
 import { GAMES, type GameType } from './games';
 import { GiftPicker, sendFriendGift, useShopItems } from './Social';
 
-/** How long a chat message lives (the server deletes older ones). */
-const CHAT_LIFETIME_MS = 24 * 3600_000;
+/** Chat lifetime (the server deletes on the same rule): a read message lasts a day after it was read, an unread one five days. */
+const READ_LIFETIME_MS = 24 * 3600_000;
+const UNREAD_LIFETIME_MS = 5 * 24 * 3600_000;
+const stillKept = (message: { read_at?: string | null; created_at: string }, now: number) => message.read_at
+  ? now - Date.parse(message.read_at) < READ_LIFETIME_MS
+  : now - Date.parse(message.created_at) < UNREAD_LIFETIME_MS;
 
 /* ---------- data ---------- */
 
@@ -18,7 +22,7 @@ export type Friend = {
   unread: number; last_message_at: string | null;
 };
 type Found = { id: string; display_name: string; avatar_url: string | null; avatar_key: string; frame_key: string | null; player_no: number; relation: 'friend' | 'incoming' | 'outgoing' | null };
-type Message = { id: number; sender: string; recipient: string; kind: 'text' | 'invite' | 'gift'; body: string; room_code: string | null; gift_key: string | null; created_at: string };
+type Message = { id: number; sender: string; recipient: string; kind: 'text' | 'invite' | 'gift'; body: string; room_code: string | null; gift_key: string | null; created_at: string; read_at?: string | null };
 
 const failure = (error: { message?: string } | null | undefined) => error?.message || 'Алдаа гарлаа. Дахин оролдоно уу.';
 
@@ -213,12 +217,13 @@ function FriendPanel({ friend, userId, myRoom, notify, onJoinRoom, onRead, onRem
 
   const load = useCallback(async () => {
     if (!supabase) return;
-    const { data } = await supabase.from('direct_messages').select('id,sender,recipient,kind,body,room_code,gift_key,created_at')
+    const { data } = await supabase.from('direct_messages').select('id,sender,recipient,kind,body,room_code,gift_key,created_at,read_at')
       .or(`and(sender.eq.${userId},recipient.eq.${friend.id}),and(sender.eq.${friend.id},recipient.eq.${userId})`)
-      // Chats last one day; the server removes older messages every hour.
-      .gte('created_at', new Date(Date.now() - CHAT_LIFETIME_MS).toISOString())
+      .gte('created_at', new Date(Date.now() - UNREAD_LIFETIME_MS).toISOString())
       .order('created_at', { ascending: false }).limit(80);
-    setMessages(((data as Message[] | null) ?? []).reverse());
+    // The server clears expired messages hourly; hide any that expired since.
+    const now = Date.now();
+    setMessages(((data as Message[] | null) ?? []).filter((message) => stillKept(message, now)).reverse());
     await supabase.rpc('mark_chat_read', { p_from: friend.id });
     onRead();
   }, [friend.id, userId, onRead]);
@@ -293,7 +298,7 @@ function FriendPanel({ friend, userId, myRoom, notify, onJoinRoom, onRead, onRem
           }); }} />}</div>
       : <>
         <ol className="chat-list" ref={list} aria-live="polite">
-          <li className="chat-expiry-note"><Clock3 size={11} /> Мессежүүд 24 цагийн дараа автоматаар устна.</li>
+          <li className="chat-expiry-note"><Clock3 size={11} /> Уншсан мессеж 1 хоногийн, уншаагүй мессеж 5 хоногийн дараа устна.</li>
           {messages.length === 0 && <li className="chat-empty">Мэндчилгээ бичээд эхлээрэй 👋</li>}
           {messages.map((message) => {
             const mine = message.sender === userId;
