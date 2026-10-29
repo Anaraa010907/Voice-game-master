@@ -28,6 +28,18 @@ function gridCell(index: number): CSSProperties {
   return { gridRow: 11 - (index - 30), gridColumn: 1 };
 }
 
+/** Where a tile's pieces stand: on its inner edge, or for a corner on its inner corner. */
+function tokenEdge(index: number) {
+  if (index === 0) return 'corner-br';
+  if (index === 10) return 'corner-bl';
+  if (index === 20) return 'corner-tl';
+  if (index === 30) return 'corner-tr';
+  if (index < 10) return 'top';
+  if (index < 20) return 'right';
+  if (index < 30) return 'bottom';
+  return 'left';
+}
+
 function side(index: number) {
   if (index % 10 === 0) return 'corner';
   if (index < 10) return 'top';
@@ -175,7 +187,7 @@ export default function MonopolyScreen({ roomCode, roomName, userId, isHost, sea
               {tile.kind === 'parking' && rules.vacationCash && <span className="mono-tile-price mono-pot-amount">{money(pot)}</span>}
             </span>
             {tileState.houses > 0 && <span className="mono-houses" aria-label={`${tileState.houses} барилга`}>{tileState.houses === 5 ? <Building2 size={10} /> : Array.from({ length: tileState.houses }, (_, index) => <i key={index} />)}</span>}
-            {here.length > 0 && <span className={`mono-tokens count-${Math.min(here.length, 4)}`}>{here.map((entry) => <Token key={entry.id} player={entry} color={ownerColor(game, entry.id, mySeat)} isTurn={entry.id === turnId && game.phase !== 'finished'} isMe={entry.id === mySeat} />)}</span>}
+            {here.length > 0 && <span className={`mono-tokens tokens-${tokenEdge(tile.id)} count-${Math.min(here.length, 4)}`}>{here.map((entry) => <Token key={entry.id} player={entry} color={ownerColor(game, entry.id, mySeat)} isTurn={entry.id === turnId && game.phase !== 'finished'} isMe={entry.id === mySeat} />)}</span>}
           </button>;
         })}
 

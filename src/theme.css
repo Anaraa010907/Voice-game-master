@@ -3893,12 +3893,11 @@ button.rank-chip:active { filter: brightness(1.15); }
 .viewport .game-frame .mono-center {
   grid-row: 2 / 11;
   grid-column: 2 / 11;
-  padding: 10px 14px 10px;
+  /* Room for the pieces that lean in from the track. */
+  padding: 20px 22px;
 }
 
-/* Each tile is a size container so the pieces scale with it. */
 .viewport .game-frame .mono-tile {
-  container-type: size;
   border-radius: 2px;
 }
 
@@ -3958,56 +3957,87 @@ button.rank-chip:active { filter: brightness(1.15); }
   font-weight: 800;
 }
 
-/* Pieces: big round profile pictures standing right on the tile, as on Richup. */
+/* Pieces: round profile pictures standing on the tile's inner edge, mostly over the board centre,
+   so the place name stays readable. Players sharing a tile get smaller pieces that overlap less. */
 .viewport .game-frame .mono-tile > .mono-tokens {
-  --size: clamp(20px, 7vh, 40px);
-  inset: 0;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  --size: clamp(18px, 7.4vh, 38px);
+  /* How much of a piece stands inside its tile; the rest leans over the board centre. */
+  --in: .3;
+  inset: auto;
   z-index: 3;
   flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  transform: none;
 }
 
-@supports (width: 1cqmin) {
-  .viewport .game-frame .mono-tile > .mono-tokens {
-    --size: clamp(20px, 112cqmin, 46px);
-  }
-}
+.viewport .game-frame .mono-tile > .mono-tokens.tokens-top { top: calc(100% - var(--size) * var(--in)); left: 50%; transform: translateX(-50%); }
+.viewport .game-frame .mono-tile > .mono-tokens.tokens-bottom { bottom: calc(100% - var(--size) * var(--in)); left: 50%; transform: translateX(-50%); }
+.viewport .game-frame .mono-tile > .mono-tokens.tokens-left { left: calc(100% - var(--size) * var(--in)); top: 50%; transform: translateY(-50%); }
+.viewport .game-frame .mono-tile > .mono-tokens.tokens-right { right: calc(100% - var(--size) * var(--in)); top: 50%; transform: translateY(-50%); flex-direction: row-reverse; }
 
-.viewport .game-frame .mono-tile > .mono-tokens.count-2 { --k: .88; }
-.viewport .game-frame .mono-tile > .mono-tokens.count-3 { --k: .76; }
-.viewport .game-frame .mono-tile > .mono-tokens.count-4 { --k: .68; }
+.viewport .game-frame .mono-tile > .mono-tokens.tokens-corner-br { top: calc(100% - var(--size) * var(--in)); left: calc(100% - var(--size) * var(--in)); }
+.viewport .game-frame .mono-tile > .mono-tokens.tokens-corner-bl { top: calc(100% - var(--size) * var(--in)); right: calc(100% - var(--size) * var(--in)); flex-direction: row-reverse; }
+.viewport .game-frame .mono-tile > .mono-tokens.tokens-corner-tl { bottom: calc(100% - var(--size) * var(--in)); right: calc(100% - var(--size) * var(--in)); flex-direction: row-reverse; }
+.viewport .game-frame .mono-tile > .mono-tokens.tokens-corner-tr { bottom: calc(100% - var(--size) * var(--in)); left: calc(100% - var(--size) * var(--in)); }
+
+.viewport .game-frame .mono-tile > .mono-tokens.count-2 { --k: .8; }
+.viewport .game-frame .mono-tile > .mono-tokens.count-3 { --k: .7; }
+.viewport .game-frame .mono-tile > .mono-tokens.count-4 { --k: .62; }
 
 .viewport .game-frame .mono-tile .mono-token {
   width: calc(var(--size) * var(--k, 1));
   height: calc(var(--size) * var(--k, 1));
-  border: 2.5px solid var(--owner, #d2b073);
+  border: 2px solid var(--owner, #d2b073);
   font-size: calc(var(--size) * var(--k, 1) * .42);
-  box-shadow: 0 0 0 1.5px #0b0e14, 0 4px 10px #000e;
+  box-shadow: 0 0 0 1.5px #0b0e14, 0 3px 8px #000e;
   animation: mono-land .5s cubic-bezier(.2, .9, .3, 1.25) both;
 }
 
-.viewport .game-frame .mono-tile .mono-token + .mono-token,
-.viewport .game-frame .mono-tile.is-right .mono-token + .mono-token {
+.viewport .game-frame .mono-tile .mono-token + .mono-token {
   margin-right: 0;
-  margin-left: calc(var(--size) * var(--k, 1) * -.42);
+  margin-left: calc(var(--size) * var(--k, 1) * -.2);
+}
+
+.viewport .game-frame .mono-tile > :is(.tokens-right, .tokens-corner-bl, .tokens-corner-tl) .mono-token + .mono-token {
+  margin-left: 0;
+  margin-right: calc(var(--size) * var(--k, 1) * -.2);
 }
 
 .viewport .game-frame .mono-tile .mono-token.is-turn {
-  width: calc(var(--size) * var(--k, 1) * 1.16);
-  height: calc(var(--size) * var(--k, 1) * 1.16);
+  width: calc(var(--size) * var(--k, 1) * 1.14);
+  height: calc(var(--size) * var(--k, 1) * 1.14);
   border-color: #f1d79a;
-  box-shadow: 0 0 0 2px #0b0e14, 0 0 14px 4px #f1d79acc, 0 4px 10px #000e;
+  box-shadow: 0 0 0 2px #0b0e14, 0 0 12px 3px #f1d79acc, 0 3px 8px #000e;
   animation: mono-land .5s cubic-bezier(.2, .9, .3, 1.25) both, mono-hop 1s .5s ease-in-out infinite;
 }
 
 .viewport .game-frame .mono-tile .mono-token.is-me:not(.is-turn) {
-  box-shadow: 0 0 0 1.5px #0b0e14, 0 0 0 3.5px #ff5ca866, 0 4px 10px #000e;
+  box-shadow: 0 0 0 1.5px #0b0e14, 0 0 0 3px #ff5ca866, 0 3px 8px #000e;
+}
+
+/* With a piece on it, a side tile moves its name to the outer side, away from the piece. */
+.viewport .game-frame .mono-tile.is-left.has-tokens .mono-tile-body {
+  align-items: flex-start;
+  padding-left: 3px;
+  text-align: left;
+}
+
+.viewport .game-frame .mono-tile.is-right.has-tokens .mono-tile-body {
+  align-items: flex-end;
+  padding-right: 3px;
+  text-align: right;
+}
+
+/* Top and bottom tiles keep their name on the outer edge too. */
+.viewport .game-frame .mono-tile.is-top.has-tokens .mono-tile-body {
+  justify-content: flex-start;
+  padding-top: 2px;
+}
+
+.viewport .game-frame .mono-tile.is-bottom.has-tokens .mono-tile-body {
+  justify-content: flex-end;
+  padding-bottom: 2px;
 }
 
 @keyframes mono-land {
