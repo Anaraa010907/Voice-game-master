@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Check, ChevronRight, Crown, Flame, History, Lock, Swords, Trophy } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Clock3, Coins, Crown, Flame, Gift, History, Lock, Swords, Trophy } from 'lucide-react';
 import Avatar from './Avatar';
 import RankEmblem, { RANK_GAME_LABEL } from './RankEmblem';
 import { TitleBadge, TitlePlaque, useFreeShopping, useShopItems } from './Social';
@@ -12,6 +12,9 @@ export type RankRow = {
   game_type: RankGame; points: number; peak_points: number; matches: number; wins: number; losses: number; current_streak: number; best_streak: number;
 };
 type Leader = { id: string; display_name: string; avatar_url: string | null; avatar_key: string; frame_key: string | null; title_key: string | null; player_no: number | null; points: number; wins: number; matches: number; level: number };
+/** What a rank pays the first time it is reached; item_key null = prize still to be chosen. */
+type RankReward = { game_type: RankGame; level: number; coins: number; item_key: string | null };
+
 type Change = { id: number; outcome: 'win' | 'loss'; rp_change: number; rank_points_after: number; previous_rank: string; new_rank: string; created_at: string };
 
 const EMPTY: RankRow = { game_type: 'mafia', points: 0, peak_points: 0, matches: 0, wins: 0, losses: 0, current_streak: 0, best_streak: 0 };
@@ -67,7 +70,13 @@ export function RanksScreen({ userId, onBack, onPlay, notify, initialGame = 'maf
   const [leaders, setLeaders] = useState<Leader[] | null>(null);
   const [history, setHistory] = useState<Change[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [rewards, setRewards] = useState<RankReward[]>([]);
   const ladder = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!supabase) return;
+    void Promise.resolve(supabase.from('rank_rewards').select('game_type,level,coins,item_key')).then(({ data }) => setRewards((data as RankReward[] | null) ?? []));
+  }, []);
 
   const loadMine = useCallback(async () => {
     if (!supabase) return;
@@ -158,7 +167,7 @@ export function RanksScreen({ userId, onBack, onPlay, notify, initialGame = 'maf
             const worn = key !== null && wearing === key;
             return <div key={level} className={`rank-step ${reached ? 'is-reached' : has ? 'is-open' : 'is-locked'} ${info.level === level ? 'is-current' : ''}`}>
               <RankEmblem game={game} level={level} className="rank-step-emblem" />
-              <div className="rank-step-copy"><b>{RANK_NAMES[game][level - 1]}</b><small>{RANK_THRESHOLDS[level - 1]} оноо{info.level === level ? ' · ТА ЭНД' : ''}</small></div>
+              <div className="rank-step-copy"><b>{RANK_NAMES[game][level - 1]}</b><small>{RANK_THRESHOLDS[level - 1]} оноо{info.level === level ? ' · ТА ЭНД' : ''}</small>{level >= 2 && <RewardLine reward={rewards.find((entry) => entry.game_type === game && entry.level === level)} items={items} earned={rankInfo(game, row.peak_points).level >= level} />}</div>
               {key ? <TitlePlaque titleKey={key} name={RANK_NAMES[game][level - 1]} size="sm" /> : <span className="rank-step-none">Цолгүй</span>}
               {!key ? <span /> : has
                 ? worn
@@ -201,12 +210,23 @@ export function RanksScreen({ userId, onBack, onPlay, notify, initialGame = 'maf
   </div>;
 }
 
+/** A rank's prize: coins, and a nameplate or board that is still being chosen ("coming soon"). */
+function RewardLine({ reward, items, earned }: { reward?: RankReward; items: Array<{ key: string; name: string }>; earned: boolean }) {
+  if (!reward) return null;
+  const prize = reward.item_key ? items.find((item) => item.key === reward.item_key)?.name ?? reward.item_key : null;
+  return <span className={`rank-reward ${earned ? 'is-earned' : ''}`}>
+    {earned ? <Check size={11} /> : <Gift size={11} />}
+    <span className="rank-reward-coins"><Coins size={11} />+{reward.coins.toLocaleString('en-US')}</span>
+    {prize ? <span>· {prize}</span> : <span className="rank-reward-soon">· Нэрийн хавтан <Clock3 size={10} /> тун удахгүй</span>}
+  </span>;
+}
+
 /**
- * After a ranked game: how many points the player won or lost, and a new rank if they reached one.
- * Casual games have no rating change, so nothing shows.
+ * After a game: the coins it paid, and for a ranked game the points won or lost and any new rank.
  */
 export function RankResultBanner({ roomCode, userId }: { roomCode: string; userId: string }) {
   const [change, setChange] = useState<(Change & { game_type: RankGame }) | null>(null);
+  const [coins, setCoins] = useState<number | null>(null);
   useEffect(() => {
     if (!supabase) return;
     const client = supabase;
@@ -214,18 +234,25 @@ export function RankResultBanner({ roomCode, userId }: { roomCode: string; userI
     let tries = 0;
     const since = new Date(Date.now() - 2 * 60_000).toISOString();
     const look = async () => {
-      const { data } = await client.from('rating_changes').select('id,outcome,rp_change,rank_points_after,previous_rank,new_rank,created_at,game_type')
-        .eq('user_id', userId).eq('room_code', roomCode).gte('created_at', since).order('created_at', { ascending: false }).limit(1);
-      const found = (data as Array<Change & { game_type: RankGame }> | null)?.[0];
+      const [rated, paid] = await Promise.all([
+        client.from('rating_changes').select('id,outcome,rp_change,rank_points_after,previous_rank,new_rank,created_at,game_type')
+          .eq('user_id', userId).eq('room_code', roomCode).gte('created_at', since).order('created_at', { ascending: false }).limit(1),
+        client.from('match_records').select('coins_earned,processed_at')
+          .eq('user_id', userId).eq('room_code', roomCode).gte('processed_at', since).order('processed_at', { ascending: false }).limit(1),
+      ]);
       if (!active) return;
-      if (found) { setChange(found); if (Number(found.new_rank) > Number(found.previous_rank)) playSfx('reveal'); return; }
+      const found = (rated.data as Array<Change & { game_type: RankGame }> | null)?.[0];
+      const record = (paid.data as Array<{ coins_earned: number }> | null)?.[0];
+      if (record) setCoins(record.coins_earned ?? 0);
+      if (found) { setChange(found); if (Number(found.new_rank) > Number(found.previous_rank)) playSfx('reveal'); }
       tries += 1;
-      if (tries < 6) window.setTimeout(() => { void look(); }, 1500);
+      if ((!record || (!found && tries < 3)) && tries < 6) window.setTimeout(() => { void look(); }, 1500);
     };
     void look();
     return () => { active = false; };
   }, [roomCode, userId]);
-  if (!change) return null;
+  const coinChip = coins !== null && coins > 0 ? <span className="result-coins"><Coins size={13} />+{coins.toLocaleString('en-US')} зоос</span> : null;
+  if (!change) return coinChip ? <div className="rank-result is-coins" role="status">{coinChip}</div> : null;
   const game = change.game_type;
   const level = Number(change.new_rank) || 1;
   const promoted = level > (Number(change.previous_rank) || 1);
@@ -236,5 +263,6 @@ export function RankResultBanner({ roomCode, userId }: { roomCode: string; userI
       <b>{promoted ? RANK_NAMES[game][level - 1] : `${change.rp_change >= 0 ? '+' : ''}${change.rp_change} оноо`}</b>
       <i>{promoted ? `+${change.rp_change} оноо · ` : ''}{RANK_NAMES[game][level - 1]} · {change.rank_points_after} оноо</i>
     </span>
+    {coinChip}
   </div>;
 }

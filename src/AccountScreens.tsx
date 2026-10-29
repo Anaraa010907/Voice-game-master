@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useRef } from 'react';
 import { ArrowLeft, Camera, Check, ChevronRight, LoaderCircle, LockKeyhole, Shield, ShoppingBag, Sparkles, Trash2, UserRound, X } from 'lucide-react';
-import { CoinCount, TitleBadge, useShopItems } from './Social';
+import { CoinCount, DiamondCount, TitleBadge, TopUpModal, useShopItems } from './Social';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
 import { RankChip, ShowcaseDecor, ShowcaseTitle, showcaseClass } from './RankEmblem';
 import { useRanks } from './Ranks';
@@ -32,6 +32,7 @@ export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, o
   const { ranks } = useRanks(profile?.id);
   const [uploading, setUploading] = useState(false);
   const [portraitsOpen, setPortraitsOpen] = useState(false);
+  const [topUpOpen, setTopUpOpen] = useState(false);
   const choosePortrait = async (url: string) => {
     setError('');
     setMessage('');
@@ -86,7 +87,7 @@ export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, o
             : <button type="button" className="profile-title-empty" onClick={onRanks}><Sparkles size={12} /> ЦОЛ СОНГОХ</button>}
       </section>
       <div className="profile-main">
-        <div className={`profile-identity-row ${nameplate(profile.nameplate_key).className} ${rowBorderClass(profile.border_key)}`} style={nameplate(profile.nameplate_key).style}><RowBorder borderKey={profile.border_key} /><div className="profile-identity"><div className="eyebrow left-eye">{profile.is_verified ? i18n.account.verifiedAccount : i18n.account.verificationRequired} <span className={profile.is_verified ? 'verified-led' : 'unverified-led'} /></div><h1>{profile.display_name}</h1><div className="profile-shop-row">{profile.player_no && <span className="chip profile-id">ID #{profile.player_no}</span>}<CoinCount value={profile.coins ?? null} /><button type="button" className="text-button" onClick={onShop}><ShoppingBag size={13} /> ДЭЛГҮҮР</button></div><p>{i18n.account.memberSince} {formatDate(profile.created_at)} · {profile.registration_method === 'email' ? i18n.account.emailAccount : i18n.account.phoneAccount}</p></div></div>
+        <div className={`profile-identity-row ${nameplate(profile.nameplate_key).className} ${rowBorderClass(profile.border_key)}`} style={nameplate(profile.nameplate_key).style}><RowBorder borderKey={profile.border_key} /><div className="profile-identity"><div className="eyebrow left-eye">{profile.is_verified ? i18n.account.verifiedAccount : i18n.account.verificationRequired} <span className={profile.is_verified ? 'verified-led' : 'unverified-led'} /></div><h1>{profile.display_name}</h1><div className="profile-shop-row">{profile.player_no && <span className="chip profile-id">ID #{profile.player_no}</span>}<CoinCount value={profile.coins ?? null} /><DiamondCount value={profile.diamonds ?? 0} onTopUp={() => setTopUpOpen(true)} /><button type="button" className="text-button" onClick={onShop}><ShoppingBag size={13} /> ДЭЛГҮҮР</button></div><p>{i18n.account.memberSince} {formatDate(profile.created_at)} · {profile.registration_method === 'email' ? i18n.account.emailAccount : i18n.account.phoneAccount}</p></div></div>
         {loadError && <div className="account-inline-error">{loadError}</div>}
         {message && <div className="account-inline-success"><Check size={13} /> {message}</div>}
         <div className="profile-ranks">{RANK_GAMES.map((game) => <RankChip key={game} game={game} points={ranks?.[game].points ?? 0} onClick={onRanks} />)}</div>
@@ -105,6 +106,7 @@ export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, o
         <p className="profile-note"><Shield size={11} /> {i18n.account.profileNote}</p>
       </div>
     </div>}
+    {topUpOpen && <TopUpModal onClose={() => setTopUpOpen(false)} />}
     {portraitsOpen && profile && <div className="game-modal-backdrop" onClick={() => setPortraitsOpen(false)}>
       <section className="game-modal portrait-picker" role="dialog" aria-modal="true" aria-labelledby="portrait-title" onClick={(event) => event.stopPropagation()}>
         <header><h2 id="portrait-title">Портрет сонгох</h2><button type="button" className="icon-button" onClick={() => setPortraitsOpen(false)} aria-label="Хаах"><X size={15} /></button></header>

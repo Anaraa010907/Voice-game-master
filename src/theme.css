@@ -3824,3 +3824,54 @@ button.rank-chip:active { filter: brightness(1.15); }
 .viewport .game-frame .done-button { min-height: 32px; padding: 0 16px; display: inline-flex; align-items: center; gap: 6px; }
 .viewport .game-frame .done-count { color: #a9a29a; font-size: 9.5px; }
 .viewport .game-frame .done-bar { justify-content: center; }
+
+/* ================= Two currencies: coins (earned) and diamonds (bought) ================= */
+.diamond-count { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border: 1px solid rgba(110, 200, 255, .5); border-radius: 999px; background: linear-gradient(180deg, rgba(20, 60, 100, .6), rgba(8, 24, 48, .7)); color: #a8e4ff; font-size: 11px; font-weight: 700; white-space: nowrap; font-family: inherit; }
+.diamond-count.is-big { padding: 4px 12px; font-size: 13px; }
+.diamond-count.is-button { cursor: pointer; }
+.diamond-count.is-button:active { filter: brightness(1.2); }
+.diamond-count .diamond-plus { margin-left: 2px; padding: 1px; border-radius: 50%; background: #5bc8ff; color: #04203a; }
+.price { display: inline-flex; align-items: center; gap: 4px; }
+.price.is-diamond { color: #a8e4ff; }
+.viewport .game-frame .shop-card .buy-diamond { background: linear-gradient(180deg, #2f7fc4, #144a85); border-color: rgba(140, 215, 255, .7); box-shadow: 0 0 14px rgba(70, 170, 255, .3); }
+.viewport .game-frame .shop-card .buy-diamond .price.is-diamond { color: #fff; }
+.shop-card.is-diamond { border-color: rgba(110, 200, 255, .22); }
+.shop-section { display: grid; gap: 7px; }
+.shop-section-title { display: flex; align-items: center; gap: 6px; margin: 4px 2px 0; color: #e6c88b; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.shop-section.is-diamond .shop-section-title { color: #9fdcff; }
+.shop-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.viewport .game-frame .shop-tabs .is-pass { display: inline-flex; align-items: center; gap: 5px; border-color: rgba(255, 196, 90, .5); color: #ffdc95; }
+
+/* Diamond top-up (not connected yet). */
+.viewport .game-frame .topup-modal { width: min(420px, 94%); }
+.viewport .game-frame .topup-symbol { border-color: rgba(110, 200, 255, .5); background: #0e2a44; color: #8fd6ff; }
+.topup-packs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 10px 0 6px; }
+.topup-packs span { display: grid; justify-items: center; gap: 2px; padding: 9px 4px; border: 1px dashed rgba(110, 200, 255, .35); border-radius: 10px; background: rgba(10, 30, 50, .5); color: #8fd6ff; opacity: .75; }
+.topup-packs b { color: #e8f7ff; font-size: 15px; }
+.topup-packs small { color: #8c9aa6; font-size: 8.5px; }
+.viewport .game-frame .topup-modal p { display: flex; align-items: center; justify-content: center; gap: 6px; }
+
+/* Battle pass (coming soon). */
+.pass-soon { display: grid; gap: 10px; }
+.pass-hero { position: relative; display: grid; justify-items: start; gap: 4px; padding: 14px 16px; border: 1px solid rgba(255, 196, 90, .45); border-radius: 14px; background: radial-gradient(circle at 85% 20%, rgba(255, 180, 70, .22), transparent 55%), linear-gradient(120deg, #2a1c0c, #120c14 70%); overflow: hidden; }
+.pass-badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; background: rgba(255, 196, 90, .18); color: #ffd98a; font-size: 9.5px; font-weight: 800; letter-spacing: .14em; }
+.viewport .game-frame .pass-hero h2 { margin: 0; font-family: var(--display); font-size: 26px; color: #fff1d0; }
+.pass-hero p { margin: 0; max-width: 560px; color: #c8bba5; font-size: 11px; line-height: 1.45; }
+.pass-soon-tag { position: absolute; right: 14px; top: 14px; display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid rgba(255, 255, 255, .25); border-radius: 999px; background: rgba(0, 0, 0, .45); color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .14em; }
+.pass-track { display: grid; gap: 5px; overflow-x: auto; padding-bottom: 3px; opacity: .8; filter: saturate(.85); }
+.pass-row { display: grid; grid-template-columns: 70px repeat(8, minmax(74px, 1fr)); gap: 5px; align-items: stretch; }
+.pass-row > b { display: flex; align-items: center; gap: 4px; color: #bdb4a8; font-size: 10px; letter-spacing: .1em; }
+.pass-row.is-premium > b { color: #ffd36b; }
+.pass-cell { position: relative; display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 52px; padding: 6px 4px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 9px; background: rgba(14, 15, 21, .85); color: #d8d0c4; font-size: 9.5px; text-align: center; }
+.pass-cell small { color: #7d777b; font-size: 8px; }
+.pass-row.is-premium .pass-cell { border-color: rgba(255, 196, 90, .35); background: linear-gradient(180deg, rgba(60, 40, 10, .6), rgba(16, 12, 8, .9)); color: #ffe2a0; }
+.pass-row.is-premium .pass-cell svg { position: absolute; right: 5px; top: 5px; color: #b89a62; }
+
+/* Rank prizes on the ladder; coins after a game. */
+.rank-reward { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; color: #a9a29a; font-size: 9.5px; }
+.rank-reward-coins { display: inline-flex; align-items: center; gap: 3px; color: #ffd979; font-weight: 700; }
+.rank-reward-soon { display: inline-flex; align-items: center; gap: 3px; color: #8f8a8e; font-style: italic; }
+.rank-reward.is-earned { color: #8fe8b5; }
+.result-coins { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; padding: 3px 10px; border: 1px solid rgba(255, 209, 102, .45); border-radius: 999px; background: rgba(60, 44, 10, .6); color: #ffd979; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.rank-result.is-coins { padding: 4px; border-color: rgba(255, 209, 102, .35); }
+.rank-result.is-coins .result-coins { margin: 0; }

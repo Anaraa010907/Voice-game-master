@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  ArrowLeft, Ban, Bug, Check, Coins, DoorClosed, Eye, Flag, History, Inbox, LayoutDashboard, Lightbulb, Lock, LogOut,
-  Megaphone, MessageSquare, RefreshCw, Search, Send, ShieldCheck, Undo2, UserCog, Users, X,
+  ArrowLeft, Ban, Bug, Check, Coins, DoorClosed, Eye, Flag, Gem, History, Inbox, LayoutDashboard, Lightbulb, Lock, LogOut, Megaphone, MessageSquare, RefreshCw, Search, Send, ShieldCheck, Undo2, UserCog, Users, X,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import { supabase } from './supabaseClient';
@@ -344,22 +343,35 @@ const COIN_PRESETS = [100, 500, 1000, 5000, 10000];
 function CoinsDialog({ player, onClose, onDone, notify }: { player: AdminPlayer; onClose: () => void; onDone: () => void; notify: NotifyFn }) {
   const [amount, setAmount] = useState('1000');
   const [take, setTake] = useState(false);
+  /** Coins are earned in play; diamonds stand in for real-money top-ups until payment is connected. */
+  const [currency, setCurrency] = useState<'coin' | 'diamond'>('coin');
+  const [diamonds, setDiamonds] = useState<number | null>(null);
+  useEffect(() => {
+    if (!supabase || currency !== 'diamond') return;
+    void Promise.resolve(supabase.from('profiles').select('diamonds').eq('id', player.id).maybeSingle())
+      .then(({ data }) => setDiamonds((data as { diamonds?: number } | null)?.diamonds ?? 0));
+  }, [currency, player.id]);
+  const unit = currency === 'diamond' ? 'алмаз' : 'зоос';
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const value = Number(amount || 0);
   const submit = async () => {
     if (!supabase || !value) return;
     setBusy(true);
-    const { data, error } = await supabase.rpc('admin_grant_coins', { p_user: player.id, p_amount: take ? -value : value, p_reason: reason.trim() });
+    const { data, error } = await supabase.rpc(currency === 'diamond' ? 'admin_grant_diamonds' : 'admin_grant_coins', { p_user: player.id, p_amount: take ? -value : value, p_reason: reason.trim() });
     setBusy(false);
     if (error) { notify(failure(error), 'error'); return; }
-    notify(`${player.display_name}: ${take ? '−' : '+'}${value.toLocaleString('en-US')} зоос. Одоо ${Number(data).toLocaleString('en-US')}.`, 'success');
+    notify(`${player.display_name}: ${take ? '−' : '+'}${value.toLocaleString('en-US')} ${unit}. Одоо ${Number(data).toLocaleString('en-US')}.`, 'success');
     onDone();
   };
   return <div className="game-modal-backdrop" onClick={onClose}>
     <section className="game-modal admin-ban-modal" role="dialog" aria-modal="true" aria-labelledby="coins-title" onClick={(event) => event.stopPropagation()}>
       <header><h2 id="coins-title"><Coins size={16} /> {player.display_name}</h2><button type="button" className="icon-button" onClick={onClose} aria-label="Хаах"><X size={15} /></button></header>
-      <p className="admin-note">Одоо {player.coins.toLocaleString('en-US')} зоостой.</p>
+      <div className="admin-choice-row" role="radiogroup" aria-label="Валют">
+        <button type="button" role="radio" aria-checked={currency === 'coin'} className={currency === 'coin' ? 'is-picked' : ''} onClick={() => setCurrency('coin')}><Coins size={12} /> Зоос</button>
+        <button type="button" role="radio" aria-checked={currency === 'diamond'} className={currency === 'diamond' ? 'is-picked' : ''} onClick={() => setCurrency('diamond')}><Gem size={12} /> Алмаз</button>
+      </div>
+      <p className="admin-note">Одоо {currency === 'diamond' ? (diamonds === null ? '…' : diamonds.toLocaleString('en-US')) + ' алмазтай' : player.coins.toLocaleString('en-US') + ' зоостой'}.</p>
       <div className="admin-choice-row" role="radiogroup" aria-label="Өгөх эсвэл хасах">
         <button type="button" role="radio" aria-checked={!take} className={!take ? 'is-picked' : ''} onClick={() => setTake(false)}>Өгөх</button>
         <button type="button" role="radio" aria-checked={take} className={take ? 'is-picked' : ''} onClick={() => setTake(true)}>Хасах</button>
@@ -369,7 +381,7 @@ function CoinsDialog({ player, onClose, onDone, notify }: { player: AdminPlayer;
       <label className="auth-field"><span>ШАЛТГААН (заавал биш)</span><input value={reason} maxLength={80} onChange={(event) => setReason(event.target.value)} placeholder="Жишээ нь: Тэмцээний шагнал" /></label>
       <div className="modal-actions">
         <button type="button" className="secondary-button" onClick={onClose}>БОЛИХ</button>
-        <button type="button" className="primary-button" disabled={busy || !value} onClick={() => void submit()}><Coins size={14} /> {take ? 'ХАСАХ' : 'ӨГӨХ'}</button>
+        <button type="button" className="primary-button" disabled={busy || !value} onClick={() => void submit()}>{currency === 'diamond' ? <Gem size={14} /> : <Coins size={14} />} {take ? 'ХАСАХ' : 'ӨГӨХ'}</button>
       </div>
     </section>
   </div>;

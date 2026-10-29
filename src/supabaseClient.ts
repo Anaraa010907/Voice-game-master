@@ -34,6 +34,7 @@ export type PublicProfile = {
   current_win_streak: number;
   best_win_streak: number;
   coins?: number;
+  diamonds?: number;
   frame_key?: string | null;
   title_key?: string | null;
   nameplate_key?: string | null;
