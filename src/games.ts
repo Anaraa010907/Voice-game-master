@@ -36,11 +36,11 @@ export const GAMES: Record<GameType, GameInfo> = {
     title: 'Монгол Монополь',
     tagline: 'Аймаг, хот, байгалийн газруудыг худалдаж аваад гэр бааз барь.',
     players: '2–6 тоглогч',
-    duration: '20–40 мин',
+    duration: '30–60 мин',
     minPlayers: 2,
     sizes: [2, 3, 4, 5, 6],
     defaultSize: 4,
     defaultRoomName: 'Талын наймаа',
-    allowBots: false,
+    allowBots: true,
   },
 };

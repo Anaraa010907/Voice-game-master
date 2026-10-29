@@ -3875,3 +3875,743 @@ button.rank-chip:active { filter: brightness(1.15); }
 .result-coins { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; padding: 3px 10px; border: 1px solid rgba(255, 209, 102, .45); border-radius: 999px; background: rgba(60, 44, 10, .6); color: #ffd979; font-size: 12px; font-weight: 800; white-space: nowrap; }
 .rank-result.is-coins { padding: 4px; border-color: rgba(255, 209, 102, .35); }
 .rank-result.is-coins .result-coins { margin: 0; }
+
+/* ================= Monopoly: the classic 40-tile board (Richup layout) ================= */
+
+/* The board gets a little more of the width now that each side has nine tiles. */
+.viewport .game-frame .mono {
+  grid-template-columns: minmax(0, 2fr) minmax(236px, 1fr);
+}
+
+.viewport .game-frame .mono-board {
+  grid-template-columns: 1.3fr repeat(9, minmax(0, 1fr)) 1.3fr;
+  grid-template-rows: 1.3fr repeat(9, minmax(0, 1fr)) 1.3fr;
+  gap: 2px;
+  padding: 3px;
+}
+
+.viewport .game-frame .mono-center {
+  grid-row: 2 / 11;
+  grid-column: 2 / 11;
+  padding: 10px 14px 10px;
+}
+
+/* Each tile is a size container so the pieces scale with it. */
+.viewport .game-frame .mono-tile {
+  container-type: size;
+  border-radius: 2px;
+}
+
+.viewport .game-frame .mono-tile-body {
+  gap: 0;
+  padding: 1px;
+}
+
+.viewport .game-frame .mono-tile-name {
+  font-size: clamp(7.5px, 2.2vh, 11px);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.viewport .game-frame .mono-tile-price {
+  font-size: clamp(6.5px, 1.8vh, 9.5px);
+  line-height: 1.1;
+}
+
+.viewport .game-frame .mono-tile-icon svg {
+  width: clamp(9px, 2.6vh, 13px);
+  height: clamp(9px, 2.6vh, 13px);
+}
+
+.viewport .game-frame .mono-tile.is-corner .mono-tile-icon svg {
+  width: clamp(12px, 3.8vh, 19px);
+  height: clamp(12px, 3.8vh, 19px);
+}
+
+.viewport .game-frame .is-corner .mono-tile-name {
+  font-size: clamp(7.5px, 2.3vh, 12px);
+}
+
+/* The colour band always faces the board centre. */
+.viewport .game-frame .mono-tile.is-top .mono-tile-band {
+  order: 2;
+}
+
+.viewport .game-frame .mono-tile-band {
+  flex-basis: 18%;
+  max-height: 8px;
+  min-height: 4px;
+}
+
+.viewport .game-frame .mono-tile.is-left .mono-tile-band,
+.viewport .game-frame .mono-tile.is-right .mono-tile-band {
+  flex: 0 0 5px;
+}
+
+.viewport .game-frame :is(.is-left, .is-right) .mono-tile-name {
+  font-size: clamp(7.5px, 2.4vh, 11.5px);
+  -webkit-line-clamp: 1;
+}
+
+.viewport .game-frame .mono-tile.kind-parking .mono-pot-amount {
+  color: #f1d79a;
+  font-weight: 800;
+}
+
+/* Pieces: big round profile pictures standing right on the tile, as on Richup. */
+.viewport .game-frame .mono-tile > .mono-tokens {
+  --size: clamp(20px, 7vh, 40px);
+  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  transform: none;
+}
+
+@supports (width: 1cqmin) {
+  .viewport .game-frame .mono-tile > .mono-tokens {
+    --size: clamp(20px, 112cqmin, 46px);
+  }
+}
+
+.viewport .game-frame .mono-tile > .mono-tokens.count-2 { --k: .88; }
+.viewport .game-frame .mono-tile > .mono-tokens.count-3 { --k: .76; }
+.viewport .game-frame .mono-tile > .mono-tokens.count-4 { --k: .68; }
+
+.viewport .game-frame .mono-tile .mono-token {
+  width: calc(var(--size) * var(--k, 1));
+  height: calc(var(--size) * var(--k, 1));
+  border: 2.5px solid var(--owner, #d2b073);
+  font-size: calc(var(--size) * var(--k, 1) * .42);
+  box-shadow: 0 0 0 1.5px #0b0e14, 0 4px 10px #000e;
+  animation: mono-land .5s cubic-bezier(.2, .9, .3, 1.25) both;
+}
+
+.viewport .game-frame .mono-tile .mono-token + .mono-token,
+.viewport .game-frame .mono-tile.is-right .mono-token + .mono-token {
+  margin-right: 0;
+  margin-left: calc(var(--size) * var(--k, 1) * -.42);
+}
+
+.viewport .game-frame .mono-tile .mono-token.is-turn {
+  width: calc(var(--size) * var(--k, 1) * 1.16);
+  height: calc(var(--size) * var(--k, 1) * 1.16);
+  border-color: #f1d79a;
+  box-shadow: 0 0 0 2px #0b0e14, 0 0 14px 4px #f1d79acc, 0 4px 10px #000e;
+  animation: mono-land .5s cubic-bezier(.2, .9, .3, 1.25) both, mono-hop 1s .5s ease-in-out infinite;
+}
+
+.viewport .game-frame .mono-tile .mono-token.is-me:not(.is-turn) {
+  box-shadow: 0 0 0 1.5px #0b0e14, 0 0 0 3.5px #ff5ca866, 0 4px 10px #000e;
+}
+
+@keyframes mono-land {
+  0% { opacity: 0; transform: translateY(-55%) scale(1.45); }
+  60% { opacity: 1; transform: translateY(6%) scale(.94); }
+  100% { opacity: 1; transform: none; }
+}
+
+/* The tile a piece just landed on glows in that player's colour. */
+.viewport .game-frame .mono-tile.is-active {
+  border-color: #f1d79a;
+}
+
+/* Vacation pot in the board centre. */
+.viewport .game-frame .mono-pot-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid #f1d79a66;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #3a2d19cc, #1b1510cc);
+  color: #d8c18d;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.viewport .game-frame .mono-pot-badge b {
+  color: #ffe2a0;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px;
+  letter-spacing: .3px;
+}
+
+.viewport .game-frame .mono-side-head .mono-guide-button {
+  flex: none;
+}
+
+@media (orientation: portrait), (max-width: 620px) {
+  .viewport .game-frame .mono-board {
+    aspect-ratio: 1.15;
+  }
+}
+
+/* ---------- Board-game rules: lobby card buttons and the host editor ---------- */
+
+.viewport .game-frame .board-rules-buttons {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.viewport .game-frame .lobby-rules header .board-rules-buttons {
+  color: inherit;
+  letter-spacing: 0;
+}
+
+.viewport .game-frame .board-rules .rules-roles span.is-cash {
+  border-color: #f1d79a66;
+  color: #f1d79a;
+  font-weight: 700;
+}
+
+.viewport .game-frame .board-rules-modal .rules-row {
+  flex-wrap: wrap;
+}
+
+.viewport .game-frame .board-rules-modal .rules-row > span {
+  min-width: 84px;
+}
+
+.viewport .game-frame .board-rule-switches {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.viewport .game-frame .board-rule-switches > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #ffffff1f;
+  border-radius: 10px;
+  background: #15110e;
+  color: #e7ddcc;
+  text-align: left;
+}
+
+.viewport .game-frame .board-rule-switches > button.is-on {
+  border-color: #d2b07399;
+  background: linear-gradient(160deg, #2c2116, #17120e);
+}
+
+.viewport .game-frame .board-rule-switches > button > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.viewport .game-frame .board-rule-switches b {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.viewport .game-frame .board-rule-switches small {
+  color: #9d9389;
+  font-size: 9.5px;
+  line-height: 1.3;
+}
+
+.viewport .game-frame .board-rule-switches .toggle {
+  display: block;
+  flex: none;
+  margin-left: 0;
+}
+
+/* ---------- Game hub: "how to play" link on the board-game card ---------- */
+
+.hub-card > .hub-guide {
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid #f6e2b099;
+  border-radius: 14px;
+  background: #0b0d13cc;
+  color: #f3d48e;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 12px #0008;
+}
+
+/* ---------- Board-game guide: short illustrated pages ---------- */
+
+.viewport .game-frame .guide-backdrop {
+  z-index: 40;
+  padding: 8px;
+}
+
+.viewport .game-frame .mono-guide {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 8px;
+  width: min(700px, 97%);
+  height: min(400px, calc(100% - 8px));
+  padding: 10px 14px 12px;
+  border-color: #d2b07388;
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse at 15% 20%, #3a2a1544, transparent 55%),
+    linear-gradient(160deg, #1a1712, #0e0f15 70%);
+  text-align: left;
+}
+
+.viewport .game-frame .mono-guide-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.viewport .game-frame .mono-guide-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #c9a96a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.3px;
+}
+
+.viewport .game-frame .mono-guide-tabs {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.viewport .game-frame .mono-guide-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.viewport .game-frame .mono-guide-tabs button {
+  flex: none;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid #ffffff1a;
+  border-radius: 12px;
+  background: #13110f;
+  color: #8f877d;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.viewport .game-frame .mono-guide-tabs button.is-seen {
+  color: #c7b996;
+}
+
+.viewport .game-frame .mono-guide-tabs button.is-current {
+  border-color: #f1d79a;
+  background: linear-gradient(160deg, #3a2d19, #1b1510);
+  color: #f1d79a;
+}
+
+.viewport .game-frame .mono-guide-page {
+  display: grid;
+  grid-template-columns: minmax(150px, 34%) minmax(0, 1fr);
+  gap: 14px;
+  min-height: 0;
+  animation: guide-page .28s ease-out;
+}
+
+@keyframes guide-page {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+.viewport .game-frame .mono-guide-art {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  border: 1px solid #d2b07333;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 0 56%, #d2b07322 56.5% 57.5%, transparent 58%),
+    radial-gradient(ellipse at 50% 45%, #1d3a36 0, #12241f 50%, #0b1512 100%);
+  box-shadow: inset 0 0 30px #000b;
+  color: #f1d79a;
+  overflow: hidden;
+}
+
+.viewport .game-frame .guide-art-stack {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  filter: drop-shadow(0 4px 10px #000a);
+}
+
+.viewport .game-frame .guide-art-stack > svg {
+  color: #f1d79a;
+}
+
+.viewport .game-frame .guide-art-stack:has(> .guide-tag) {
+  flex-direction: column;
+}
+
+.viewport .game-frame .guide-coin-row {
+  display: flex;
+  gap: 3px;
+  color: #ffd36b;
+}
+
+.viewport .game-frame .guide-dice {
+  display: flex;
+  gap: 8px;
+}
+
+.viewport .game-frame .guide-die {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 40px;
+  height: 40px;
+  padding: 5px;
+  gap: 2px;
+  border-radius: 8px;
+  background: linear-gradient(160deg, #fffaf0, #e7dcc6);
+  box-shadow: inset 0 -3px 0 #0003, 0 4px 8px #0008;
+}
+
+.viewport .game-frame .guide-die i {
+  border-radius: 50%;
+}
+
+.viewport .game-frame .guide-die i.on {
+  background: #1c1a19;
+}
+
+.viewport .game-frame .guide-tag {
+  padding: 3px 10px;
+  border: 1px solid #f1d79a88;
+  border-radius: 11px;
+  background: #1b1510;
+  color: #f1d79a;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.viewport .game-frame .guide-tag.is-big {
+  font-size: 22px;
+}
+
+.viewport .game-frame .guide-deed {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  width: 66px;
+  padding: 0 0 6px;
+  overflow: hidden;
+  border: 1px solid #ffffff2a;
+  border-radius: 5px;
+  background: linear-gradient(170deg, #232834, #141821);
+  color: #ece6dc;
+  text-align: center;
+}
+
+.viewport .game-frame .guide-deed > i {
+  justify-self: stretch;
+  height: 12px;
+  margin-bottom: 3px;
+  background: var(--band, #666);
+}
+
+.viewport .game-frame .guide-deed b {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0 3px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewport .game-frame .guide-deed small {
+  color: #b9b2a8;
+  font-size: 10px;
+}
+
+.viewport .game-frame .guide-deed em {
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #f1d79a22;
+  color: #f1d79a;
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.viewport .game-frame .guide-set .guide-deed {
+  width: 56px;
+}
+
+.viewport .game-frame .guide-set .guide-deed b {
+  font-size: 10.5px;
+}
+
+.viewport .game-frame .guide-houses {
+  display: flex;
+  gap: 4px;
+}
+
+.viewport .game-frame .guide-houses i {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px 3px 2px 2px;
+  background: #7ed39b;
+  box-shadow: 0 2px 4px #000a;
+  clip-path: polygon(50% 0, 100% 40%, 100% 100%, 0 100%, 0 40%);
+}
+
+.viewport .game-frame .guide-hotel {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #c4423f;
+  color: #fff;
+  box-shadow: 0 3px 8px #000a;
+}
+
+.viewport .game-frame .guide-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  gap: 6px;
+}
+
+.viewport .game-frame .guide-icon-grid svg {
+  box-sizing: content-box;
+  padding: 7px;
+  border: 1px solid #d2b07355;
+  border-radius: 8px;
+  background: #0b0e14aa;
+}
+
+.viewport .game-frame .guide-bars {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: repeating-linear-gradient(90deg, #ffffff10 0 4px, transparent 4px 12px), #3a2128;
+  box-shadow: inset 0 0 0 2px #c2485288;
+  color: #f0b4b4;
+}
+
+.viewport .game-frame .guide-trade {
+  flex-wrap: nowrap;
+}
+
+.viewport .game-frame .mono-guide-copy {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+
+.viewport .game-frame .mono-guide-copy h2 {
+  margin: 0 0 6px;
+  color: #f1d79a;
+  font-family: var(--display, 'Barlow Condensed', sans-serif);
+  font-size: clamp(18px, 5.5vh, 24px);
+  font-weight: 700;
+  letter-spacing: .4px;
+}
+
+.viewport .game-frame .mono-guide-copy p,
+.viewport .game-frame .guide-list li {
+  margin: 0 0 6px;
+  color: #d8cfc0;
+  font-size: clamp(11px, 3.1vh, 13px);
+  line-height: 1.42;
+}
+
+.viewport .game-frame .mono-guide-copy p b,
+.viewport .game-frame .guide-list b {
+  color: #fff1cf;
+}
+
+.viewport .game-frame .mono-guide-copy p svg {
+  vertical-align: -1px;
+  color: #d2b073;
+}
+
+.viewport .game-frame .mono-guide-copy .guide-note {
+  color: #a59a88;
+  font-size: clamp(10px, 2.8vh, 12px);
+}
+
+.viewport .game-frame .guide-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.viewport .game-frame .guide-list li svg {
+  margin-right: 4px;
+  vertical-align: -1px;
+  color: #d2b073;
+}
+
+.viewport .game-frame .guide-flags {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.viewport .game-frame .guide-flags li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border: 1px solid #ffffff17;
+  border-radius: 9px;
+  background: #13110f;
+  color: #8f877d;
+  font-size: 11.5px;
+}
+
+.viewport .game-frame .guide-flags li span {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 7px;
+  background: #ffffff10;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .6px;
+}
+
+.viewport .game-frame .guide-flags li.is-on {
+  border-color: #d2b07366;
+  color: #efe4cf;
+}
+
+.viewport .game-frame .guide-flags li.is-on span {
+  background: #3ddc8433;
+  color: #8fe8b5;
+}
+
+.viewport .game-frame .mono-guide-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.viewport .game-frame .mono-guide-foot .primary-button,
+.viewport .game-frame .mono-guide-foot .secondary-button {
+  height: 34px;
+  padding: 0 14px;
+}
+
+.viewport .game-frame .mono-guide-dots {
+  display: flex;
+  gap: 5px;
+}
+
+.viewport .game-frame .mono-guide-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffffff26;
+  transition: width .2s, background .2s;
+}
+
+.viewport .game-frame .mono-guide-dots i.on {
+  width: 16px;
+  border-radius: 3px;
+  background: #f1d79a;
+}
+
+@media (orientation: portrait), (max-width: 560px) {
+  .viewport .game-frame .mono-guide {
+    height: min(560px, calc(100% - 8px));
+  }
+
+  .viewport .game-frame .mono-guide-page {
+    grid-template-columns: 1fr;
+    grid-template-rows: 120px minmax(0, 1fr);
+  }
+
+  .viewport .game-frame .board-rule-switches,
+  .viewport .game-frame .guide-flags {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Side columns are wide and short: names may take two lines there too. */
+.viewport .game-frame :is(.is-left, .is-right) .mono-tile-name {
+  -webkit-line-clamp: 2;
+  font-size: clamp(7px, 2.15vh, 10.5px);
+}
+
+.viewport .game-frame :is(.is-left, .is-right) .mono-tile-price {
+  font-size: clamp(6px, 1.7vh, 9px);
+}
+
+.viewport .game-frame :is(.is-left, .is-right) .mono-tile-icon {
+  display: none;
+}
+
+.viewport .game-frame .mono-side-head {
+  gap: 6px;
+}
+
+.viewport .game-frame .mono-side-head b {
+  white-space: nowrap;
+}
+
+.viewport .game-frame .board-rules header > span {
+  white-space: nowrap;
+}
+
+.viewport .game-frame .board-rules .lobby-rules-edit.is-guide {
+  border-color: #f1d79a;
+  background: linear-gradient(180deg, #3a2d19, #1b1510);
+}
+
+.viewport .game-frame .board-rules .lobby-rules-edit.is-icon {
+  justify-content: center;
+  width: 26px;
+  padding: 0;
+}
+
+/* One line of rule chips, fading out at the edge, so the card stays short on small phones. */
+.viewport .game-frame .board-rules .rules-roles {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, #000 85%, transparent);
+}
+
+.viewport .game-frame .guide-set .guide-deed {
+  width: 62px;
+}
+
+.viewport .game-frame .guide-set .guide-deed b {
+  font-size: 10px;
+  letter-spacing: -.1px;
+}

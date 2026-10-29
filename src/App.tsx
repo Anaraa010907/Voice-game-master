@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
-  ArrowLeft, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, LockKeyhole, Moon,
+  ArrowLeft, BookOpen, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, LockKeyhole, Moon,
   MessageSquare, Radio, RefreshCw, Settings as SettingsIcon, Shield, ShieldCheck, ShoppingBag, Swords, Trophy, UserPlus, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles, type RoleName } from './gameData';
@@ -22,7 +22,8 @@ import { callGame, useRoom, type ListedRoom, type NoticeTone, type NotifyFn, typ
 import { GAMES, type GameType } from './games';
 import MonopolyScreen from './Monopoly';
 import { MafiaRulesCard, MafiaRulesEditor } from './MafiaRules';
-import { BoardRulesCard, ROUND_OPTIONS, roundsLabel } from './BoardRules';
+import { BoardRulesCard, BoardRulesEditor, ROUND_OPTIONS, roundsLabel } from './BoardRules';
+import { MonopolyGuide } from './MonopolyGuide';
 import { motionReduced, setMotionReduced } from './motion';
 import { startMusic, wakeMusic } from './sfx';
 import { VolumeControls } from './VolumeControls';
@@ -379,7 +380,7 @@ function CreateRoom({ gameType, startRanked, onBack, onCreate }: { gameType: Gam
   const [isPublic, setIsPublic] = useState(true);
   const [ranked, setRanked] = useState(startRanked);
   const [password, setPassword] = useState('');
-  const [rounds, setRounds] = useState<number | null>(20);
+  const [rounds, setRounds] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -438,10 +439,12 @@ function JoinRoom({ onBack, onJoin }: { onBack: () => void; onJoin: (code: strin
 
 /** Choose a game type: two large cards (board game / voice game) with illustrations. */
 function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoose: (type: GameType) => void; onJoinCode: () => void }) {
+  const [guideOpen, setGuideOpen] = useState(false);
   return <div className="inner-screen hub-screen"><TopBar title="ТОГЛООМ СОНГОНО УУ" subtitle="ТОГЛОХ" onBack={onBack} trailing={<button className="text-button hub-code-button" onClick={onJoinCode}><Radio size={14} /> КОДООР НЭГДЭХ</button>} />
     <div className="hub-cards">
       <article className="hub-card hub-card-board" style={{ '--hub-bg': "url('/assets/hub/board-bg.jpg')" } as CSSProperties}>
         <h2>BOARD GAME</h2>
+        <button type="button" className="hub-guide" onClick={() => setGuideOpen(true)}><BookOpen size={13} /> ХЭРХЭН ТОГЛОХ</button>
         <button type="button" className="hub-play" onClick={() => onChoose('monopoly')}>ТОГЛОХ <ChevronRight size={18} /></button>
         <p className="hub-card-meta"><b>{GAMES.monopoly.title}</b>{GAMES.monopoly.players} · Монгол газрууд, гэр бааз</p>
       </article>
@@ -452,6 +455,7 @@ function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoos
         <p className="hub-card-meta"><b>{GAMES.mafia.title}</b>{GAMES.mafia.players} · Дуут чат, нууц дүр</p>
       </article>
     </div>
+    {guideOpen && <MonopolyGuide onClose={() => setGuideOpen(false)} />}
   </div>;
 }
 
@@ -535,6 +539,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
   const { room, seats, loaded, missing, error, reload } = useRoom(roomCode);
   const [busy, setBusy] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [profileSeat, setProfileSeat] = useState<RoomSeat | null>(null);
   const mine = seats.find((seat) => seat.user_id === userId);
   /** Opens a seated player's card by seat number (games) or seat row (lobby). */
@@ -615,7 +620,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
           </div>
           {(room.game_type ?? 'mafia') === 'mafia'
             ? <MafiaRulesCard settings={room.settings} players={seats.length} isHost={isHost && !room.ranked} busy={busy} ranked={room.ranked === true} onEdit={() => setRulesOpen(true)} />
-            : <BoardRulesCard settings={room.settings} isHost={isHost && !room.ranked} busy={busy} onChange={(settings) => { void run('settings', { settings }); }} />}
+            : <BoardRulesCard settings={room.settings} isHost={isHost && !room.ranked} busy={busy} ranked={room.ranked === true} onEdit={() => setRulesOpen(true)} onGuide={() => setGuideOpen(true)} />}
           <div className="lobby-bottom">
             <div className="lobby-hint"><LockKeyhole size={14} /><span>{isHost ? 'ТА ӨРӨӨНИЙ ЭЗЭН' : 'ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА'} <b>•</b> {hint}</span></div>
             <div className="lobby-actions">
@@ -626,8 +631,12 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
             </div>
           </div>
         </div>
-        {rulesOpen && isHost && !room.ranked && <MafiaRulesEditor initial={room.settings} players={seats.length} busy={busy}
-          onClose={() => setRulesOpen(false)} onSave={(settings) => { void run('settings', { settings }).then((saved) => { if (saved) setRulesOpen(false); }); }} />}
+        {rulesOpen && isHost && !room.ranked && ((room.game_type ?? 'mafia') === 'mafia'
+          ? <MafiaRulesEditor initial={room.settings} players={seats.length} busy={busy}
+            onClose={() => setRulesOpen(false)} onSave={(settings) => { void run('settings', { settings }).then((saved) => { if (saved) setRulesOpen(false); }); }} />
+          : <BoardRulesEditor initial={room.settings} busy={busy}
+            onClose={() => setRulesOpen(false)} onSave={(settings) => { void run('settings', { settings }).then((saved) => { if (saved) setRulesOpen(false); }); }} />)}
+        {guideOpen && <MonopolyGuide settings={room.ranked ? { ...(room.settings ?? {}), rounds: null } : room.settings ?? {}} onClose={() => setGuideOpen(false)} />}
       </div>
       {overlays}
       {inviteOpen && <InviteFriendsModal roomCode={roomCode} friends={friends} onClose={() => setInviteOpen(false)} notify={onNotice} />}

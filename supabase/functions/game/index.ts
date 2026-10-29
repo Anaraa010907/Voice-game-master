@@ -37,8 +37,8 @@ const BOARD_TRADE_SECONDS = 30;
 const BOARD_ACTIONS = ['roll', 'buy', 'decline', 'end', 'pay-jail', 'use-card', 'build', 'sell', 'mortgage', 'unmortgage', 'bid', 'pass', 'propose', 'accept', 'reject', 'cancel-trade'];
 const TILE_ACTIONS = ['build', 'sell', 'mortgage', 'unmortgage'];
 const LISTED_LOBBY_HOURS = 6;
-/** Which games let the host fill seats with bots. Both games are played by people only for now. */
-const BOTS_ALLOWED: Record<GameType, boolean> = { mafia: false, monopoly: false };
+/** Which games let the host fill seats with bots (never in ranked rooms). Mafia is played by people only for now. */
+const BOTS_ALLOWED: Record<GameType, boolean> = { mafia: false, monopoly: true };
 type Seat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null; is_bot?: boolean };
 type Body = Record<string, unknown>;
 
@@ -408,7 +408,7 @@ class GameServer {
       bot: seat.is_bot === true,
     }));
     const engine: AnyGame = room.game_type === 'monopoly'
-      ? { ...createMonopolyGame(people, secureRandom, sanitizeMonopolySettings(room.settings)), matchId: crypto.randomUUID() }
+      ? { ...createMonopolyGame(people, secureRandom, roomSettings('monopoly', room.settings, room.ranked) as MonopolySettings), matchId: crypto.randomUUID() }
       : { ...createInitialGame(people, undefined, secureRandom, roomSettings('mafia', room.settings, room.ranked) as MafiaSettings), matchId: crypto.randomUUID() };
     await this.admin.from('game_private').delete().eq('room_code', roomCodeValue);
     const { error } = await this.admin.from('game_states').update({ engine, version: 1, updated_at: new Date().toISOString() }).eq('room_code', roomCodeValue);

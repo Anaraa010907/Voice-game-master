@@ -3,10 +3,14 @@
  * browser and Node tests share it. Everything here is public information, so the server
  * publishes the whole state to every player.
  *
+ * The board follows the classic 40-tile layout with its prices and rents (the same layout online
+ * games such as Richup use), with Mongolian towns in place of the cities. Room rules mirror
+ * Richup's: starting cash, double rent on a full set, a vacation pot, auctions, no rent while in
+ * prison, mortgages and even building can each be switched by the host.
+ *
  * The auction, trading, per-tile rent ladders, the bank's limited houses and ger camps, the
  * shuffled card decks with "get out of jail free" cards, and the bot strategy in bots.ts are
- * ported from Monopoly Forge by Dimitriuses (MIT licence, github.com/Dimitriuses/monopoly-forge)
- * and adapted to this 32-tile Mongolian board and the 20-round online game.
+ * ported from Monopoly Forge by Dimitriuses (MIT licence, github.com/Dimitriuses/monopoly-forge).
  */
 
 export type TileKind = 'start' | 'property' | 'rail' | 'utility' | 'tax' | 'chance' | 'chest' | 'jail' | 'parking' | 'gotojail';
@@ -22,46 +26,60 @@ export type Tile = {
   region?: string;
   group?: ColorGroup;
   price?: number;
-  /** Base rent for properties; tax amount for tax tiles. */
+  /** Base rent for properties; a fixed tax for tax tiles. */
   rent?: number;
+  /** A tax taken as a share of the player's cash (income tax: 10%). */
+  taxPercent?: number;
   houseCost?: number;
   /** Property rent with 0, 1, 2, 3, 4 houses and a ger camp (the classic rent ladder). */
   rents?: number[];
 };
 
+const P = (id: number, name: string, short: string, region: string, group: ColorGroup, price: number, houseCost: number, rents: number[]): Tile =>
+  ({ id, kind: 'property', name, short, region, group, price, rent: rents[0], houseCost, rents });
+
+/** Classic layout, prices and rents; START top-left, play runs clockwise. Short names carry soft hyphens for small cells. */
 export const BOARD: Tile[] = [
   { id: 0, kind: 'start', name: 'Эхлэл', short: 'ЭХЛЭЛ' },
-  { id: 1, kind: 'property', name: 'Даланзадгад', short: 'Даланзадгад', region: 'Өмнөговь', group: 'brown', price: 60, rent: 4, houseCost: 50, rents: [4, 20, 60, 180, 320, 450] },
-  { id: 2, kind: 'chance', name: 'Хувь тавилан', short: 'Хувь' },
-  { id: 3, kind: 'property', name: 'Сайншанд', short: 'Сайншанд', region: 'Дорноговь', group: 'brown', price: 60, rent: 4, houseCost: 50, rents: [4, 20, 60, 180, 320, 450] },
-  { id: 4, kind: 'tax', name: 'Орлогын татвар', short: 'Татвар', rent: 200 },
-  { id: 5, kind: 'rail', name: 'Улаанбаатар өртөө', short: 'УБ өртөө', region: 'Төмөр зам', price: 200 },
-  { id: 6, kind: 'property', name: 'Мөрөн', short: 'Мөрөн', region: 'Хөвсгөл', group: 'sky', price: 100, rent: 6, houseCost: 50, rents: [6, 30, 90, 270, 400, 550] },
-  { id: 7, kind: 'property', name: 'Улиастай', short: 'Улиастай', region: 'Завхан', group: 'sky', price: 120, rent: 8, houseCost: 50, rents: [8, 40, 100, 300, 450, 600] },
-  { id: 8, kind: 'jail', name: 'Шорон', short: 'ШОРОН' },
-  { id: 9, kind: 'property', name: 'Өлгий', short: 'Өлгий', region: 'Баян-Өлгий', group: 'pink', price: 140, rent: 10, houseCost: 100, rents: [10, 50, 150, 450, 625, 750] },
-  { id: 10, kind: 'utility', name: 'Цахилгаан станц', short: 'Цахилгаан', region: 'Дулааны станц', price: 150 },
-  { id: 11, kind: 'property', name: 'Ховд', short: 'Ховд', region: 'Ховд', group: 'pink', price: 160, rent: 12, houseCost: 100, rents: [12, 60, 180, 500, 700, 900] },
-  { id: 12, kind: 'property', name: 'Баянхонгор', short: 'Баянхонгор', region: 'Баянхонгор', group: 'orange', price: 180, rent: 14, houseCost: 100, rents: [14, 70, 200, 550, 750, 950] },
-  { id: 13, kind: 'rail', name: 'Чингис хаан нисэх буудал', short: 'Нисэх буудал', region: 'Агаарын зам', price: 200 },
-  { id: 14, kind: 'property', name: 'Арвайхээр', short: 'Арвайхээр', region: 'Өвөрхангай', group: 'orange', price: 200, rent: 16, houseCost: 100, rents: [16, 80, 220, 600, 800, 1000] },
-  { id: 15, kind: 'chest', name: 'Эрдэнэсийн авдар', short: 'Авдар' },
-  { id: 16, kind: 'parking', name: 'Наадам', short: 'НААДАМ' },
-  { id: 17, kind: 'property', name: 'Цэцэрлэг', short: 'Цэцэрлэг', region: 'Архангай', group: 'red', price: 220, rent: 18, houseCost: 150, rents: [18, 90, 250, 700, 875, 1050] },
-  { id: 18, kind: 'chance', name: 'Хувь тавилан', short: 'Хувь' },
-  { id: 19, kind: 'property', name: 'Хархорин', short: 'Хархорин', region: 'Өвөрхангай', group: 'red', price: 240, rent: 20, houseCost: 150, rents: [20, 100, 300, 750, 925, 1100] },
-  { id: 20, kind: 'property', name: 'Хөвсгөл нуур', short: 'Хөвсгөл', region: 'Хөвсгөл', group: 'yellow', price: 260, rent: 22, houseCost: 150, rents: [22, 110, 330, 800, 975, 1150] },
-  { id: 21, kind: 'rail', name: 'Замын-Үүд боомт', short: 'Замын-Үүд', region: 'Хилийн боомт', price: 200 },
-  { id: 22, kind: 'property', name: 'Чойбалсан', short: 'Чойбалсан', region: 'Дорнод', group: 'yellow', price: 280, rent: 24, houseCost: 150, rents: [24, 120, 360, 850, 1025, 1200] },
-  { id: 23, kind: 'utility', name: 'Ус сувгийн компани', short: 'Ус суваг', region: 'УСУГ', price: 150 },
-  { id: 24, kind: 'gotojail', name: 'Шоронд яв', short: 'ШОРОНД ЯВ' },
-  { id: 25, kind: 'property', name: 'Дархан', short: 'Дархан', region: 'Дархан-Уул', group: 'green', price: 300, rent: 26, houseCost: 200, rents: [26, 130, 390, 900, 1100, 1275] },
-  { id: 26, kind: 'property', name: 'Эрдэнэт', short: 'Эрдэнэт', region: 'Орхон', group: 'green', price: 300, rent: 26, houseCost: 200, rents: [26, 130, 390, 900, 1100, 1275] },
-  { id: 27, kind: 'chest', name: 'Эрдэнэсийн авдар', short: 'Авдар' },
-  { id: 28, kind: 'property', name: 'Тэрэлж', short: 'Тэрэлж', region: 'Төв', group: 'green', price: 320, rent: 28, houseCost: 200, rents: [28, 150, 450, 1000, 1200, 1400] },
-  { id: 29, kind: 'tax', name: 'Тансгийн татвар', short: 'Тансаг', rent: 100 },
-  { id: 30, kind: 'property', name: 'Зайсан', short: 'Зайсан', region: 'Улаанбаатар', group: 'navy', price: 350, rent: 35, houseCost: 200, rents: [35, 175, 500, 1100, 1300, 1500] },
-  { id: 31, kind: 'property', name: 'Сүхбаатарын талбай', short: 'Сүхбаатар', region: 'Улаанбаатар', group: 'navy', price: 400, rent: 50, houseCost: 200, rents: [50, 200, 600, 1400, 1700, 2000] },
+  P(1, 'Сайншанд', 'Сайн\u00ADшанд', 'Дорноговь', 'brown', 60, 50, [2, 10, 30, 90, 160, 250]),
+  { id: 2, kind: 'chest', name: 'Эрдэнэсийн авдар', short: 'Авдар' },
+  P(3, 'Даланзадгад', 'Далан\u00ADзадгад', 'Өмнөговь', 'brown', 60, 50, [4, 20, 60, 180, 320, 450]),
+  { id: 4, kind: 'tax', name: 'Орлогын татвар', short: 'Орлогын татвар', taxPercent: 10 },
+  { id: 5, kind: 'rail', name: 'Чингис хаан нисэх буудал', short: 'Нисэх буудал', region: 'Агаарын зам', price: 200 },
+  P(6, 'Улаангом', 'Улаан\u00ADгом', 'Увс', 'sky', 100, 50, [6, 30, 90, 270, 400, 550]),
+  { id: 7, kind: 'chance', name: 'Хувь тавилан', short: 'Хувь' },
+  P(8, 'Мөрөн', 'Мөрөн', 'Хөвсгөл', 'sky', 100, 50, [6, 30, 90, 270, 400, 550]),
+  P(9, 'Улиастай', 'Улиас\u00ADтай', 'Завхан', 'sky', 120, 50, [8, 40, 100, 300, 450, 600]),
+  { id: 10, kind: 'jail', name: 'Шорон', short: 'ШОРОН' },
+  P(11, 'Өлгий', 'Өлгий', 'Баян-Өлгий', 'pink', 140, 100, [10, 50, 150, 450, 625, 750]),
+  { id: 12, kind: 'utility', name: 'Цахилгаан станц', short: 'Цахил\u00ADгаан', region: 'Дулааны станц', price: 150 },
+  P(13, 'Ховд', 'Ховд', 'Ховд', 'pink', 140, 100, [10, 50, 150, 450, 625, 750]),
+  P(14, 'Алтай', 'Алтай', 'Говь-Алтай', 'pink', 160, 100, [12, 60, 180, 500, 700, 900]),
+  { id: 15, kind: 'rail', name: 'Улаанбаатар өртөө', short: 'УБ өртөө', region: 'Төмөр зам', price: 200 },
+  P(16, 'Баянхонгор', 'Баян\u00ADхонгор', 'Баянхонгор', 'orange', 180, 100, [14, 70, 200, 550, 750, 950]),
+  { id: 17, kind: 'chest', name: 'Эрдэнэсийн авдар', short: 'Авдар' },
+  P(18, 'Арвайхээр', 'Арвай\u00ADхээр', 'Өвөрхангай', 'orange', 180, 100, [14, 70, 200, 550, 750, 950]),
+  P(19, 'Цэцэрлэг', 'Цэцэр\u00ADлэг', 'Архангай', 'orange', 200, 100, [16, 80, 220, 600, 800, 1000]),
+  { id: 20, kind: 'parking', name: 'Наадмын амралт', short: 'НААДАМ' },
+  P(21, 'Өндөрхаан', 'Өндөр\u00ADхаан', 'Хэнтий', 'red', 220, 150, [18, 90, 250, 700, 875, 1050]),
+  { id: 22, kind: 'chance', name: 'Хувь тавилан', short: 'Хувь' },
+  P(23, 'Дадал', 'Дадал', 'Хэнтий', 'red', 220, 150, [18, 90, 250, 700, 875, 1050]),
+  P(24, 'Хархорин', 'Хар\u00ADхорин', 'Өвөрхангай', 'red', 240, 150, [20, 100, 300, 750, 925, 1100]),
+  { id: 25, kind: 'rail', name: 'Замын-Үүд боомт', short: 'Замын-Үүд', region: 'Хилийн боомт', price: 200 },
+  P(26, 'Чойбалсан', 'Чой\u00ADбалсан', 'Дорнод', 'yellow', 260, 150, [22, 110, 330, 800, 975, 1150]),
+  P(27, 'Баруун-Урт', 'Баруун-Урт', 'Сүхбаатар', 'yellow', 260, 150, [22, 110, 330, 800, 975, 1150]),
+  { id: 28, kind: 'utility', name: 'Ус сувгийн компани', short: 'Ус суваг', region: 'УСУГ', price: 150 },
+  P(29, 'Халх гол', 'Халх гол', 'Дорнод', 'yellow', 280, 150, [24, 120, 360, 850, 1025, 1200]),
+  { id: 30, kind: 'gotojail', name: 'Шоронд яв', short: 'ШОРОНД ЯВ' },
+  P(31, 'Дархан', 'Дархан', 'Дархан-Уул', 'green', 300, 200, [26, 130, 390, 900, 1100, 1275]),
+  P(32, 'Эрдэнэт', 'Эрдэнэт', 'Орхон', 'green', 300, 200, [26, 130, 390, 900, 1100, 1275]),
+  { id: 33, kind: 'chest', name: 'Эрдэнэсийн авдар', short: 'Авдар' },
+  P(34, 'Оюу толгой', 'Оюу толгой', 'Өмнөговь', 'green', 320, 200, [28, 150, 450, 1000, 1200, 1400]),
+  { id: 35, kind: 'rail', name: 'Алтанбулаг боомт', short: 'Алтан\u00ADбулаг', region: 'Хилийн боомт', price: 200 },
+  { id: 36, kind: 'chance', name: 'Хувь тавилан', short: 'Хувь' },
+  P(37, 'Зайсан', 'Зайсан', 'Улаанбаатар', 'navy', 350, 200, [35, 175, 500, 1100, 1300, 1500]),
+  { id: 38, kind: 'tax', name: 'Тансгийн татвар', short: 'Тансгийн татвар', rent: 75 },
+  P(39, 'Сүхбаатарын талбай', 'Сүхбаатар талбай', 'Улаанбаатар', 'navy', 400, 200, [50, 200, 600, 1400, 1700, 2000]),
 ];
 
 export const GROUP_TILES: Record<ColorGroup, number[]> = BOARD.reduce((groups, tile) => {
@@ -72,19 +90,51 @@ export const GROUP_TILES: Record<ColorGroup, number[]> = BOARD.reduce((groups, t
 export const START_MONEY = 1500;
 export const PASS_START_BONUS = 200;
 export const JAIL_FINE = 50;
-export const JAIL_TILE = 8;
+export const JAIL_TILE = 10;
 /** Rolls a jailed player gets to throw doubles; after the last miss the fine is paid automatically. */
 export const JAIL_TERM = 3;
-/** Default round limit; the host can pick another, or play until one player is left. */
+/** Round limit of games saved before rooms could choose; new rooms play until one player is left. */
 export const MAX_ROUNDS = 20;
 export const ROUND_CHOICES = [10, 15, 20, 30] as const;
-/** Room rules for the board game. `rounds: null` plays on until everyone else is bankrupt. */
-export type MonopolySettings = { rounds: number | null };
-export const DEFAULT_MONOPOLY_SETTINGS: MonopolySettings = { rounds: MAX_ROUNDS };
+export const STARTING_CASH_CHOICES = [1000, 1500, 2000, 3000] as const;
+
+/** Rules the host can switch, as in Richup's room settings. */
+export type MonopolyRules = {
+  startingCash: number;
+  /** Rent doubles on an unbuilt deed when its owner has the whole colour set. */
+  doubleRent: boolean;
+  /** Taxes, fines and card payments go into a pot; landing on Наадам takes it. */
+  vacationCash: boolean;
+  /** A deed nobody buys is auctioned. */
+  auction: boolean;
+  /** No rent is collected for an owner who sits in prison. */
+  prisonNoRent: boolean;
+  /** Deeds can be mortgaged for half their price. */
+  mortgage: boolean;
+  /** Houses go up (and come down) evenly across a colour set. */
+  evenBuild: boolean;
+};
+/** Room settings for the board game. `rounds: null` plays on until everyone else is bankrupt. */
+export type MonopolySettings = MonopolyRules & { rounds: number | null };
+export const DEFAULT_MONOPOLY_RULES: MonopolyRules = {
+  startingCash: START_MONEY, doubleRent: true, vacationCash: true, auction: true, prisonNoRent: false, mortgage: true, evenBuild: true,
+};
+export const DEFAULT_MONOPOLY_SETTINGS: MonopolySettings = { ...DEFAULT_MONOPOLY_RULES, rounds: null };
 export function sanitizeMonopolySettings(input: unknown): MonopolySettings {
-  const rounds = (input && typeof input === 'object' ? (input as { rounds?: unknown }).rounds : undefined);
-  if (rounds === null) return { rounds: null };
-  return { rounds: (ROUND_CHOICES as readonly number[]).includes(Number(rounds)) ? Number(rounds) : MAX_ROUNDS };
+  const raw = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  const flag = (key: keyof MonopolyRules) => typeof raw[key] === 'boolean' ? raw[key] as boolean : DEFAULT_MONOPOLY_RULES[key] as boolean;
+  const rounds = (ROUND_CHOICES as readonly number[]).includes(Number(raw.rounds)) && raw.rounds !== null ? Number(raw.rounds) : null;
+  const cash = Number(raw.startingCash);
+  return {
+    rounds,
+    startingCash: (STARTING_CASH_CHOICES as readonly number[]).includes(cash) ? cash : START_MONEY,
+    doubleRent: flag('doubleRent'), vacationCash: flag('vacationCash'), auction: flag('auction'),
+    prisonNoRent: flag('prisonNoRent'), mortgage: flag('mortgage'), evenBuild: flag('evenBuild'),
+  };
+}
+/** The rules a game was started with (games saved before rules existed: the defaults). */
+export function rulesOf(state: Pick<MonopolyState, 'rules'>): MonopolyRules {
+  return { ...DEFAULT_MONOPOLY_RULES, ...(state.rules ?? {}) };
 }
 export const MIN_MONOPOLY_PLAYERS = 2;
 /** The bank's building supply. A ger camp hands its four houses back to the bank. */
@@ -114,9 +164,9 @@ const JAIL_FREE_TEXT = 'Шоронгоос үнэгүй гарах карт. Х�
 
 export const CHANCE: Card[] = [
   { title: 'Шуурхай аялал', text: 'Эхлэл рүү шууд оч, 200₮ ав.', effect: { type: 'move-to', tile: 0 } },
-  { title: 'Хархорин аялал', text: 'Хархорин руу яв. Эхлэлийг давбал 200₮ авна.', effect: { type: 'move-to', tile: 19 } },
-  { title: 'Бүргэдийн баяр', text: 'Өлгийд бүргэдийн баярт оч. Эхлэлийг давбал 200₮ авна.', effect: { type: 'move-to', tile: 9 } },
-  { title: 'Галт тэрэг', text: 'Хамгийн ойрын өртөө, боомт руу яв. Эзэнтэй бол түрээсийг 2 дахин төлнө.', effect: { type: 'nearest', kind: 'rail' } },
+  { title: 'Хархорин аялал', text: 'Хархорин руу яв. Эхлэлийг давбал 200₮ авна.', effect: { type: 'move-to', tile: 24 } },
+  { title: 'Бүргэдийн баяр', text: 'Өлгийд бүргэдийн баярт оч. Эхлэлийг давбал 200₮ авна.', effect: { type: 'move-to', tile: 11 } },
+  { title: 'Аялал', text: 'Хамгийн ойрын нисэх буудал, өртөө, боомт руу яв. Эзэнтэй бол түрээсийг 2 дахин төлнө.', effect: { type: 'nearest', kind: 'rail' } },
   { title: 'Ашиглалтын газар', text: 'Хамгийн ойрын цахилгаан, ус сувгийн газар руу яв. Эзэнтэй бол шооны нийлбэрийг 10-аар үржүүлж төлнө.', effect: { type: 'nearest', kind: 'utility' } },
   { title: 'Ногдол ашиг', text: 'Банк танд 50₮ ногдол ашиг өгнө.', effect: { type: 'money', amount: 50 } },
   { title: 'Өршөөл', text: JAIL_FREE_TEXT, effect: { type: 'jail-free' } },
@@ -124,8 +174,8 @@ export const CHANCE: Card[] = [
   { title: 'Хурд хэтрүүлэв', text: 'Зам цагдаа баривчиллаа. Шууд шоронд яв.', effect: { type: 'jail' } },
   { title: 'Ерөнхий засвар', text: 'Гэр бүрд 25₮, жуулчны бааз бүрд 100₮ засварын зардал төлнө.', effect: { type: 'repairs', perHouse: 25, perHotel: 100 } },
   { title: 'Торгууль', text: 'Хог хаясны торгууль 15₮ төлнө.', effect: { type: 'money', amount: -15 } },
-  { title: 'Нисэх буудал', text: 'Чингис хаан нисэх буудал руу яв. Эхлэлийг давбал 200₮ авна.', effect: { type: 'move-to', tile: 13 } },
-  { title: 'Нийслэлд', text: 'Сүхбаатарын талбай руу яв.', effect: { type: 'move-to', tile: 31 } },
+  { title: 'Нисэх буудал', text: 'Чингис хаан нисэх буудал руу яв. Эхлэлийг давбал 200₮ авна.', effect: { type: 'move-to', tile: 5 } },
+  { title: 'Нийслэлд', text: 'Сүхбаатарын талбай руу яв.', effect: { type: 'move-to', tile: 39 } },
   { title: 'Хурлын дарга', text: 'Хурлын даргаар сонгогдлоо. Тоглогч бүрд 50₮ төлнө.', effect: { type: 'pay-each', amount: 50 } },
   { title: 'Наадмын бөх', text: 'Улсын наадамд түрүүлж 150₮ авна.', effect: { type: 'money', amount: 150 } },
   { title: 'Шатрын тэмцээн', text: 'Шатрын тэмцээнд түрүүлж 100₮ авна.', effect: { type: 'money', amount: 100 } },
@@ -229,6 +279,10 @@ export type MonopolyState = {
   decks?: Record<DeckName, number[]>;
   /** Round limit for this match; null = until one player is left. Older saves: MAX_ROUNDS. */
   maxRounds?: number | null;
+  /** Room rules this game was started with. */
+  rules?: MonopolyRules;
+  /** Vacation pot: taxes, fines and card payments to the bank, taken by whoever lands on Наадам. */
+  pot?: number;
 };
 
 /** The round limit in force, or null when the game only ends by bankruptcy. */
@@ -308,7 +362,8 @@ function freshDecks(players: MonopolyPlayer[], random: RandomSource): Record<Dec
 export function createMonopolyGame(players: Array<Pick<MonopolyPlayer, 'id' | 'name' | 'initials' | 'color' | 'avatarUrl' | 'host' | 'bot'>>, random: RandomSource = Math.random, settings: MonopolySettings = DEFAULT_MONOPOLY_SETTINGS): MonopolyState {
   const order = shuffle(players.map((entry) => entry.id), random);
   const first = players.find((entry) => entry.id === order[0])!;
-  const seated = players.map((entry) => ({ ...entry, avatarUrl: entry.avatarUrl ?? null, money: START_MONEY, position: 0, inJail: false, jailTries: 0, bankrupt: false, jailCards: [] as DeckName[] }));
+  const rules = sanitizeMonopolySettings(settings);
+  const seated = players.map((entry) => ({ ...entry, avatarUrl: entry.avatarUrl ?? null, money: rules.startingCash, position: 0, inJail: false, jailTries: 0, bankrupt: false, jailCards: [] as DeckName[] }));
   return {
     kind: 'monopoly',
     phase: 'roll',
@@ -327,7 +382,12 @@ export function createMonopolyGame(players: Array<Pick<MonopolyPlayer, 'id' | 'n
     trade: null,
     offersThisTurn: 0,
     decks: freshDecks(seated, random),
-    maxRounds: sanitizeMonopolySettings(settings).rounds,
+    maxRounds: rules.rounds,
+    rules: {
+      startingCash: rules.startingCash, doubleRent: rules.doubleRent, vacationCash: rules.vacationCash, auction: rules.auction,
+      prisonNoRent: rules.prisonNoRent, mortgage: rules.mortgage, evenBuild: rules.evenBuild,
+    },
+    pot: 0,
   };
 }
 
@@ -350,10 +410,12 @@ export function rentFor(state: MonopolyState, tileId: number, diceTotal: number)
   const tile = BOARD[tileId];
   const tileState = state.tiles[tileId];
   if (tileState.owner === null || tileState.mortgaged) return 0;
+  const rules = rulesOf(state);
+  if (rules.prisonNoRent && state.players.find((entry) => entry.id === tileState.owner)?.inJail) return 0;
   if (tile.kind === 'property') {
     const rents = tile.rents!;
     if (tileState.houses > 0) return rents[tileState.houses];
-    return ownsGroup(state, tileState.owner, tile.group!) ? rents[0] * 2 : rents[0];
+    return rules.doubleRent && ownsGroup(state, tileState.owner, tile.group!) ? rents[0] * 2 : rents[0];
   }
   if (tile.kind === 'rail') {
     const owned = BOARD.filter((other) => other.kind === 'rail' && state.tiles[other.id].owner === tileState.owner).length;
@@ -411,6 +473,7 @@ function pay(state: MonopolyState, from: number, amount: number, to: number | nu
   if (debtor.money >= amount) {
     next = withPlayer(next, from, (value) => ({ ...value, money: value.money - amount }));
     if (to !== null) next = withPlayer(next, to, (value) => ({ ...value, money: value.money + amount }));
+    else next = toPot(next, amount);
     return log(next, `${debtor.name} ${reason} ${money(amount)} төллөө.`);
   }
   // Bankrupt: give everything that is left to the creditor.
@@ -418,7 +481,7 @@ function pay(state: MonopolyState, from: number, amount: number, to: number | nu
   const cards = debtor.jailCards ?? [];
   next = withPlayer(next, from, (value) => ({ ...value, money: 0, bankrupt: true, inJail: false, jailCards: [] }));
   if (to !== null) next = withPlayer(next, to, (value) => ({ ...value, money: value.money + remaining, jailCards: [...(value.jailCards ?? []), ...cards] }));
-  else next = returnJailCards(next, cards);
+  else next = toPot(returnJailCards(next, cards), remaining);
   next = {
     ...next,
     tiles: next.tiles.map((tileState) => tileState.owner === from
@@ -427,6 +490,11 @@ function pay(state: MonopolyState, from: number, amount: number, to: number | nu
   };
   next = log(next, `${debtor.name} дампуурлаа${to !== null ? `. Хөрөнгө нь ${player(next, to).name}-д шилжив` : ''}.`);
   return checkWinner(next);
+}
+
+/** Money paid to the bank goes into the vacation pot when that rule is on. */
+function toPot(state: MonopolyState, amount: number): MonopolyState {
+  return rulesOf(state).vacationCash && amount > 0 ? { ...state, pot: (state.pot ?? 0) + amount } : state;
 }
 
 function raiseCash(state: MonopolyState, id: number, needed: number): MonopolyState {
@@ -443,8 +511,9 @@ function raiseCash(state: MonopolyState, id: number, needed: number): MonopolySt
     next = withTile(next, built.index, (value) => ({ ...value, houses: lower }));
     next = withPlayer(next, id, (value) => ({ ...value, money: value.money + refund }));
   }
-  // Then mortgage the cheapest property.
+  // Then mortgage the cheapest property (when mortgages are allowed).
   for (;;) {
+    if (!rulesOf(next).mortgage) break;
     if (player(next, id).money >= needed) return next;
     const target = next.tiles.map((value, index) => ({ value, index })).filter(({ value }) => value.owner === id && !value.mortgaged).sort((left, right) => (BOARD[left.index].price ?? 0) - (BOARD[right.index].price ?? 0))[0];
     if (!target) break;
@@ -553,7 +622,14 @@ function land(state: MonopolyState, id: number, diceTotal: number, random: Rando
     }
     return { ...state, phase: 'end' };
   }
-  if (tile.kind === 'tax') return settled(pay(state, id, tile.rent!, null, tile.name));
+  if (tile.kind === 'tax') {
+    const amount = tile.taxPercent ? Math.round((player(state, id).money * tile.taxPercent) / 100) : tile.rent ?? 0;
+    return amount > 0 ? settled(pay(state, id, amount, null, tile.name)) : { ...state, phase: 'end' };
+  }
+  if (tile.kind === 'parking' && rulesOf(state).vacationCash && (state.pot ?? 0) > 0) {
+    const pot = state.pot ?? 0;
+    return log({ ...withPlayer(state, id, (value) => ({ ...value, money: value.money + pot })), pot: 0, phase: 'end' }, `${player(state, id).name} Наадмын санг авч ${money(pot)} оллоо!`);
+  }
   if (tile.kind === 'chance') return drawCard(state, id, 'chance', random, diceTotal);
   if (tile.kind === 'chest') return drawCard(state, id, 'chest', random, diceTotal);
   if (tile.kind === 'gotojail') return sendToJail(state, id);
@@ -586,7 +662,7 @@ function canBuildOn(state: MonopolyState, id: number, tileId: number): string {
   const group = GROUP_TILES[tile.group!];
   if (group.some((other) => state.tiles[other].mortgaged)) return 'Барьцаалсан газартай бүлэгт барих боломжгүй.';
   if (tileState.houses >= 5) return 'Энэ газар бүрэн баригдсан.';
-  if (tileState.houses > Math.min(...group.map((other) => state.tiles[other].houses))) return 'Байшинг бүлгийн газруудад жигд барина.';
+  if (rulesOf(state).evenBuild && tileState.houses > Math.min(...group.map((other) => state.tiles[other].houses))) return 'Байшинг бүлгийн газруудад жигд барина.';
   const supply = bankSupply(state);
   if (tileState.houses === 4 && supply.hotels <= 0) return 'Банкинд жуулчны бааз дууссан.';
   if (tileState.houses < 4 && supply.houses <= 0) return 'Банкинд гэр дууссан.';
@@ -738,8 +814,15 @@ function executeTrade(state: MonopolyState, offer: TradeOffer): MonopolyState {
 
 /** Applies one player action. Returns an error message (Mongolian) instead of changing state when invalid. */
 export function applyMonopolyAction(state: MonopolyState, actorId: number, action: MonopolyAction, random: RandomSource = Math.random): MonopolyResult {
+  if (state.phase !== 'finished' && state.tiles.length !== BOARD.length) return { state: retireOldBoard(state) };
   const result = applyAction(state, actorId, action, random);
   return result.error ? result : { state: skipBankruptTurn(result.state) };
+}
+
+/** A game saved on the old 32-tile board cannot go on on the new one: it ends by net worth. */
+function retireOldBoard(state: MonopolyState): MonopolyState {
+  const ranked = state.players.filter((entry) => !entry.bankrupt).sort((left, right) => right.money - left.money);
+  return finish(state, ranked[0]?.id ?? null, 'Самбар шинэчлэгдсэн тул энэ тоглолт дууслаа. Шинээр эхлүүлнэ үү.');
 }
 
 /** A player who goes bankrupt on their own turn (rent, tax, a card) hands the turn on instead of freezing the game. */
@@ -828,7 +911,8 @@ function applyAction(state: MonopolyState, actorId: number, action: MonopolyActi
     }
     case 'decline': {
       if (state.phase !== 'buy') return { state, error: 'Одоо алгасах зүйл алга.' };
-      return { state: startAuction(log(state, `${actor.name} ${BOARD[actor.position].name}-г авсангүй.`), actor.position) };
+      const declined = log(state, `${actor.name} ${BOARD[actor.position].name}-г авсангүй.`);
+      return { state: rulesOf(state).auction ? startAuction(declined, actor.position) : { ...declined, phase: 'end' } };
     }
     case 'end': {
       if (state.phase === 'buy') return { state, error: 'Эхлээд газрыг авах эсвэл алгасна уу.' };
@@ -840,7 +924,7 @@ function applyAction(state: MonopolyState, actorId: number, action: MonopolyActi
       // Before rolling, or straight away at the end of the turn that put you in jail.
       if (!actor.inJail || (state.phase !== 'roll' && state.phase !== 'end')) return { state, error: 'Одоо торгууль төлөх шаардлагагүй.' };
       if (actor.money < JAIL_FINE) return { state, error: 'Мөнгө хүрэлцэхгүй байна.' };
-      const next = withPlayer(state, actorId, (value) => ({ ...value, money: value.money - JAIL_FINE, inJail: false, jailTries: 0 }));
+      const next = toPot(withPlayer(state, actorId, (value) => ({ ...value, money: value.money - JAIL_FINE, inJail: false, jailTries: 0 })), JAIL_FINE);
       return { state: log(next, `${actor.name} ${money(JAIL_FINE)} төлж шоронгоос гарлаа.`) };
     }
     case 'use-card': {
@@ -866,7 +950,7 @@ function applyAction(state: MonopolyState, actorId: number, action: MonopolyActi
       const tileState = state.tiles[action.tile];
       if (!tile || tileState.owner !== actorId || tileState.houses === 0) return { state, error: 'Зарах байшин алга.' };
       const group = GROUP_TILES[tile.group!];
-      if (tileState.houses < Math.max(...group.map((other) => state.tiles[other].houses))) return { state, error: 'Байшинг бүлгийн газруудаас жигд зарна.' };
+      if (rulesOf(state).evenBuild && tileState.houses < Math.max(...group.map((other) => state.tiles[other].houses))) return { state, error: 'Байшинг бүлгийн газруудаас жигд зарна.' };
       if (tileState.houses === 5 && bankSupply(state).houses < 4) return { state, error: 'Банкинд 4 гэр үлдээгүй тул баазыг гэр болгож задлах боломжгүй.' };
       let next = withTile(state, action.tile, (value) => ({ ...value, houses: value.houses - 1 }));
       next = withPlayer(next, actorId, (value) => ({ ...value, money: value.money + tile.houseCost! / 2 }));
@@ -875,6 +959,7 @@ function applyAction(state: MonopolyState, actorId: number, action: MonopolyActi
     case 'mortgage': {
       const tile = BOARD[action.tile];
       const tileState = state.tiles[action.tile];
+      if (!rulesOf(state).mortgage) return { state, error: 'Энэ өрөөнд барьцаа хаалттай.' };
       if (!tile || tileState.owner !== actorId || tileState.mortgaged) return { state, error: 'Энэ газрыг барьцаалах боломжгүй.' };
       if (tile.group && GROUP_TILES[tile.group].some((other) => state.tiles[other].houses > 0)) return { state, error: 'Эхлээд бүлгийн байшингуудыг зарна уу.' };
       let next = withTile(state, action.tile, (value) => ({ ...value, mortgaged: true }));
@@ -920,6 +1005,7 @@ function proposeTrade(state: MonopolyState, actor: MonopolyPlayer, raw: TradePro
 /** What happens when the acting player's timer runs out: roll, skip buying, pass a bid, turn down an offer, or end the turn. */
 export function autoPlay(state: MonopolyState, random: RandomSource = Math.random): MonopolyState {
   if (state.phase === 'finished') return state;
+  if (state.tiles.length !== BOARD.length) return retireOldBoard(state);
   // Also unfreezes games saved before bankrupt turns were handed on.
   const unstuck = skipBankruptTurn(state);
   if (unstuck !== state) return unstuck;
@@ -965,7 +1051,8 @@ export function runMonopolySelfTests() {
     ...value, tiles: value.tiles.map((tileState, index) => owners[index] !== undefined ? { ...tileState, owner: owners[index], ...extra } : tileState),
   });
 
-  require(BOARD.length === 32 && BOARD.every((tile, index) => tile.id === index), 'The board has 32 tiles in order.');
+  require(BOARD.length === 40 && BOARD.every((tile, index) => tile.id === index), 'The board has 40 tiles in order.');
+  require(BOARD.filter((tile) => tile.kind === 'property').length === 22 && BOARD.filter((tile) => tile.kind === 'rail').length === 4 && BOARD[JAIL_TILE].kind === 'jail' && BOARD[30].kind === 'gotojail' && BOARD[20].kind === 'parking', 'The classic layout: 22 deeds, 4 transport hubs, the corners in place.');
   require(Object.values(GROUP_TILES).every((tiles) => tiles.length >= 2), 'Every colour group has at least two tiles.');
   require(BOARD.every((tile) => tile.kind !== 'property' || (tile.rents?.length === 6 && tile.rents[0] === tile.rent)), 'Every property has a six-step rent ladder.');
   require(CHANCE.length === 16 && CHEST.length === 16 && JAIL_FREE_CARD.chance >= 0 && JAIL_FREE_CARD.chest >= 0, 'Both decks have 16 cards and a jail card.');
@@ -994,7 +1081,7 @@ export function runMonopolySelfTests() {
   state = createMonopolyGame(people, () => 0.99);
   const owner = currentPlayerId(state);
   state = own(state, { 1: owner, 3: owner });
-  require(rentFor(state, 1, 7) === 8, 'Owning the whole group doubles base rent.');
+  require(rentFor(state, 1, 7) === BOARD[1].rents![0] * 2, 'Owning the whole group doubles base rent.');
   state = act(state, owner, { type: 'build', tile: 1 });
   require(state.tiles[1].houses === 1, 'A house can be built on a full group.');
   require(Boolean(applyMonopolyAction(state, owner, { type: 'build', tile: 1 }).error), 'Houses must be built evenly.');
@@ -1006,9 +1093,9 @@ export function runMonopolySelfTests() {
   state = createMonopolyGame(people, () => 0.99);
   const builder = currentPlayerId(state);
   const rival = state.order[1];
-  state = { ...state, tiles: state.tiles.map((tileState, index) => [17, 19, 20, 22, 25, 26, 28, 30].includes(index) ? { owner: rival, houses: 4, mortgaged: false } : index === 1 || index === 3 ? { owner: builder, houses: 0, mortgaged: false } : tileState) };
+  state = { ...state, tiles: state.tiles.map((tileState, index) => [6, 8, 9, 11, 13, 14, 16, 18].includes(index) ? { owner: rival, houses: 4, mortgaged: false } : index === 1 || index === 3 ? { owner: builder, houses: 0, mortgaged: false } : tileState) };
   require(bankSupply(state).houses === 0 && Boolean(applyMonopolyAction(state, builder, { type: 'build', tile: 1 }).error), 'No houses can be built once the bank runs out.');
-  state = { ...state, tiles: state.tiles.map((tileState, index) => [6, 7, 9, 11, 12, 14, 17, 19, 20, 22, 25, 26].includes(index) ? { owner: rival, houses: 5, mortgaged: false } : index === 1 || index === 3 ? { owner: builder, houses: 4, mortgaged: false } : index === 28 || index === 30 ? { owner: null, houses: 0, mortgaged: false } : tileState) };
+  state = { ...state, tiles: state.tiles.map((tileState, index) => [6, 8, 9, 11, 13, 14, 16, 18, 19, 21, 23, 24].includes(index) ? { owner: rival, houses: 5, mortgaged: false } : index === 1 || index === 3 ? { owner: builder, houses: 4, mortgaged: false } : tileState) };
   require(bankSupply(state).hotels === 0 && Boolean(applyMonopolyAction(state, builder, { type: 'build', tile: 1 }).error), 'No ger camp can be built once the bank runs out.');
 
   // Declining starts an auction; a pass is final; the last bidder standing pays and takes the deed.
@@ -1075,7 +1162,7 @@ export function runMonopolySelfTests() {
   state = createMonopolyGame(people, () => 0.99);
   const lucky = currentPlayerId(state);
   state = { ...state, decks: { ...state.decks!, chance: [JAIL_FREE_CARD.chance, ...state.decks!.chance.filter((index) => index !== JAIL_FREE_CARD.chance)] } };
-  state = act(state, lucky, { type: 'roll' }, sequence([dieValue(1), dieValue(1)]));
+  state = act(state, lucky, { type: 'roll' }, sequence([dieValue(3), dieValue(4)]));
   require(player(state, lucky).jailCards?.length === 1 && state.decks!.chance.length === 15, 'Drawing the jail card keeps it in hand.');
   state = withPlayer({ ...state, phase: 'end', rollAgain: false }, lucky, (value) => ({ ...value, inJail: true, position: JAIL_TILE }));
   state = act(state, lucky, { type: 'use-card' });
@@ -1085,10 +1172,10 @@ export function runMonopolySelfTests() {
   state = createMonopolyGame(people, () => 0.99);
   const traveller = currentPlayerId(state);
   const landlord = state.order[1];
-  state = own(state, { 5: landlord });
+  state = own(state, { 15: landlord });
   state = { ...state, decks: { ...state.decks!, chance: [3, ...state.decks!.chance.filter((index) => index !== 3)] } };
-  state = act(state, traveller, { type: 'roll' }, sequence([dieValue(1), dieValue(1)]));
-  require(player(state, traveller).position === 5 && player(state, traveller).money === START_MONEY - 50, 'The nearest-railway card charges double rent.');
+  state = act(state, traveller, { type: 'roll' }, sequence([dieValue(3), dieValue(4)]));
+  require(player(state, traveller).position === 15 && player(state, traveller).money === START_MONEY - 50, 'The nearest-transport card charges double rent.');
 
   // Three doubles in a row sends to jail; three missed jail rolls pay the fine.
   state = createMonopolyGame(people, () => 0.99);
@@ -1103,7 +1190,7 @@ export function runMonopolySelfTests() {
   // Passing start pays the bonus.
   state = createMonopolyGame(people, () => 0.99);
   const passer = currentPlayerId(state);
-  state = withPlayer(state, passer, (value) => ({ ...value, position: 30 }));
+  state = withPlayer(state, passer, (value) => ({ ...value, position: 38 }));
   state = act(state, passer, { type: 'roll' }, sequence([dieValue(1), dieValue(2)]));
   require(player(state, passer).position === 1 && player(state, passer).money === START_MONEY + PASS_START_BONUS, 'Passing start pays the bonus.');
 
@@ -1118,16 +1205,16 @@ export function runMonopolySelfTests() {
   require(player(state, b).money === START_MONEY + 60, 'The creditor receives all remaining cash.');
 
   // Timeouts never leave the game stuck, and the host's round limit ends the game.
-  state = createMonopolyGame(people, () => 0.99);
+  state = createMonopolyGame(people, () => 0.99, sanitizeMonopolySettings({ rounds: 20 }));
   for (let step = 0; step < 600 && state.phase !== 'finished'; step += 1) state = autoPlay(state, Math.random);
-  require(state.round <= MAX_ROUNDS, 'Automatic play keeps the round counter within the limit.');
+  require(state.round <= 20, 'Automatic play keeps the round counter within the limit.');
   state = createMonopolyGame(people, () => 0.99, sanitizeMonopolySettings({ rounds: 10 }));
   for (let step = 0; step < 600 && state.phase !== 'finished'; step += 1) state = autoPlay(state, Math.random);
   require(state.phase === 'finished' && state.round === 10 && /^10 тойрог/.test(state.log[state.log.length - 1]), 'A 10-round game ends after round 10.');
   state = createMonopolyGame(people, () => 0.99, sanitizeMonopolySettings({ rounds: null }));
   for (let step = 0; step < 300; step += 1) state = autoPlay(state, Math.random);
   require(state.phase !== 'finished' && roundLimit(state) === null, 'Without a round limit the game goes on until someone wins.');
-  require(sanitizeMonopolySettings({ rounds: 7 }).rounds === MAX_ROUNDS && roundLimit({}) === MAX_ROUNDS, 'Unknown limits and old games use the default.');
+  require(sanitizeMonopolySettings({ rounds: 7 }).rounds === null && sanitizeMonopolySettings(undefined).rounds === null && roundLimit({}) === MAX_ROUNDS, 'New rooms play until one is left; old saved games keep their 20 rounds.');
 
   // Leaving players are removed cleanly, also in the middle of an auction or a trade.
   state = createMonopolyGame(people, () => 0.99);
@@ -1142,6 +1229,38 @@ export function runMonopolySelfTests() {
   require(state.phase === 'auction' && state.auction!.highBid === 0 && actingPlayerId(state) === l3, "A leaver's bid no longer stands.");
   state = removeMonopolyPlayer(state, l1);
   require(state.phase === 'finished' && state.winner === l3, 'The last player left wins, even mid-auction.');
+
+  // Richup rules: income tax 10%, luxury tax, the vacation pot, and each switchable rule.
+  state = createMonopolyGame(people, () => 0.99);
+  const taxed = currentPlayerId(state);
+  state = withPlayer(state, taxed, (value) => ({ ...value, position: 1 }));
+  state = act(state, taxed, { type: 'roll' }, sequence([dieValue(1), dieValue(2)]));
+  require(player(state, taxed).money === START_MONEY - 150 && state.pot === 150, 'Income tax takes 10% of cash into the vacation pot.');
+  state = withPlayer({ ...state, phase: 'roll', turn: state.order.indexOf(taxed) }, taxed, (value) => ({ ...value, position: 17 }));
+  state = act(state, taxed, { type: 'roll' }, sequence([dieValue(1), dieValue(2)]));
+  require(player(state, taxed).position === 20 && player(state, taxed).money === START_MONEY && state.pot === 0, 'Landing on Наадам takes the pot.');
+  state = withPlayer({ ...state, phase: 'roll' }, taxed, (value) => ({ ...value, position: 35 }));
+  state = act(state, taxed, { type: 'roll' }, sequence([dieValue(1), dieValue(2)]));
+  require(player(state, taxed).money === START_MONEY - 75 && state.pot === 75, 'Luxury tax is a fixed 75₮.');
+  require(createMonopolyGame(people, () => 0.99, sanitizeMonopolySettings({ startingCash: 2000 })).players.every((entry) => entry.money === 2000), 'Starting cash follows the room setting.');
+
+  const plain = sanitizeMonopolySettings({ doubleRent: false, auction: false, prisonNoRent: true, mortgage: false, evenBuild: false });
+  state = createMonopolyGame(people, () => 0.99, plain);
+  const host = currentPlayerId(state);
+  const guest = state.order[1];
+  state = own(state, { 1: host, 3: host });
+  require(rentFor(state, 1, 7) === BOARD[1].rents![0], 'Without the x2 rule a full set pays the base rent.');
+  state = act(state, host, { type: 'build', tile: 1 });
+  state = act(state, host, { type: 'build', tile: 1 });
+  require(state.tiles[1].houses === 2 && state.tiles[3].houses === 0, 'Without even building houses go where the owner wants.');
+  require(Boolean(applyMonopolyAction(state, host, { type: 'mortgage', tile: 3 }).error), 'Mortgages can be switched off.');
+  state = withPlayer(state, host, (value) => ({ ...value, inJail: true, position: JAIL_TILE }));
+  require(rentFor(state, 1, 7) === 0, 'No rent for an owner in prison when that rule is on.');
+  state = createMonopolyGame(people, () => 0.99, plain);
+  state = act(state, currentPlayerId(state), { type: 'roll' }, sequence([dieValue(1), dieValue(2)]));
+  state = act(state, currentPlayerId(state), { type: 'decline' });
+  require(state.phase === 'end' && state.tiles[3].owner === null && !state.auction, 'Without auctions a declined deed stays with the bank.');
+  require(applyMonopolyAction({ ...createMonopolyGame(people, () => 0.99), tiles: Array.from({ length: 32 }, () => ({ owner: null, houses: 0, mortgaged: false })) }, guest, { type: 'roll' }).state.phase === 'finished', 'A game saved on the old board ends cleanly.');
 
   return 'Monopoly self-tests passed.';
 }
