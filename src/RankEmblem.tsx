@@ -1,5 +1,6 @@
 import { useId } from 'react';
-import { MAX_RANK_LEVEL, RANK_METALS, RANK_NAMES, rankInfo, type RankGame, type RankMetal } from './rankRules';
+import type { CSSProperties } from 'react';
+import { MAX_RANK_LEVEL, RANK_METALS, RANK_NAMES, parseRankTitle, rankInfo, type RankGame, type RankMetal } from './rankRules';
 
 export const RANK_GAME_LABEL: Record<RankGame, string> = { mafia: 'Мафи', monopoly: 'Монополь' };
 
@@ -129,4 +130,38 @@ export function RankChip({ game, points, onClick }: { game: RankGame; points: nu
   return onClick
     ? <button type="button" className={`rank-chip metal-${info.metal}`} onClick={onClick} aria-label={`${RANK_GAME_LABEL[game]} рэйтинг: ${info.name}, ${info.points} оноо`}>{body}</button>
     : <span className={`rank-chip metal-${info.metal}`}>{body}</span>;
+}
+
+/*
+ * The profile showcase dresses itself in the worn title: its rank's metal colours the frame and the
+ * glow, the game draws the backdrop (a night skyline for Mafia, a gold lattice for the board game),
+ * and higher ranks add more: corner ornaments (3+), turning light rays (5+), drifting sparks (7+)
+ * and, for the top rank, a flowing border and rising embers.
+ */
+export function showcaseClass(titleKey: string | null | undefined) {
+  const rank = parseRankTitle(titleKey);
+  return rank ? `metal-${RANK_METALS[rank.level - 1]} showcase-game-${rank.game} showcase-tier-${rank.level}` : 'showcase-plain';
+}
+
+export function ShowcaseDecor({ titleKey }: { titleKey: string | null | undefined }) {
+  const rank = parseRankTitle(titleKey);
+  const level = rank?.level ?? 0;
+  return <span className="showcase-decor" aria-hidden="true">
+    <i className="sc-backdrop" />
+    {level >= 5 && <i className="sc-rays" />}
+    {level >= 3 && ['tl', 'tr', 'bl', 'br'].map((corner) => <i key={corner} className={`sc-corner sc-${corner}`} />)}
+    {level >= 7 && Array.from({ length: level >= 9 ? 14 : 9 }, (_, index) => <i key={index} className="sc-spark"
+      style={{ ['--x' as string]: `${(index * 37 + 11) % 96 + 2}%`, ['--d' as string]: `${-((index * 1.37) % 5).toFixed(2)}s`, ['--t' as string]: `${4 + (index % 4) * 0.9}s`, ['--s' as string]: `${2 + (index % 3)}px` } as CSSProperties} />)}
+  </span>;
+}
+
+/** The worn title in the showcase: the rank's emblem, with its name in small metal letters. */
+export function ShowcaseTitle({ titleKey, onClick }: { titleKey: string; onClick?: () => void }) {
+  const rank = parseRankTitle(titleKey);
+  if (!rank) return null;
+  const name = RANK_NAMES[rank.game][rank.level - 1];
+  return <button type="button" className="showcase-title" onClick={onClick} aria-label={`Цол: ${name}`} title={name}>
+    <RankEmblem game={rank.game} level={rank.level} className="showcase-crest" />
+    <span className="showcase-title-name">{name}</span>
+  </button>;
 }

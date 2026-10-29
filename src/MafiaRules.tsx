@@ -40,7 +40,7 @@ export function MafiaRulesCard({ settings, players, isHost, busy, ranked = false
   const rules = sanitizeMafiaSettings(settings);
   return <section className="lobby-rules" aria-label="Тоглоомын дүрэм">
     <header>
-      <span><ScrollText size={13} /> ДҮРЭМ · <b>{ranked ? 'РЭЙТИНГ' : MODE_LABEL[rules.mode].toUpperCase()}</b></span>
+      <span><ScrollText size={13} /> ДҮРЭМ · <b>{ranked ? 'РЭЙТИНГ · СТАНДАРТ' : MODE_LABEL[rules.mode].toUpperCase()}</b></span>
       {isHost && <button type="button" className="lobby-rules-edit" disabled={busy} onClick={onEdit}><SlidersHorizontal size={13} /> ӨӨРЧЛӨХ</button>}
     </header>
     <RoleChips players={players} settings={rules} />

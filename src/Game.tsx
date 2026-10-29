@@ -69,8 +69,8 @@ function watcherView(roles: Record<number, RoleName> | null): PrivateGameView {
   } as unknown as PrivateGameView;
 }
 
-export default function GameScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice, fullscreen, onProfile, watching }: {
-  roomCode: string; roomName: string; userId: string; isHost: boolean; seats: RoomSeat[];
+export default function GameScreen({ roomCode, roomName, userId, isHost, ranked = false, seats, onLeave, onRematch, onNotice, fullscreen, onProfile, watching }: {
+  roomCode: string; roomName: string; userId: string; isHost: boolean; ranked?: boolean; seats: RoomSeat[];
   onLeave: () => void; onRematch: () => void; onNotice: NotifyFn; fullscreen: FullscreenState; onProfile: (seat: number) => void;
   /** Set when an admin watches the table: read only, no voice, every role shown. */
   watching?: { roles: Record<number, RoleName> | null };
@@ -200,6 +200,8 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
     if (await send('vote', { choice: voteSelection })) { setVoteConfirmOpen(false); setVoteSelection(null); }
   };
 
+  // In a ranked game only the clock moves phases on; the host gets no skip buttons.
+  const canSkip = isHost && !ranked;
   const withVoice = (content: ReactNode) => watching ? <>{content}</> : <VoiceChatProvider roomCode={roomCode} userId={userId} seats={seats} phase={voicePhase} alive={currentPlayer.alive} isHost={isHost}>{content}</VoiceChatProvider>;
 
   if (game.phase === 'Results') return withVoice(<ResultsScreen game={game} me={me} roomName={roomName} roomCode={roomCode} userId={userId} isHost={isHost && !watching} watching={Boolean(watching)} onReplay={onRematch} onMenu={onLeave} />);
@@ -212,16 +214,16 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
       <div className="game-top-actions"><button className="game-icon-button" onClick={() => setSettingsOpen(true)} aria-label="Тоглоомын тохиргоо" title="Тоглоомын тохиргоо"><Settings size={16} /></button><button className="game-leave-button" onClick={() => watching ? onLeave() : setLeaveDialog(true)}><ArrowLeft size={14} /> {i18n.game.leaveGame.toUpperCase()}</button></div>
     </header>
 
-    {game.phase === 'Role Reveal' && !watching ? <RoleReveal game={game} player={currentPlayer} me={me} namesOf={namesOf} roomName={roomName} isHost={isHost} busy={busy} secondsLeft={secondsLeft} onContinue={hostSkip} onReady={() => { void send('reveal-ready'); }} /> : <>
+    {game.phase === 'Role Reveal' && !watching ? <RoleReveal game={game} player={currentPlayer} me={me} namesOf={namesOf} roomName={roomName} isHost={canSkip} busy={busy} secondsLeft={secondsLeft} onContinue={hostSkip} onReady={() => { void send('reveal-ready'); }} /> : <>
       <div className="core-game-board">
         <aside className="game-player-list game-player-list-left"><div className="game-list-heading">{i18n.game.table} <span>{String(game.players.length).padStart(2, '0')}</span></div>{leftPlayers.map(renderPlayer)}{!currentPlayer.alive && !watching && <GhostVoice roomCode={roomCode} userId={userId} />}{whisperOpen && !watching && <GhostVoice key="mafia-whisper" roomCode={roomCode} userId={userId} channel="mafia" />}</aside>
         <section className="crime-stage">
           <div className="crime-stage-art" aria-hidden="true"><div className="crime-window" /><div className="crime-light" /><div className="crime-table" /></div>
           <div className="crime-stage-label"><span><i /> {roomName.toUpperCase()} · {roomCode}</span>{me.spectatorRoles && <span className="spectator-tag">АЖИГЛАГЧ · БҮХ ДҮР ХАРАГДАНА</span>}</div>
           {game.phase === 'Night' && <NightPanel round={game.round} player={currentPlayer} me={me} mafiaNames={mafiaNames} nameOf={nameOf} selectedName={nightSelection === null ? undefined : nameOf(nightSelection)} lockedName={me.nightAction.targetId === null ? undefined : nameOf(me.nightAction.targetId)} lastProtectedName={me.lastProtectedId === null ? undefined : nameOf(me.lastProtectedId)} busy={busy} onConfirm={confirmNight} onCancel={() => setNightSelection(null)} />}
-          {game.phase === 'Morning' && <MorningPanel round={game.round} report={game.morningReport} winner={game.winner} isHost={isHost} busy={busy} onContinue={hostSkip} />}
-          {game.phase === 'Discussion' && <DiscussionPanel round={game.round} alive={currentPlayer.alive} watching={Boolean(watching)} isHost={isHost} busy={busy} onVote={hostSkip} onPrivate={() => setPrivateOpen((open) => !open)} />}
-          {game.phase === 'Voting' && <VotingPanel game={game} me={me} alive={currentPlayer.alive} voteSelection={voteSelection} voteConfirmOpen={voteConfirmOpen} isHost={isHost} busy={busy} nameOf={nameOf} onSkip={() => setVoteSelection('skip')} onReview={() => voteSelection === null ? onNotice(translateMessage('Choose a living player or Skip Vote.')) : setVoteConfirmOpen(true)} onSubmit={submitVote} onCancel={() => { setVoteConfirmOpen(false); setVoteSelection(null); }} onNext={hostSkip} onVerdict={giveVerdict} />}
+          {game.phase === 'Morning' && <MorningPanel round={game.round} report={game.morningReport} winner={game.winner} isHost={canSkip} busy={busy} onContinue={hostSkip} />}
+          {game.phase === 'Discussion' && <DiscussionPanel round={game.round} alive={currentPlayer.alive} watching={Boolean(watching)} isHost={canSkip} busy={busy} onVote={hostSkip} onPrivate={() => setPrivateOpen((open) => !open)} />}
+          {game.phase === 'Voting' && <VotingPanel game={game} me={me} alive={currentPlayer.alive} voteSelection={voteSelection} voteConfirmOpen={voteConfirmOpen} isHost={canSkip} busy={busy} nameOf={nameOf} onSkip={() => setVoteSelection('skip')} onReview={() => voteSelection === null ? onNotice(translateMessage('Choose a living player or Skip Vote.')) : setVoteConfirmOpen(true)} onSubmit={submitVote} onCancel={() => { setVoteConfirmOpen(false); setVoteSelection(null); }} onNext={hostSkip} onVerdict={giveVerdict} />}
           {quickOpen && <div className="quick-replies" aria-label="Хурдан хариулт">{QUICK_REPLIES.map((text) => <button type="button" key={text} onClick={() => quick.send(text)}>{text}</button>)}</div>}
         </section>
         <aside className="game-player-list game-player-list-right"><div className="game-list-heading">{i18n.game.stillInIt} <span>{String(living.length).padStart(2, '0')}</span></div>{rightPlayers.map(renderPlayer)}{!watching && <><MyRoleCard role={roleInfo(me.role)} dead={!currentPlayer.alive} onOpen={() => setCardOpen(true)} /><button className="private-info-button" onClick={() => setPrivateOpen((open) => !open)}><LockKeyhole size={13} /> {i18n.game.privateInfo}</button></>}</aside>
@@ -232,7 +234,7 @@ export default function GameScreen({ roomCode, roomName, userId, isHost, seats, 
     {cardOpen && <RoleCardViewer role={roleInfo(me.role)} onClose={closeCard} />}
     {privateOpen && !watching && <PrivateInfoPanel player={currentPlayer} me={me} mafiaNames={mafiaNames} namesOf={namesOf} onClose={() => setPrivateOpen(false)} />}
     {leaveDialog && <div className="game-modal-backdrop"><section className="game-modal" role="dialog" aria-modal="true" aria-labelledby="leave-game-title"><div className="modal-symbol"><ArrowLeft size={18} /></div><h2 id="leave-game-title">Тоглоомоос гарах уу?</h2><p>Гарвал та хасагдсанд тооцогдож, энэ тоглолтод буцаж орох боломжгүй.</p><div className="modal-actions"><button className="secondary-button" onClick={() => setLeaveDialog(false)}>ҮЛДЭХ</button><button className="primary-button" onClick={onLeave}>ТОГЛООМООС ГАРАХ</button></div></section></div>}
-    {settingsOpen && <div className="game-modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="game-modal game-settings-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title" onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setSettingsOpen(false)} aria-label="Тохиргоо хаах"><X size={16} /></button><div className="modal-symbol"><Settings size={18} /></div><h2 id="game-settings-title">Тоглоомын тохиргоо</h2><p>Үе шат бүр цаг дуусахад автоматаар солигдоно. Өрөөний эзэн хүлээх үеийг алгасаж болно.</p><p className="rules-line">Дүрэм: {rulesSummary(game.settings)}</p><div className="setting-list modal-volume"><VolumeControls /></div><div className="modal-fullscreen"><FullscreenToggle fullscreen={fullscreen} /></div><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>ТОГЛООМ ҮРГЭЛЖЛҮҮЛЭХ</button></div></section></div>}
+    {settingsOpen && <div className="game-modal-backdrop" onClick={() => setSettingsOpen(false)}><section className="game-modal game-settings-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title" onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setSettingsOpen(false)} aria-label="Тохиргоо хаах"><X size={16} /></button><div className="modal-symbol"><Settings size={18} /></div><h2 id="game-settings-title">Тоглоомын тохиргоо</h2><p>{ranked ? 'Рэйтинг тоглолт: үе шат бүр тогтмол цагаар явагдана, алгасах боломжгүй.' : 'Үе шат бүр цаг дуусахад автоматаар солигдоно. Өрөөний эзэн хүлээх үеийг алгасаж болно.'}</p><p className="rules-line">Дүрэм: {rulesSummary(game.settings)}</p><div className="setting-list modal-volume"><VolumeControls /></div><div className="modal-fullscreen"><FullscreenToggle fullscreen={fullscreen} /></div><div className="modal-actions"><button className="primary-button" onClick={() => setSettingsOpen(false)}>ТОГЛООМ ҮРГЭЛЖЛҮҮЛЭХ</button></div></section></div>}
   </div>);
 }
 

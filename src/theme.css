@@ -738,34 +738,170 @@
   gap: 12px;
 }
 .viewport .game-frame .profile-showcase {
+  /* Colours come from the worn title's rank (.metal-* and --sc-bg below); plain gold without one. */
   position: relative;
+  isolation: isolate;
   min-width: 0;
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 12px;
-  padding: 10px 10px 16px;
-  border: 1px solid var(--gold-line);
-  border-radius: 14px;
+  gap: 8px;
+  padding: 10px 24px 12px;
+  border: 2px solid transparent;
+  border-radius: 16px;
   background:
-    radial-gradient(circle at 50% 40%, rgba(226, 192, 132, .2), transparent 58%),
-    linear-gradient(180deg, rgba(22, 21, 28, .94), rgba(8, 9, 14, .96));
-  box-shadow: var(--panel-shadow), inset 0 0 40px rgba(0, 0, 0, .55);
+    linear-gradient(180deg, var(--sc-bg, #16151c), #07080c 92%) padding-box,
+    linear-gradient(155deg, var(--m-hi), var(--m-mid) 22%, var(--m-lo) 48%, var(--m-mid) 74%, var(--m-hi)) border-box;
+  background-size: 100% 100%, 100% 100%;
+  box-shadow: var(--panel-shadow), 0 0 22px color-mix(in srgb, var(--m-glow) 70%, transparent), inset 0 0 44px rgba(0, 0, 0, .6);
   overflow: hidden;
 }
-.viewport .game-frame .profile-showcase::before {
+.viewport .game-frame .profile-showcase > :not(.showcase-decor) { position: relative; z-index: 1; }
+.showcase-decor { position: absolute; inset: 0; z-index: 0; border-radius: inherit; overflow: hidden; pointer-events: none; container-type: size; }
+.showcase-decor > i { position: absolute; display: block; }
+/* Backdrop: the metal's glow behind the avatar, and the game's own scenery. */
+.showcase-decor .sc-backdrop {
+  inset: 0;
+  background: radial-gradient(circle at 50% 36%, var(--m-glow), transparent 58%);
+}
+.showcase-game-mafia .showcase-decor .sc-backdrop {
+  background:
+    radial-gradient(circle at 50% 36%, var(--m-glow), transparent 58%),
+    radial-gradient(circle at 78% 12%, color-mix(in srgb, var(--m-hi) 30%, transparent) 0 5%, transparent 6%),
+    linear-gradient(0deg, color-mix(in srgb, var(--m-lo) 55%, #000) 0 6%, transparent 6%),
+    repeating-linear-gradient(105deg, transparent 0 22px, rgba(255, 255, 255, .025) 22px 23px);
+}
+.showcase-game-mafia .showcase-decor .sc-backdrop::after {
   content: '';
   position: absolute;
+  inset: auto 0 0;
+  height: 26%;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--m-lo) 70%, #000), #05060a);
+  opacity: .9;
+  clip-path: polygon(0 52%, 8% 52%, 8% 30%, 15% 30%, 15% 48%, 22% 48%, 22% 12%, 26% 12%, 26% 4%, 29% 4%, 29% 12%, 33% 12%, 33% 44%, 41% 44%, 41% 26%, 49% 26%, 49% 50%, 56% 50%, 56% 18%, 63% 18%, 63% 38%, 70% 38%, 70% 8%, 73% 0, 76% 8%, 76% 42%, 84% 42%, 84% 24%, 91% 24%, 91% 46%, 100% 46%, 100% 100%, 0 100%);
+}
+.showcase-game-monopoly .showcase-decor .sc-backdrop {
+  background:
+    radial-gradient(circle at 50% 36%, var(--m-glow), transparent 58%),
+    repeating-linear-gradient(45deg, color-mix(in srgb, var(--m-mid) 9%, transparent) 0 1px, transparent 1px 26px),
+    repeating-linear-gradient(-45deg, color-mix(in srgb, var(--m-mid) 9%, transparent) 0 1px, transparent 1px 26px);
+}
+.showcase-game-monopoly .showcase-decor .sc-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 30%;
+  background:
+    radial-gradient(ellipse at 50% 100%, color-mix(in srgb, var(--m-mid) 35%, transparent), transparent 70%),
+    linear-gradient(180deg, color-mix(in srgb, var(--m-lo) 60%, #000), #05060a);
+  opacity: .85;
+  clip-path: polygon(0 60%, 6% 60%, 6% 40%, 12% 40%, 12% 58%, 18% 58%, 18% 22%, 21% 14%, 24% 22%, 24% 50%, 31% 50%, 31% 30%, 38% 30%, 38% 56%, 44% 56%, 44% 6%, 47% 0, 50% 6%, 50% 46%, 57% 46%, 57% 26%, 64% 26%, 64% 52%, 70% 52%, 70% 16%, 74% 16%, 74% 44%, 81% 44%, 81% 34%, 88% 34%, 88% 56%, 100% 56%, 100% 100%, 0 100%);
+}
+/* Rank 5+: slow light rays turning behind the avatar. */
+.showcase-decor .sc-rays {
   left: 50%;
-  top: 40%;
-  width: 150%;
+  top: 38%;
+  width: 170%;
   aspect-ratio: 1;
   translate: -50% -50%;
-  background: conic-gradient(from 0deg, transparent 0 8%, rgba(255, 220, 150, .07) 10% 14%, transparent 16% 33%, rgba(255, 220, 150, .06) 35% 39%, transparent 41% 58%, rgba(255, 220, 150, .07) 60% 64%, transparent 66% 83%, rgba(255, 220, 150, .06) 85% 89%, transparent 91%);
-  animation: frame-spin 40s linear infinite;
-  pointer-events: none;
+  background: conic-gradient(from 0deg, transparent 0 7%, color-mix(in srgb, var(--m-hi) 14%, transparent) 9% 12%, transparent 14% 32%, color-mix(in srgb, var(--m-hi) 11%, transparent) 34% 37%, transparent 39% 57%, color-mix(in srgb, var(--m-hi) 14%, transparent) 59% 62%, transparent 64% 82%, color-mix(in srgb, var(--m-hi) 11%, transparent) 84% 87%, transparent 89%);
+  animation: frame-spin 36s linear infinite;
 }
-.viewport .game-frame .profile-showcase { --av: clamp(86px, 31svh, 210px); }
+/* Rank 3+: ornamental metal corners. */
+.showcase-decor .sc-corner {
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--m-hi);
+  filter: drop-shadow(0 0 4px var(--m-glow));
+  opacity: .9;
+}
+.showcase-decor .sc-corner::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: linear-gradient(135deg, var(--m-hi), var(--m-mid));
+  transform: rotate(45deg);
+}
+.showcase-decor .sc-tl { left: 7px; top: 7px; border-right: 0; border-bottom: 0; border-top-left-radius: 8px; }
+.showcase-decor .sc-tr { right: 7px; top: 7px; border-left: 0; border-bottom: 0; border-top-right-radius: 8px; }
+.showcase-decor .sc-bl { left: 7px; bottom: 7px; border-right: 0; border-top: 0; border-bottom-left-radius: 8px; }
+.showcase-decor .sc-br { right: 7px; bottom: 7px; border-left: 0; border-top: 0; border-bottom-right-radius: 8px; }
+.showcase-decor .sc-tl::after { left: 8px; top: 8px; }
+.showcase-decor .sc-tr::after { right: 8px; top: 8px; }
+.showcase-decor .sc-bl::after { left: 8px; bottom: 8px; }
+.showcase-decor .sc-br::after { right: 8px; bottom: 8px; }
+.showcase-tier-7 .showcase-decor .sc-corner, .showcase-tier-8 .showcase-decor .sc-corner, .showcase-tier-9 .showcase-decor .sc-corner { width: 40px; height: 40px; border-width: 3px; }
+/* Rank 7+: sparks drift up through the panel; at the top rank they are embers. */
+.showcase-decor .sc-spark {
+  left: var(--x);
+  bottom: -6px;
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  background: var(--m-hi);
+  box-shadow: 0 0 6px 1px var(--m-glow);
+  opacity: 0;
+  animation: sc-drift var(--t) ease-in var(--d) infinite;
+}
+@keyframes sc-drift {
+  0% { transform: translate(0, 0); opacity: 0; }
+  15% { opacity: .95; }
+  60% { transform: translate(8px, -55cqh); opacity: .7; }
+  100% { transform: translate(-6px, -105cqh); opacity: 0; }
+}
+.showcase-tier-9 .showcase-decor .sc-spark { background: #ffd27a; box-shadow: 0 0 7px 2px rgba(255, 110, 20, .8); animation-duration: calc(var(--t) * .7); }
+/* Top rank: the frame itself flows like fire, and the bottom of the panel burns. */
+.viewport .game-frame .profile-showcase.showcase-tier-9 {
+  background:
+    linear-gradient(180deg, var(--sc-bg, #16151c), #07080c 92%) padding-box,
+    linear-gradient(90deg, #fff1c4, #ffb347, #ff5e3a, #c04cff, #ffb347, #fff1c4) border-box;
+  background-size: 100% 100%, 300% 100%;
+  animation: sc-flow 4s linear infinite;
+}
+@keyframes sc-flow { to { background-position: 0 0, 300% 0; } }
+.showcase-tier-9 .showcase-decor .sc-backdrop { box-shadow: inset 0 -40px 50px -20px rgba(255, 90, 20, .45); }
+.profile-showcase.showcase-plain { --m-hi: #fff1cf; --m-mid: #d8b066; --m-lo: #6e4a17; --m-glow: rgba(226, 192, 132, .3); }
+.metal-iron.profile-showcase { --sc-bg: #1a1c21; }
+.metal-bronze.profile-showcase { --sc-bg: #24170f; }
+.metal-silver.profile-showcase { --sc-bg: #141c27; }
+.metal-gold.profile-showcase { --sc-bg: #241b0c; }
+.metal-emerald.profile-showcase { --sc-bg: #0d241a; }
+.metal-sapphire.profile-showcase { --sc-bg: #0c1630; }
+.metal-ruby.profile-showcase { --sc-bg: #2a0b12; }
+.metal-amethyst.profile-showcase { --sc-bg: #1f0d33; }
+.metal-legend.profile-showcase { --sc-bg: #2a0d0a; }
+/* The worn rank title: its emblem, with the name small underneath. */
+.viewport .game-frame .showcase-title {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.viewport .game-frame .showcase-title .showcase-crest { width: var(--crest, clamp(64px, 20svh, 128px)); filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .7)) drop-shadow(0 0 12px var(--m-glow)); }
+.viewport .game-frame .showcase-title-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: transparent;
+  background: linear-gradient(180deg, #fff, var(--m-hi) 35%, var(--m-mid) 75%, var(--m-lo));
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .9));
+}
+@media (prefers-reduced-motion: reduce) {
+  .showcase-decor *, .viewport .game-frame .profile-showcase.showcase-tier-9 { animation: none !important; }
+}
+.viewport .game-frame .profile-showcase { --av: clamp(76px, 25svh, 180px); }
 .viewport .game-frame .profile-showcase .account-avatar { width: var(--av); height: var(--av); margin: 14px; font-size: calc(var(--av) * .36); }
 .viewport .game-frame .profile-showcase .account-avatar.has-frame { margin: calc(var(--av) * .2); border-color: transparent; }
 .viewport .game-frame .profile-showcase .account-avatar:has(> .is-painted) { margin: calc(var(--av) * .42) 0 calc(var(--av) * .37); }
@@ -798,6 +934,11 @@
   .viewport .game-frame .profile-body { grid-template-columns: minmax(176px, 31%) minmax(0, 1fr); gap: 9px; }
   .viewport .game-frame .profile-showcase { gap: 9px; padding: 6px 6px 12px; }
   .viewport .game-frame .profile-showcase .title-badge.is-hero { --tb-h: 34px; --tb-font: 13.5px; --tb-pad: 15px; --tb-notch: 11px; }
+  .viewport .game-frame .profile-showcase { --av: clamp(70px, 22svh, 150px); gap: 4px; padding: 8px 18px 10px; }
+  .viewport .game-frame .showcase-title .showcase-crest { --crest: clamp(52px, 16svh, 100px); }
+  .viewport .game-frame .showcase-title-name { font-size: 11px; }
+  .showcase-decor .sc-corner { width: 22px; height: 22px; }
+  .showcase-tier-7 .showcase-decor .sc-corner, .showcase-tier-8 .showcase-decor .sc-corner, .showcase-tier-9 .showcase-decor .sc-corner { width: 28px; height: 28px; }
   .viewport .game-frame .profile-main { gap: 7px; }
   .viewport .game-frame .profile-main .profile-identity-row { padding: 9px 12px; }
   .viewport .game-frame .profile-main .profile-footer .secondary-button { height: 27px; padding: 0 8px; font-size: 9px; }
@@ -2622,6 +2763,9 @@
 .title-badge.is-lg { --tb-h: 30px; --tb-pad: 15px; --tb-font: 13px; --tb-notch: 10px; --tb-edge: 2px; gap: 8px; }
 .title-badge.is-hero { --tb-h: 40px; --tb-pad: 20px; --tb-font: 16.5px; --tb-notch: 14px; --tb-edge: 2px; gap: 10px; filter: drop-shadow(0 0 9px var(--tb-glow)) drop-shadow(0 4px 10px rgba(0, 0, 0, .6)); }
 .title-badge.is-hero .tb-emblem { box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .5), 0 0 10px var(--tb-glow); }
+/* Rank titles carry their emblem picture, a little taller than the plaque. */
+.title-badge.has-crest { padding-left: 2px; }
+.title-badge .tb-crest { flex: none; width: calc(var(--tb-h) * 1.45); margin: calc(var(--tb-h) * -.25) -2px calc(var(--tb-h) * -.2) calc(var(--tb-h) * -.3); filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .8)); }
 
 .title-tier-legend { --tb-bg1: #3d1352; --tb-bg2: #1b0712; --tb-glow: rgba(255, 160, 60, .65); }
 .title-tier-legend::before {
@@ -3673,3 +3817,4 @@ button.rank-chip:active { filter: brightness(1.15); }
   .viewport .game-frame .game-settings-modal .modal-symbol { display: none; }
   .viewport .game-frame .game-settings-modal > p { margin: 4px 0 6px; }
 }
+.chat-expiry-note { display: flex; justify-content: center; align-items: center; gap: 5px; margin: 2px auto 6px; padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, .05); color: #8f8a8e; font-size: 9.5px; list-style: none; }

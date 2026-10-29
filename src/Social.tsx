@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, Bot, Check, Coins, Crown, Flag, Gift, Landmark, Send, ShoppingBag, Sparkles, UserPlus, VenetianMask, X } from 'lucide-react';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
-import { RankChip } from './RankEmblem';
+import RankEmblem, { RankChip } from './RankEmblem';
 import { RANK_GAMES, RANK_METALS, RANK_NAMES, parseRankTitle, type RankGame } from './rankRules';
 import { supabase } from './supabaseClient';
 import type { NotifyFn, RoomSeat } from './multiplayer';
@@ -78,8 +78,11 @@ export function TitlePlaque({ titleKey, name, size = 'sm' }: { titleKey: string;
   const rank = parseRankTitle(titleKey);
   const Icon = !rank ? Sparkles : rank.level >= 8 ? Crown : rank.game === 'mafia' ? VenetianMask : Landmark;
   const tone = rank ? `title-metal-${RANK_METALS[rank.level - 1]}` : `title-tier-${titleKey.replace(/^title-/, '')}`;
-  return <span className={`title-badge is-${size} ${tone}`} title={name}>
-    <i className="tb-emblem" aria-hidden="true"><Icon size={ICON_SIZE[size]} /></i><span className="tb-name">{name}</span>
+  return <span className={`title-badge is-${size} ${tone} ${rank ? 'has-crest' : ''}`} title={name}>
+    {rank
+      ? <RankEmblem game={rank.game} level={rank.level} className="tb-crest" />
+      : <i className="tb-emblem" aria-hidden="true"><Icon size={ICON_SIZE[size]} /></i>}
+    <span className="tb-name">{name}</span>
   </span>;
 }
 

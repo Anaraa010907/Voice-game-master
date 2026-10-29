@@ -3,9 +3,9 @@ import { useRef } from 'react';
 import { ArrowLeft, Camera, Check, ChevronRight, LoaderCircle, LockKeyhole, Shield, ShoppingBag, Sparkles, Trash2, UserRound, X } from 'lucide-react';
 import { CoinCount, TitleBadge, useShopItems } from './Social';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
-import { RankChip } from './RankEmblem';
+import { RankChip, ShowcaseDecor, ShowcaseTitle, showcaseClass } from './RankEmblem';
 import { useRanks } from './Ranks';
-import { RANK_GAMES } from './rankRules';
+import { RANK_GAMES, parseRankTitle } from './rankRules';
 import { PORTRAITS } from './portraits';
 import { supabaseConfigured, type PublicProfile } from './supabaseClient';
 import { i18n } from './i18n';
@@ -76,10 +76,14 @@ export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, o
 
   return <div className="inner-screen account-screen"><AccountTopBar title={i18n.account.yourFile.toUpperCase()} subtitle={i18n.account.playerProfile.toUpperCase()} onBack={onBack} trailing={profile && <button className="account-signout-link" onClick={onSignOut}>{i18n.account.signOut}</button>} />
     {!supabaseConfigured ? <BackendSetupNotice /> : loading ? <LoadingState label={i18n.account.loadingAccount} /> : !profile ? <AccountEmpty title={i18n.account.profileWaiting} detail={loadError || i18n.account.profileDetail} action={i18n.account.signInAction} onAction={onSignIn} /> : <div className="account-body profile-body">
-      <section className="profile-showcase" aria-label="Аватар ба цол">
+      <section className={`profile-showcase ${showcaseClass(profile.title_key)}`} aria-label="Аватар ба цол">
+        <ShowcaseDecor titleKey={profile.title_key} />
         <Avatar name={profile.display_name} color={profile.avatar_key} url={profile.avatar_url} frame={profile.frame_key} className="account-avatar" />
-        {profile.title_key && <TitleBadge titleKey={profile.title_key} items={shopItems} size="hero" />}
-        {!profile.title_key && <button type="button" className="profile-title-empty" onClick={onRanks}><Sparkles size={12} /> ЦОЛ СОНГОХ</button>}
+        {parseRankTitle(profile.title_key)
+          ? <ShowcaseTitle titleKey={profile.title_key!} onClick={onRanks} />
+          : profile.title_key
+            ? <TitleBadge titleKey={profile.title_key} items={shopItems} size="hero" />
+            : <button type="button" className="profile-title-empty" onClick={onRanks}><Sparkles size={12} /> ЦОЛ СОНГОХ</button>}
       </section>
       <div className="profile-main">
         <div className={`profile-identity-row ${nameplate(profile.nameplate_key).className} ${rowBorderClass(profile.border_key)}`} style={nameplate(profile.nameplate_key).style}><RowBorder borderKey={profile.border_key} /><div className="profile-identity"><div className="eyebrow left-eye">{profile.is_verified ? i18n.account.verifiedAccount : i18n.account.verificationRequired} <span className={profile.is_verified ? 'verified-led' : 'unverified-led'} /></div><h1>{profile.display_name}</h1><div className="profile-shop-row">{profile.player_no && <span className="chip profile-id">ID #{profile.player_no}</span>}<CoinCount value={profile.coins ?? null} /><button type="button" className="text-button" onClick={onShop}><ShoppingBag size={13} /> ДЭЛГҮҮР</button></div><p>{i18n.account.memberSince} {formatDate(profile.created_at)} · {profile.registration_method === 'email' ? i18n.account.emailAccount : i18n.account.phoneAccount}</p></div></div>

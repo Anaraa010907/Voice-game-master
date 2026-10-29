@@ -144,11 +144,13 @@ function boardAction(move: string, body: Body): MonopolyAction {
 }
 
 /** Validated room rules for this kind of game. */
+/**
+ * Ranked rooms play fixed rules so every ranked game is alike: the board game goes on until
+ * everyone else is bankrupt, and Mafia uses the standard roles and timers.
+ */
 function roomSettings(type: GameType, input: unknown, ranked = false) {
-  if (type === 'monopoly') return sanitizeMonopolySettings(input);
-  // Ranked Mafia always plays the standard (classic) roles; only the discussion length may change.
-  if (ranked) return sanitizeMafiaSettings({ mode: 'classic', discussion: (input as { discussion?: unknown } | null)?.discussion });
-  return sanitizeMafiaSettings(input);
+  if (type === 'monopoly') return ranked ? sanitizeMonopolySettings({ rounds: null }) : sanitizeMonopolySettings(input);
+  return ranked ? sanitizeMafiaSettings({ mode: 'classic', discussion: 'normal' }) : sanitizeMafiaSettings(input);
 }
 
 function deadlineFor(state: AnyGame): string | null {
@@ -627,7 +629,8 @@ class GameServer {
     const room = await this.room(roomCodeValue);
     if (room.host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн дүрэм өөрчилнө.');
     if (room.status !== 'lobby') throw new GameError(409, 'Тоглоом эхэлсэн үед дүрэм өөрчлөх боломжгүй.');
-    const settings = roomSettings(room.game_type ?? 'mafia', body.settings, room.ranked === true);
+    if (room.ranked) throw new GameError(409, 'Рэйтинг тоглолтын дүрэм тогтмол, өөрчлөх боломжгүй.');
+    const settings = roomSettings(room.game_type ?? 'mafia', body.settings);
     await this.touchRoom(roomCodeValue, { settings });
     return { settings };
   }
@@ -671,7 +674,8 @@ class GameServer {
     if (room.status !== 'playing') return { ok: true };
     const { data: pub } = await this.admin.from('game_public').select('deadline').eq('room_code', roomCodeValue).maybeSingle();
     const expired = pub?.deadline ? Date.parse(pub.deadline) <= Date.now() + 500 : false;
-    const hostSkip = body.skip === true && room.host_id === this.userId;
+    // In a ranked game the clock alone moves the game on: the host cannot cut a phase short.
+    const hostSkip = body.skip === true && room.host_id === this.userId && room.ranked !== true;
     await this.mutate(roomCodeValue, (state) => {
       // On a bot's turn the bot plays a real step; for a human who ran out of time the safe default is taken.
       if (isBoard(state)) return !expired ? state : boardBotToMove(state) ? monopolyBotStep(state, secureRandom) : autoPlay(state, secureRandom);

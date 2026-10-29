@@ -391,7 +391,7 @@ function CreateRoom({ gameType, startRanked, onBack, onCreate }: { gameType: Gam
     setBusy(true);
     try {
       const open = ranked || isPublic;
-      await onCreate({ name: name.trim(), maxPlayers, isPublic: open, password: open ? '' : password, gameType, ranked, ...(gameType === 'monopoly' ? { settings: { rounds } } : {}) });
+      await onCreate({ name: name.trim(), maxPlayers, isPublic: open, password: open ? '' : password, gameType, ranked, ...(gameType === 'monopoly' ? { settings: { rounds: ranked ? null : rounds } } : {}) });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Өрөө үүсгэж чадсангүй.');
     } finally {
@@ -402,8 +402,8 @@ function CreateRoom({ gameType, startRanked, onBack, onCreate }: { gameType: Gam
   return <div className="inner-screen setup-screen"><TopBar title="ӨРӨӨ ҮҮСГЭХ" subtitle="ӨРӨӨНИЙ ТӨХИРГӨӨ" onBack={onBack} /><div className="setup-content"><div className="setup-heading"><div className="eyebrow left-eye">ТӨХИРГӨӨ СОНГОХ</div><h1>Өөрийнхөө <i>өрөөг</i> бүтээ.</h1><p><b className="setup-game-name">{game.title}</b> · Өрөөний кодыг найзууддаа илгээгээрэй. Дор хаяж {game.minPlayers} хүн нэгдвэл тоглоом эхэлнэ.</p></div><form className="room-form" onSubmit={submit}>
     <label className="form-field room-name-field"><span>{i18n.app.roomName.toUpperCase()}</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder="Өрөөний нэрээ оруулна уу" /></label>
     <label className="form-field"><span>{i18n.app.maxPlayers.toUpperCase()}</span><select value={maxPlayers} onChange={(event) => setMaxPlayers(Number(event.target.value))}>{game.sizes.map((count) => <option key={count} value={count}>{count} тоглогч</option>)}</select></label>
-    {gameType === 'monopoly' && <label className="form-field"><span>ТОГЛОХ ХУГАЦАА</span><select value={rounds === null ? 'all' : rounds} onChange={(event) => setRounds(event.target.value === 'all' ? null : Number(event.target.value))}>{ROUND_OPTIONS.map((option) => <option key={String(option)} value={option === null ? 'all' : option}>{option === null ? 'Бусад нь дампууртал' : roundsLabel(option)}</option>)}</select></label>}
-    <div className={`private-setting ranked-setting ${ranked ? 'is-on' : ''}`}><span><b><Swords size={13} /> Рэйтинг тоглолт</b><small>{ranked ? 'Цол, оноо хожино · стандарт дүрэм' : 'Энгийн тоглолт: оноо, цол өөрчлөгдөхгүй'}</small></span><button type="button" role="switch" aria-checked={ranked} aria-label="Рэйтинг тоглолт" className={`toggle ${ranked ? 'toggle-on' : ''}`} onClick={() => setRanked((value) => !value)}><i /></button></div>
+    {gameType === 'monopoly' && <label className="form-field"><span>ТОГЛОХ ХУГАЦАА</span><select disabled={ranked} value={ranked || rounds === null ? 'all' : rounds} onChange={(event) => setRounds(event.target.value === 'all' ? null : Number(event.target.value))}>{ROUND_OPTIONS.map((option) => <option key={String(option)} value={option === null ? 'all' : option}>{option === null ? 'Бусад нь дампууртал' : roundsLabel(option)}</option>)}</select></label>}
+    <div className={`private-setting ranked-setting ${ranked ? 'is-on' : ''}`}><span><b><Swords size={13} /> Рэйтинг тоглолт</b><small>{ranked ? (gameType === 'monopoly' ? 'Цол, оноо хожино · бусад нь дампууртал тоглоно' : 'Цол, оноо хожино · стандарт дүрэм, тогтмол цаг') : 'Энгийн тоглолт: оноо, цол өөрчлөгдөхгүй'}</small></span><button type="button" role="switch" aria-checked={ranked} aria-label="Рэйтинг тоглолт" className={`toggle ${ranked ? 'toggle-on' : ''}`} onClick={() => setRanked((value) => !value)}><i /></button></div>
     <div className={`private-setting ${ranked ? 'is-disabled' : ''}`}><span><b>Нийтэд нээлттэй</b><small>{ranked ? 'Рэйтинг өрөө үргэлж нийтэд нээлттэй' : isPublic ? 'Өрөөний жагсаалтад харагдана, хэн ч нэгдэнэ' : 'Зөвхөн кодоор нэгдэнэ, нууц үг тавьж болно'}</small></span><button type="button" role="switch" aria-checked={ranked || isPublic} disabled={ranked} className={`toggle ${ranked || isPublic ? 'toggle-on' : ''}`} onClick={() => setIsPublic((value) => !value)}><i /></button></div>
     {!ranked && !isPublic && <label className="form-field password-field"><span>ӨРӨӨНИЙ НУУЦ ҮГ <small>СОНГОЛТТОЙ</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} maxLength={32} placeholder="Нууц үггүй орж болно" autoComplete="new-password" /></label>}
     {error && <p className="form-error" role="alert">{error}</p>}
@@ -582,7 +582,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
   }
 
   if (room.status !== 'lobby') {
-    return <><GameScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} fullscreen={fullscreen} onProfile={openProfile} />{overlays}</>;
+    return <><GameScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} ranked={room.ranked === true} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} fullscreen={fullscreen} onProfile={openProfile} />{overlays}</>;
   }
 
   const isHost = room.host_id === userId;
@@ -614,8 +614,8 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
               : <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>СУЛ СУУДАЛ</small></div>)}
           </div>
           {(room.game_type ?? 'mafia') === 'mafia'
-            ? <MafiaRulesCard settings={room.settings} players={seats.length} isHost={isHost} busy={busy} ranked={room.ranked === true} onEdit={() => setRulesOpen(true)} />
-            : <BoardRulesCard settings={room.settings} isHost={isHost} busy={busy} onChange={(settings) => { void run('settings', { settings }); }} />}
+            ? <MafiaRulesCard settings={room.settings} players={seats.length} isHost={isHost && !room.ranked} busy={busy} ranked={room.ranked === true} onEdit={() => setRulesOpen(true)} />
+            : <BoardRulesCard settings={room.settings} isHost={isHost && !room.ranked} busy={busy} onChange={(settings) => { void run('settings', { settings }); }} />}
           <div className="lobby-bottom">
             <div className="lobby-hint"><LockKeyhole size={14} /><span>{isHost ? 'ТА ӨРӨӨНИЙ ЭЗЭН' : 'ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА'} <b>•</b> {hint}</span></div>
             <div className="lobby-actions">
@@ -626,7 +626,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
             </div>
           </div>
         </div>
-        {rulesOpen && isHost && <MafiaRulesEditor initial={room.settings} players={seats.length} busy={busy} ranked={room.ranked === true}
+        {rulesOpen && isHost && !room.ranked && <MafiaRulesEditor initial={room.settings} players={seats.length} busy={busy}
           onClose={() => setRulesOpen(false)} onSave={(settings) => { void run('settings', { settings }).then((saved) => { if (saved) setRulesOpen(false); }); }} />}
       </div>
       {overlays}

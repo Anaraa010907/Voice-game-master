@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, Check, Clipboard, DoorOpen, Gift, MessageCircle, Search, Send, UserMinus, UserPlus, Users, X } from 'lucide-react';
+import { ArrowLeft, Check, Clipboard, Clock3, DoorOpen, Gift, MessageCircle, Search, Send, UserMinus, UserPlus, Users, X } from 'lucide-react';
 import Avatar from './Avatar';
 import { supabase } from './supabaseClient';
 import type { NotifyFn } from './multiplayer';
 import { GAMES, type GameType } from './games';
 import { GiftPicker, sendFriendGift, useShopItems } from './Social';
+
+/** How long a chat message lives (the server deletes older ones). */
+const CHAT_LIFETIME_MS = 24 * 3600_000;
 
 /* ---------- data ---------- */
 
@@ -212,6 +215,8 @@ function FriendPanel({ friend, userId, myRoom, notify, onJoinRoom, onRead, onRem
     if (!supabase) return;
     const { data } = await supabase.from('direct_messages').select('id,sender,recipient,kind,body,room_code,gift_key,created_at')
       .or(`and(sender.eq.${userId},recipient.eq.${friend.id}),and(sender.eq.${friend.id},recipient.eq.${userId})`)
+      // Chats last one day; the server removes older messages every hour.
+      .gte('created_at', new Date(Date.now() - CHAT_LIFETIME_MS).toISOString())
       .order('created_at', { ascending: false }).limit(80);
     setMessages(((data as Message[] | null) ?? []).reverse());
     await supabase.rpc('mark_chat_read', { p_from: friend.id });
@@ -288,6 +293,7 @@ function FriendPanel({ friend, userId, myRoom, notify, onJoinRoom, onRead, onRem
           }); }} />}</div>
       : <>
         <ol className="chat-list" ref={list} aria-live="polite">
+          <li className="chat-expiry-note"><Clock3 size={11} /> Мессежүүд 24 цагийн дараа автоматаар устна.</li>
           {messages.length === 0 && <li className="chat-empty">Мэндчилгээ бичээд эхлээрэй 👋</li>}
           {messages.map((message) => {
             const mine = message.sender === userId;
