@@ -4,4 +4,7 @@
     <string name="title_activity_main">MAFIA: SHADOWS</string>
     <string name="package_name">com.mafiashadows.game</string>
     <string name="custom_url_scheme">com.mafiashadows.game</string>
+    <!-- Facebook sign-in through the Facebook app (the client token comes from the build, see app/build.gradle). -->
+    <string name="facebook_app_id" translatable="false">1081195264747013</string>
+    <string name="fb_login_protocol_scheme" translatable="false">fb1081195264747013</string>
 </resources>

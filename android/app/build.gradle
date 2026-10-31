@@ -10,10 +10,31 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Facebook client token (Meta app dashboard → App settings → Advanced → Client token). It is
+        // embedded in the app by design; the build takes it from FACEBOOK_CLIENT_TOKEN (a GitHub
+        // Actions variable) or -PfacebookClientToken. Without it Facebook sign-in uses the browser.
+        resValue "string", "facebook_client_token", (System.getenv("FACEBOOK_CLIENT_TOKEN") ?: (project.findProperty("facebookClientToken") ?: "")).toString().trim()
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    // One fixed signing key for every build, so a new APK installs over the old one and Facebook
+    // recognises the app (its key hash is registered in the Meta app dashboard). The key file is
+    // password-protected; its password is the ANDROID_KEYSTORE_PASSWORD repository secret. Without
+    // the password Gradle's own one-off debug key is used.
+    signingConfigs {
+        debug {
+            def keystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")?.trim()
+            def keystore = file("signing/mafia-shadows.p12")
+            if (keystorePassword && keystore.exists()) {
+                storeFile keystore
+                storeType "pkcs12"
+                storePassword keystorePassword
+                keyAlias "mafia-shadows"
+                keyPassword keystorePassword
+            }
         }
     }
     buildTypes {
@@ -37,6 +58,8 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "androidx.core:core:$androidxCoreVersion"
     implementation project(':capacitor-android')
+    // Facebook sign-in through the Facebook app (FacebookAuthPlugin).
+    implementation "com.facebook.android:facebook-login:18.+"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

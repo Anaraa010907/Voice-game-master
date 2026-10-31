@@ -6,6 +6,7 @@ import {
 import { Capacitor } from '@capacitor/core';
 import { supabase, supabaseConfigured } from './supabaseClient';
 import { i18n } from './i18n';
+import { signInWithFacebookApp, signOutOfFacebookApp } from './nativeFacebook';
 
 const authRedirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL?.trim();
 
@@ -70,15 +71,22 @@ export default function Auth({ initialView = 'sign-in', onBack, onAuthenticated,
   };
 
   /**
-   * Facebook sign-in through Supabase OAuth. On the Android app Facebook must open in the system
-   * browser (it blocks embedded web views); it then returns to mafia-shadows://auth/callback,
-   * which App.tsx already exchanges for a session.
+   * Facebook sign-in. On the Android app it goes through the Facebook app installed on the phone
+   * (see nativeFacebook.ts). Otherwise, or when that route is unavailable, it is Supabase OAuth: on
+   * the Android app Facebook then opens in the system browser (it blocks embedded web views) and
+   * returns to mafia-shadows://auth/callback, which App.tsx exchanges for a session.
    */
   const signInWithFacebook = async () => {
     resetFeedback();
     if (!ensureConfigured()) return;
     const native = Capacitor.isNativePlatform();
     setBusy(true);
+    if (native) {
+      const outcome = await signInWithFacebookApp();
+      if (outcome.kind === 'signed-in') { setBusy(false); onAuthenticated(); return; }
+      if (outcome.kind === 'cancelled') { setBusy(false); return; }
+      if (outcome.kind === 'error') { setBusy(false); setError(outcome.message); return; }
+    }
     try { window.localStorage.setItem(OAUTH_PENDING_KEY, String(Date.now())); } catch { /* private mode: stays on this screen */ }
     const { data, error: oauthError } = await supabase!.auth.signInWithOAuth({
       provider: 'facebook',
@@ -274,7 +282,7 @@ export default function Auth({ initialView = 'sign-in', onBack, onAuthenticated,
     resetFeedback();
     if (!ensureConfigured()) return;
     const result = await requestAuth(
-      () => supabase!.auth.signOut(),
+      async () => { await signOutOfFacebookApp(); return supabase!.auth.signOut(); },
       i18n.auth.signOutFailed,
     );
     if (!result) return;

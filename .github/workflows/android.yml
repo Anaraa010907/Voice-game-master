@@ -21,7 +21,25 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
           VITE_LIVEKIT_TOKEN_URL: ${{ vars.VITE_LIVEKIT_TOKEN_URL }}
       - run: npx cap sync android
+      # The app's fixed signing key (android/app/signing, see android/app/build.gradle); its key hash
+      # is the one registered in the Meta app dashboard.
+      - name: Signing key
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          FACEBOOK_CLIENT_TOKEN: ${{ vars.FACEBOOK_CLIENT_TOKEN }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_PASSWORD" ]; then
+            echo "Facebook key hash: $(keytool -exportcert -alias mafia-shadows -keystore android/app/signing/mafia-shadows.p12 -storetype pkcs12 -storepass:env ANDROID_KEYSTORE_PASSWORD | openssl sha1 -binary | openssl base64)"
+          else
+            echo "::warning::The ANDROID_KEYSTORE_PASSWORD secret is not set: this APK gets a one-off key, so it will not install over the previous one and Facebook app sign-in will not work."
+          fi
+          if [ -z "$FACEBOOK_CLIENT_TOKEN" ]; then
+            echo "::warning::The FACEBOOK_CLIENT_TOKEN variable is not set: Facebook sign-in will open in the browser."
+          fi
       - run: chmod +x android/gradlew && cd android && ./gradlew assembleDebug
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          FACEBOOK_CLIENT_TOKEN: ${{ vars.FACEBOOK_CLIENT_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug

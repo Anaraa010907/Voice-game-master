@@ -13,6 +13,8 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Local plugins must be registered before the bridge starts.
+        registerPlugin(FacebookAuthPlugin.class);
         super.onCreate(savedInstanceState);
         // Draw under the status/navigation bars and into the camera cutout.
         // The web layer keeps content clear of them with CSS safe-area insets.
