@@ -14,6 +14,11 @@ const FRAME_IMAGES: Record<string, string> = {
   'frame-gold-skull': '/assets/frames/gold-skull.webp',
   'frame-twin-serpent': '/assets/frames/twin-serpent.webp',
   'frame-eagle-crown': '/assets/frames/eagle-crown.webp',
+  // Battle Pass season 1, gold track.
+  'frame-rainy-night': '/assets/frames/rainy-night.webp',
+  'frame-card-master': '/assets/frames/card-master.webp',
+  'frame-blood-rose': '/assets/frames/blood-rose.webp',
+  'frame-shadow-don': '/assets/frames/shadow-don.webp',
 };
 
 /*
@@ -29,6 +34,10 @@ const NAMEPLATE_IMAGES: Record<string, string> = {
   'plate-royal-crown': '/assets/nameplates/royal-crown.webp',
   'plate-skull-king': '/assets/nameplates/skull-king.webp',
   'plate-fire-dragon': '/assets/nameplates/fire-dragon.webp',
+  // Battle Pass season 1, gold track.
+  'plate-neon-alley': '/assets/nameplates/neon-alley.webp',
+  'plate-casino': '/assets/nameplates/casino.webp',
+  'plate-don-office': '/assets/nameplates/don-office.webp',
   // Plain plates (coins): still pictures, no light sweep.
   'plate-night-blue': '/assets/nameplates/plain/night-blue.svg',
   'plate-paper': '/assets/nameplates/plain/paper.svg',
@@ -79,8 +88,9 @@ export const FRAME_KEYS = [...PLAIN_FRAMES, ...ANIMATED_FRAMES, ...Object.keys(F
  * eyes glow, the mafia cigar smokes. Every particle is an <i class="fx fx-KIND"> placed by the
  * variables below and animated by the .fx-* rules in theme.css (sizes in cqw of the frame box).
  */
-type FxKind = 'ember' | 'flame' | 'snow' | 'petal' | 'butterfly' | 'dust' | 'drip' | 'feather' | 'smoke' | 'beam' | 'eye' | 'star' | 'glint';
-type FxSpec = { kind: FxKind; n: number; at?: number[] };
+type FxKind = 'ember' | 'flame' | 'snow' | 'rain' | 'petal' | 'butterfly' | 'dust' | 'drip' | 'feather' | 'smoke' | 'beam' | 'eye' | 'star' | 'glint';
+/** `at`: angles on the ring; `pts`: spots painted into this frame's picture (percent of the frame box). */
+type FxSpec = { kind: FxKind; n: number; at?: number[]; pts?: Array<[number, number]> };
 const FRAME_FX: Record<string, FxSpec[]> = {
   'frame-gold': [{ kind: 'dust', n: 4 }],
   'frame-neon': [{ kind: 'star', n: 3 }],
@@ -96,6 +106,10 @@ const FRAME_FX: Record<string, FxSpec[]> = {
   'frame-mafia-city': [{ kind: 'glint', n: 1 }, { kind: 'beam', n: 2 }, { kind: 'smoke', n: 4 }],
   'frame-gold-skull': [{ kind: 'glint', n: 1 }, { kind: 'eye', n: 2 }, { kind: 'dust', n: 4 }],
   'frame-eagle-crown': [{ kind: 'glint', n: 1 }, { kind: 'feather', n: 3 }],
+  'frame-rainy-night': [{ kind: 'beam', n: 1, pts: [[24.4, 31.6]] }, { kind: 'rain', n: 7 }],
+  'frame-card-master': [{ kind: 'glint', n: 1 }, { kind: 'dust', n: 4 }],
+  'frame-blood-rose': [{ kind: 'glint', n: 1 }, { kind: 'petal', n: 6 }],
+  'frame-shadow-don': [{ kind: 'glint', n: 1 }, { kind: 'feather', n: 3 }, { kind: 'dust', n: 4 }],
   'frame-smoke': [{ kind: 'smoke', n: 5, at: [-150, -110, -70, -30, 200] }],
   'frame-coins': [{ kind: 'dust', n: 3 }],
   'frame-tycoon': [{ kind: 'star', n: 3 }, { kind: 'dust', n: 3 }],
@@ -111,7 +125,7 @@ const SPOTS: Partial<Record<FxKind, Array<[number, number]>>> = {
 const noise = (seed: number) => { const v = Math.sin(seed * 12.9898 + 4.1414) * 43758.5453; return v - Math.floor(v); };
 const onRing = (deg: number, radius: number): [number, number] => [50 + radius * Math.cos((deg * Math.PI) / 180), 50 + radius * Math.sin((deg * Math.PI) / 180)];
 
-function fxStyle({ kind, n, at }: FxSpec, i: number, painted: boolean): CSSProperties {
+function fxStyle({ kind, n, at, pts }: FxSpec, i: number, painted: boolean): CSSProperties {
   const r = (k: number) => noise(i * 31 + k * 7 + kind.length * 101);
   // Painted pictures have their ring at about 36% of the box from the centre; CSS rings sit at 47%.
   const ring = painted ? 36 : 47;
@@ -134,6 +148,12 @@ function fxStyle({ kind, n, at }: FxSpec, i: number, painted: boolean): CSSPrope
       v['--s'] = kind === 'petal' ? 5 + 2.4 * r(6) : kind === 'dust' ? 1.6 + 1.4 * r(6) : 2.4 + 2.6 * r(6);
       break;
     }
+    case 'rain': {
+      // Thin streaks falling past the outside of the ring.
+      x = 50 + side * (ring - 2 + 12 * r(1)); y = 50 - ring * (0.4 + 0.6 * r(2));
+      dur = 0.8 + 0.5 * r(3); v['--fall'] = 40 + 20 * r(4); v['--s'] = 4 + 3 * r(6);
+      break;
+    }
     case 'butterfly': {
       [x, y] = onRing(at?.[i] ?? (side < 0 ? -130 : -50), ring + 7);
       dur = 5.5 + 2 * r(3); v['--w'] = 7 + 4 * r(4); v['--s'] = 13 + 3 * r(5);
@@ -152,7 +172,7 @@ function fxStyle({ kind, n, at }: FxSpec, i: number, painted: boolean): CSSPrope
     }
     case 'smoke': case 'beam': case 'eye': {
       // Painted pictures put these on fixed spots; rings spread them along the ring at the given angles.
-      const spots = at ? at.map((deg) => onRing(deg, ring)) : SPOTS[kind] ?? [[50, 50]];
+      const spots = pts ?? (at ? at.map((deg) => onRing(deg, ring)) : SPOTS[kind] ?? [[50, 50]]);
       [x, y] = spots[i % spots.length];
       if (kind === 'smoke') { x += (r(1) - 0.5) * 1.5; dur = 3.4 + 1.4 * r(3); v['--rise'] = 22 + 12 * r(4); v['--sway'] = (r(5) - 0.5) * 12; v['--s'] = 6 + 2.5 * r(6); }
       else if (kind === 'beam') { dur = 3.4; v['--s'] = 13; }

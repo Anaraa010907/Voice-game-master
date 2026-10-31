@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ArrowLeft, Check, Clock3, Coins, Crown, Gem, Gift, Lock, Sparkles, Ticket } from 'lucide-react';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
 import { CoinCount, DiamondCount, TopUpModal, timeLeft, useFreeShopping, useMyWallet, useShopItems, type ShopItem } from './Social';
@@ -19,6 +19,11 @@ export type PassSeason = {
 type PassReward = { season_id: number; tier: number; track: 'free' | 'premium'; kind: 'coins' | 'diamonds' | 'item'; amount: number; item_key: string | null };
 type Progress = { xp: number; premium: boolean };
 type Claim = { tier: number; track: 'free' | 'premium' };
+
+/** Each season's own art: the screen backdrop and its emblem. */
+const SEASON_ART: Record<number, { bg: string; emblem: string }> = {
+  1: { bg: '/assets/pass/season1-bg.webp', emblem: '/assets/pass/season1-emblem.webp' },
+};
 
 /** Days rewards stay claimable after a season ends (the server allows the same). */
 const CLAIM_GRACE_MS = 3 * 24 * 3600_000;
@@ -126,7 +131,8 @@ export function BattlePassScreen({ onBack, notify }: { onBack: () => void; notif
     </button>;
   };
 
-  return <div className="inner-screen panel-screen pass-screen">
+  const art = season ? SEASON_ART[season.id] : undefined;
+  return <div className="inner-screen panel-screen pass-screen" style={art ? { ['--pass-bg' as string]: `url("${art.bg}")` } as CSSProperties : undefined}>
     <header className="top-bar panel-top-bar">
       <button className="icon-button" onClick={onBack} aria-label="Буцах"><ArrowLeft size={17} /></button>
       <div className="top-title"><span>{season?.name.toUpperCase() ?? 'УЛИРАЛ'}</span><strong>BATTLE PASS</strong></div>
@@ -142,6 +148,7 @@ export function BattlePassScreen({ onBack, notify }: { onBack: () => void; notif
       {seasons !== null && !season && <p className="panel-empty"><Ticket size={18} /> Удахгүй шинэ улирал эхэлнэ.</p>}
       {season && <>
         <section className={`pass-hero ${progress.premium ? 'has-premium' : ''}`}>
+          {art && <img className="pass-emblem" src={art.emblem} alt="" />}
           <div className="pass-level"><small>ШАТ</small><b>{reached}</b><span>/ {tiers}</span></div>
           <div className="pass-progress">
             <div className="pass-progress-head">
