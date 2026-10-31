@@ -4645,3 +4645,119 @@ button.rank-chip:active { filter: brightness(1.15); }
   font-size: 10px;
   letter-spacing: -.1px;
 }
+
+/* ================= Plain looks (coins): still and matte, no glow, no motion ================= */
+
+:is(.frame-bronze, .frame-silver, .frame-brass, .frame-wood, .frame-leather, .frame-double, .frame-sky, .frame-onyx, .frame-khana, .frame-ulzii) .avatar-frame::before,
+:is(.frame-bronze, .frame-silver, .frame-brass, .frame-wood, .frame-leather, .frame-double, .frame-sky, .frame-onyx, .frame-khana, .frame-ulzii) .avatar-frame::after {
+  animation: none;
+}
+/* A thin dark edge on both sides of every plain ring keeps it crisp on any background. */
+:is(.frame-bronze, .frame-silver, .frame-brass, .frame-wood, .frame-sky) .avatar-frame::after {
+  background: radial-gradient(closest-side, transparent 78.6%, rgba(10, 8, 6, .55) 79% 80%, transparent 80.6% 98.2%, rgba(10, 8, 6, .55) 98.6% 99.6%, transparent 100%);
+}
+.frame-bronze .avatar-frame::before { background: conic-gradient(from 210deg, #5e3a1d, #a8733f 18%, #7d5129 35%, #b5804a 55%, #6b4222 75%, #93623a 90%, #5e3a1d); }
+.frame-silver .avatar-frame::before { background: conic-gradient(from 210deg, #5d636b, #b9c0c8 20%, #8a9099 40%, #c6ccd3 58%, #6f757d 78%, #a2a8b0 90%, #5d636b); }
+.frame-brass .avatar-frame::before { background: conic-gradient(from 210deg, #6e5420, #b8954d 18%, #8e6f30 36%, #c4a35c 56%, #7a5d24 76%, #a8873f 90%, #6e5420); }
+.frame-wood .avatar-frame::before { background: repeating-radial-gradient(circle at 50% 50%, #6a4122 0 1.1%, #7d5130 1.1% 2.4%, #5b371c 2.4% 3.1%, #74492a 3.1% 4.4%); }
+.frame-leather .avatar-frame::before { background: radial-gradient(closest-side, #4a2c17 78%, #7a4b2a 86%, #6a4024 93%, #4e301b 99%); }
+.frame-leather .avatar-frame::after { inset: 5.4%; border: 1.5px dashed rgba(232, 201, 154, .8); }
+.frame-double .avatar-frame::before { background: radial-gradient(closest-side, transparent 79.5%, #c9a96a 80% 83.8%, rgba(18, 15, 10, .88) 84.4% 93.4%, #c9a96a 94% 98.4%, transparent 99%); }
+.frame-sky .avatar-frame::before { background: radial-gradient(closest-side, #1d4a82 79%, #3a78bf 88%, #24589a 99%); }
+.frame-sky .avatar-frame::after {
+  background:
+    radial-gradient(closest-side, transparent 82.6%, rgba(244, 248, 255, .9) 83% 84.3%, transparent 84.8%),
+    radial-gradient(closest-side, transparent 78.6%, rgba(10, 8, 6, .5) 79% 80%, transparent 80.6% 98.2%, rgba(10, 8, 6, .5) 98.6% 99.6%, transparent 100%);
+}
+.frame-onyx .avatar-frame::before { background: conic-gradient(from 30deg, #121214, #2a2a2e 15%, #0d0d0f 30%, #232326 50%, #101012 70%, #2e2e33 85%, #121214); }
+.frame-onyx .avatar-frame::after { background: radial-gradient(closest-side, transparent 79%, #9aa0a8 79.4% 80.6%, transparent 81% 98%, #9aa0a8 98.3% 99.4%, transparent 99.8%); }
+:is(.frame-khana, .frame-ulzii) .avatar-frame::before { background: var(--ring-art) center / 100% 100% no-repeat; }
+
+/* Plain nameplates: just the picture, no light sweep. */
+.has-nameplate.is-plain-plate::after { content: none; }
+
+/* Plain name borders: a still line, no glow. */
+.row-border.is-plain { animation: none; box-shadow: none; }
+.row-border.is-plain > i { padding: 1.5px; }
+.row-border.is-plain > i::before { animation: none; }
+.border-bronze { --rb-colors: linear-gradient(135deg, #6b4222, #b5804a 45%, #7d5129 70%, #a8733f); }
+.border-silver { --rb-colors: linear-gradient(135deg, #6f757d, #c6ccd3 45%, #8a9099 70%, #b9c0c8); }
+.border-ivory { --rb-colors: linear-gradient(135deg, #bfb59c, #efe7d4 50%, #cfc4aa); }
+.border-azure { --rb-colors: linear-gradient(135deg, #1f4f8a, #4d8bd0 50%, #2a5e9e); }
+.border-crimson { --rb-colors: linear-gradient(135deg, #4a0f14, #8e2630 50%, #5e161c); }
+.row-border.is-plain.border-double { box-shadow: inset 0 0 0 1.5px #c9a96a, inset 0 0 0 3.5px rgba(10, 11, 16, .92), inset 0 0 0 5px #c9a96a; }
+.row-border.is-plain.border-double > i { display: none; }
+
+/* ================= Rank looks: new animated rings and borders ================= */
+
+/* Утаат: a charcoal ring with smoke drifting round it and rising off the top. */
+.frame-smoke .avatar-frame::before {
+  background: conic-gradient(#1b1b20, #4a4752 20%, #8d8896 32%, #3a3740 50%, #6b6774 68%, #26252b 85%, #1b1b20);
+  animation-duration: 9s;
+}
+.frame-smoke .avatar-frame::after {
+  inset: -8%;
+  background: conic-gradient(transparent 0 6%, rgba(200, 196, 214, .55) 12%, transparent 22% 38%, rgba(160, 154, 178, .5) 46%, transparent 56% 70%, rgba(214, 210, 226, .45) 78%, transparent 88%);
+  -webkit-mask: radial-gradient(closest-side, transparent 70%, #000 82%, transparent 100%);
+  mask: radial-gradient(closest-side, transparent 70%, #000 82%, transparent 100%);
+  filter: blur(2.5px);
+  animation: frame-spin-back 7s linear infinite;
+}
+
+/* Зоосон цагираг: a gold ring with four coins orbiting it. */
+.frame-coins .avatar-frame::before {
+  background: conic-gradient(#7a5a22, #e0b85c, #fff0c0 8%, #c99a3e 16%, #7a5a22 30%, #d9ae55 50%, #7a5a22 70%, #e8c46a 85%, #7a5a22);
+  animation-duration: 8s;
+}
+.frame-coins .avatar-frame::after {
+  inset: -9%;
+  background:
+    radial-gradient(circle at 50% 5%, #fff3c4 0 2.4%, #e3b04a 2.8% 5%, #8a6420 5.3% 5.9%, transparent 6.3%),
+    radial-gradient(circle at 95% 50%, #fff3c4 0 2.4%, #e3b04a 2.8% 5%, #8a6420 5.3% 5.9%, transparent 6.3%),
+    radial-gradient(circle at 50% 95%, #fff3c4 0 2.4%, #e3b04a 2.8% 5%, #8a6420 5.3% 5.9%, transparent 6.3%),
+    radial-gradient(circle at 5% 50%, #fff3c4 0 2.4%, #e3b04a 2.8% 5%, #8a6420 5.3% 5.9%, transparent 6.3%);
+  box-shadow: 0 0 9px rgba(241, 200, 106, .45);
+  animation: frame-spin 6s linear infinite;
+}
+
+/* Тэрбумтны: gold and emerald, gems riding round, sparks. */
+.frame-tycoon .avatar-frame::before {
+  background: conic-gradient(#0d5a39, #45c78a 10%, #e5b65a 22%, #fff4c8 26%, #7a5016 38%, #45c78a 55%, #0d5a39 65%, #e5b65a 80%, #fff4c8 84%, #0d5a39);
+  animation-duration: 4s;
+}
+.frame-tycoon .avatar-frame::after {
+  inset: -10%;
+  background:
+    radial-gradient(circle at 50% 4%, #e9fff3 0 1.6%, #3fcf8a 2% 4%, transparent 4.6%),
+    radial-gradient(circle at 96% 50%, #fff6d0 0 1.6%, #e5b65a 2% 4%, transparent 4.6%),
+    radial-gradient(circle at 50% 96%, #e9fff3 0 1.6%, #3fcf8a 2% 4%, transparent 4.6%),
+    radial-gradient(circle at 4% 50%, #fff6d0 0 1.6%, #e5b65a 2% 4%, transparent 4.6%);
+  box-shadow: 0 0 12px rgba(80, 220, 150, .4), 0 0 18px rgba(255, 200, 90, .25);
+  animation: frame-spin-back 5s linear infinite;
+}
+
+/* Хаш ногоон: jade light running round the row. */
+.border-jade { --rb-glow: rgba(80, 220, 150, .45); --rb-colors: conic-gradient(#0d5a39, #45c78a 12%, #dcffec 16%, #2e9a68 24%, #0b4a2f 45%, #45c78a 60%, #dcffec 66%, #2e9a68 72%, #0d5a39 88%); }
+.border-jade > i::before { animation-duration: 3.6s; }
+
+/* ================= Shop: rank prizes and the ladder's prize line ================= */
+
+.shop-section-note { margin: -2px 0 6px; color: #8f8a8e; font-size: 10px; }
+.shop-rank-lock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px dashed rgba(241, 215, 154, .35);
+  border-radius: 999px;
+  color: #cdb88e;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+.rank-reward-item { display: inline-flex; align-items: center; gap: 5px; color: inherit; }
+.viewport .game-frame .rank-reward .rank-reward-frame { width: 18px; height: 18px; margin: 2px 3px; font-size: 0; }
+.viewport .game-frame .rank-reward .rank-reward-frame .avatar-frame > i.fx { display: none; }
+.rank-reward-border { position: relative; display: inline-block; width: 30px; height: 14px; border-radius: 5px; background: rgba(12, 14, 20, .9); }

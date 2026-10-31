@@ -16,32 +16,59 @@ const FRAME_IMAGES: Record<string, string> = {
   'frame-eagle-crown': '/assets/frames/eagle-crown.webp',
 };
 
+/*
+ * Three tiers of looks:
+ *   - plain (still, matte): sold for coins;
+ *   - animated rings and borders: won by reaching ranks;
+ *   - painted art: sold for diamonds (later also the season pass and limited offers).
+ */
+
 /** Nameplates: a wide picture behind the player's name; the decoration sits on the right, the name on the dark left. */
 const NAMEPLATE_IMAGES: Record<string, string> = {
   'plate-ice-crystal': '/assets/nameplates/ice-crystal.webp',
   'plate-royal-crown': '/assets/nameplates/royal-crown.webp',
   'plate-skull-king': '/assets/nameplates/skull-king.webp',
   'plate-fire-dragon': '/assets/nameplates/fire-dragon.webp',
+  // Plain plates (coins): still pictures, no light sweep.
+  'plate-night-blue': '/assets/nameplates/plain/night-blue.svg',
+  'plate-paper': '/assets/nameplates/plain/paper.svg',
+  'plate-leather': '/assets/nameplates/plain/leather.svg',
+  'plate-marble': '/assets/nameplates/plain/marble.svg',
+  'plate-black-gold': '/assets/nameplates/plain/black-gold.svg',
+  'plate-ornament': '/assets/nameplates/plain/ornament.svg',
 };
+const PLAIN_PLATES = new Set(['plate-night-blue', 'plate-paper', 'plate-leather', 'plate-marble', 'plate-black-gold', 'plate-ornament']);
 
 /** Class and style that put the player's nameplate behind a row (see .has-nameplate in theme.css). */
 export function nameplate(key: string | null | undefined): { className: string; style: CSSProperties } {
   const image = key ? NAMEPLATE_IMAGES[key] : undefined;
-  return image ? { className: `has-nameplate ${key}`, style: { ['--plate' as string]: `url("${image}")` } as CSSProperties } : { className: '', style: {} };
+  return image
+    ? { className: `has-nameplate ${key} ${PLAIN_PLATES.has(key!) ? 'is-plain-plate' : ''}`, style: { ['--plate' as string]: `url("${image}")` } as CSSProperties }
+    : { className: '', style: {} };
 }
 
-/** Name borders: a shining ring around a player's whole row (see .row-border in theme.css). */
-export const BORDER_KEYS = ['border-gold', 'border-neon', 'border-ice', 'border-fire', 'border-ruby', 'border-royal'];
+/** Name borders: a ring around a player's whole row (see .row-border in theme.css). The plain ones stand still. */
+const PLAIN_BORDERS = ['border-bronze', 'border-silver', 'border-ivory', 'border-azure', 'border-crimson', 'border-double'];
+export const BORDER_KEYS = ['border-gold', 'border-neon', 'border-ice', 'border-fire', 'border-ruby', 'border-royal', 'border-jade', ...PLAIN_BORDERS];
 
-/** The animated border, placed as the first child of a row; the row gets `has-row-border`. */
+/** The border, placed as the first child of a row; the row gets `has-row-border`. */
 export function RowBorder({ borderKey }: { borderKey: string | null | undefined }) {
   if (!borderKey || !BORDER_KEYS.includes(borderKey)) return null;
-  return <span className={`row-border ${borderKey}`} aria-hidden="true"><i /></span>;
+  return <span className={`row-border ${borderKey} ${PLAIN_BORDERS.includes(borderKey) ? 'is-plain' : ''}`} aria-hidden="true"><i /></span>;
 }
 export const rowBorderClass = (key: string | null | undefined) => (key && BORDER_KEYS.includes(key) ? 'has-row-border' : '');
 
-/** Avatar frames sold in the shop: CSS-animated rings plus painted ones (see the frame-* styles in theme.css). */
-export const FRAME_KEYS = ['frame-gold', 'frame-neon', 'frame-ice', 'frame-fire', 'frame-blood', 'frame-royal', ...Object.keys(FRAME_IMAGES)];
+/** Plain rings (coins): still and matte. Two carry a pattern drawn as an image. */
+const PLAIN_FRAMES = ['frame-bronze', 'frame-silver', 'frame-brass', 'frame-wood', 'frame-leather', 'frame-double', 'frame-sky', 'frame-onyx', 'frame-khana', 'frame-ulzii'];
+/** Plain rings whose pattern is a picture laid into the ring band (see .frame-khana in theme.css). */
+const RING_ART: Record<string, string> = {
+  'frame-khana': '/assets/frames/plain/khana.svg',
+  'frame-ulzii': '/assets/frames/plain/ulzii.svg',
+};
+/** Animated rings won by rank (frame-gold … frame-royal were sold before ranks gave them). */
+const ANIMATED_FRAMES = ['frame-gold', 'frame-neon', 'frame-ice', 'frame-fire', 'frame-blood', 'frame-royal', 'frame-smoke', 'frame-coins', 'frame-tycoon'];
+/** Every avatar frame the app can draw (see the frame-* styles in theme.css). */
+export const FRAME_KEYS = [...PLAIN_FRAMES, ...ANIMATED_FRAMES, ...Object.keys(FRAME_IMAGES)];
 
 /*
  * Frame motion. Each frame moves in its own way instead of blinking: fire throws embers upward,
@@ -66,6 +93,9 @@ const FRAME_FX: Record<string, FxSpec[]> = {
   'frame-mafia-city': [{ kind: 'glint', n: 1 }, { kind: 'beam', n: 2 }, { kind: 'smoke', n: 4 }],
   'frame-gold-skull': [{ kind: 'glint', n: 1 }, { kind: 'eye', n: 2 }, { kind: 'dust', n: 4 }],
   'frame-eagle-crown': [{ kind: 'glint', n: 1 }, { kind: 'feather', n: 3 }],
+  'frame-smoke': [{ kind: 'smoke', n: 5, at: [-150, -110, -70, -30, 200] }],
+  'frame-coins': [{ kind: 'dust', n: 3 }],
+  'frame-tycoon': [{ kind: 'star', n: 3 }, { kind: 'dust', n: 3 }],
 };
 
 /** Spots painted into the frame pictures (percent of the frame box). */
@@ -118,7 +148,8 @@ function fxStyle({ kind, n, at }: FxSpec, i: number, painted: boolean): CSSPrope
       break;
     }
     case 'smoke': case 'beam': case 'eye': {
-      const spots = SPOTS[kind] ?? [[50, 50]];
+      // Painted pictures put these on fixed spots; rings spread them along the ring at the given angles.
+      const spots = at ? at.map((deg) => onRing(deg, ring)) : SPOTS[kind] ?? [[50, 50]];
       [x, y] = spots[i % spots.length];
       if (kind === 'smoke') { x += (r(1) - 0.5) * 1.5; dur = 3.4 + 1.4 * r(3); v['--rise'] = 22 + 12 * r(4); v['--sway'] = (r(5) - 0.5) * 12; v['--s'] = 6 + 2.5 * r(6); }
       else if (kind === 'beam') { dur = 3.4; v['--s'] = 13; }
@@ -150,7 +181,8 @@ export default function Avatar({ name, color, url, initials, frame, className = 
   const painted = framed ? FRAME_IMAGES[framed] : undefined;
   return <span className={`avatar avatar-${color} ${url ? 'has-photo' : ''} ${framed ? `has-frame ${framed}` : ''} ${className}`} style={url ? { backgroundImage: `url("${url}")` } : undefined} role="img" aria-label={name}>
     {framed && <span className={`avatar-frame ${painted ? 'is-painted' : ''}`} aria-hidden="true"
-      style={painted ? { backgroundImage: `url("${painted}")`, ['--frame-img' as string]: `url("${painted}")` } as CSSProperties : undefined}>
+      style={painted ? { backgroundImage: `url("${painted}")`, ['--frame-img' as string]: `url("${painted}")` } as CSSProperties
+        : RING_ART[framed] ? { ['--ring-art' as string]: `url("${RING_ART[framed]}")` } as CSSProperties : undefined}>
       {(FRAME_FX[framed] ?? []).flatMap((spec) => Array.from({ length: spec.n }, (_, i) =>
         <i key={`${spec.kind}${i}`} className={`fx fx-${spec.kind}`} style={fxStyle(spec, i, Boolean(painted))} />))}
     </span>}

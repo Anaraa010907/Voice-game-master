@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Check, ChevronRight, Clock3, Coins, Crown, Flame, Gift, History, Lock, Swords, Trophy } from 'lucide-react';
-import Avatar from './Avatar';
+import Avatar, { RowBorder, rowBorderClass } from './Avatar';
 import RankEmblem, { RANK_GAME_LABEL } from './RankEmblem';
 import { TitleBadge, TitlePlaque, useFreeShopping, useShopItems } from './Social';
 import { MAX_RANK_LEVEL, RANK_GAMES, RANK_NAMES, RANK_POINTS, RANK_THRESHOLDS, rankInfo, rankTitleKey, type RankGame } from './rankRules';
@@ -210,14 +210,21 @@ export function RanksScreen({ userId, onBack, onPlay, notify, initialGame = 'maf
   </div>;
 }
 
-/** A rank's prize: coins, and a nameplate or board that is still being chosen ("coming soon"). */
-function RewardLine({ reward, items, earned }: { reward?: RankReward; items: Array<{ key: string; name: string }>; earned: boolean }) {
+/** A rank's prize: coins and an animated avatar frame or name border (shown small, as it looks). */
+function RewardLine({ reward, items, earned }: { reward?: RankReward; items: Array<{ key: string; name: string; kind: string }>; earned: boolean }) {
   if (!reward) return null;
-  const prize = reward.item_key ? items.find((item) => item.key === reward.item_key)?.name ?? reward.item_key : null;
+  const prize = reward.item_key ? items.find((item) => item.key === reward.item_key) ?? null : null;
   return <span className={`rank-reward ${earned ? 'is-earned' : ''}`}>
     {earned ? <Check size={11} /> : <Gift size={11} />}
     <span className="rank-reward-coins"><Coins size={11} />+{reward.coins.toLocaleString('en-US')}</span>
-    {prize ? <span>· {prize}</span> : <span className="rank-reward-soon">· Нэрийн хавтан <Clock3 size={10} /> тун удахгүй</span>}
+    {prize
+      ? <span className="rank-reward-item">
+        {prize.kind === 'frame'
+          ? <Avatar name={prize.name} color="rose" frame={prize.key} className="rank-reward-frame" />
+          : <span className={`rank-reward-border ${rowBorderClass(prize.key)}`}><RowBorder borderKey={prize.key} /></span>}
+        {prize.kind === 'frame' ? 'Хүрээ' : 'Нэрийн хүрээ'} «{prize.name}»
+      </span>
+      : reward.item_key ? null : <span className="rank-reward-soon">· <Clock3 size={10} /> тун удахгүй</span>}
   </span>;
 }
 

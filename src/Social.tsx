@@ -12,13 +12,17 @@ import { playSfx } from './sfx';
 export type ShopKind = 'gift' | 'frame' | 'title' | 'nameplate' | 'border';
 /** Coins are earned by playing; diamonds are bought with real money. */
 export type Currency = 'coin' | 'diamond';
-export type ShopItem = { key: string; kind: ShopKind; name: string; description: string; icon: string; price: number; sort: number; currency: Currency };
+/** Where a look comes from: bought in the shop, won by reaching a rank, or (later) the season pass / a limited offer. */
+export type ItemSource = 'shop' | 'rank' | 'pass' | 'limited';
+export type ShopItem = { key: string; kind: ShopKind; name: string; description: string; icon: string; price: number; sort: number; currency: Currency; source?: ItemSource };
+/** Only shop items can be bought or given. */
+export const forSale = (item: ShopItem) => (item.source ?? 'shop') === 'shop';
 
 let catalogue: Promise<ShopItem[]> | null = null;
 /** The shop's items, loaded once per app start. */
 export function loadShopItems(): Promise<ShopItem[]> {
   if (!supabase) return Promise.resolve([]);
-  catalogue ??= Promise.resolve(supabase.from('shop_items').select('key,kind,name,description,icon,price,sort,currency').order('sort'))
+  catalogue ??= Promise.resolve(supabase.from('shop_items').select('key,kind,name,description,icon,price,sort,currency,source').order('sort'))
     .then(({ data }) => (data as ShopItem[] | null) ?? [])
     .catch(() => { catalogue = null; return []; });
   return catalogue;
@@ -186,7 +190,7 @@ export function GiftPicker({ targetName, allowCosmetics, busy, note, onBack, onS
   const free = useFreeShopping();
   const [tab, setTab] = useState<GiftTab>('gift');
   const [picked, setPicked] = useState<string | null>(null);
-  const shown = items.filter((item) => item.kind === tab);
+  const shown = items.filter((item) => item.kind === tab && forSale(item));
   const choice = items.find((item) => item.key === picked);
   return <>
     <div className="pcard-subhead">{onBack && <button type="button" className="icon-button" onClick={onBack} aria-label="Буцах"><ArrowLeft size={14} /></button>}<b>{targetName}-д бэлэг</b><CoinCount value={wallet?.coins ?? null} /><DiamondCount value={wallet?.diamonds ?? null} /></div>
@@ -365,7 +369,9 @@ type Me = { coins: number; diamonds: number; frame_key: string | null; title_key
 
 type ShopTab = ShopKind | 'pass';
 const TABS: { key: ShopTab; label: string }[] = [{ key: 'frame', label: 'Аватар хүрээ' }, { key: 'nameplate', label: 'Нэрийн хавтан' }, { key: 'border', label: 'Нэрийн хүрээ' }, { key: 'gift', label: 'Бэлэг' }, { key: 'pass', label: 'Battle Pass' }];
-const CURRENCY_HEADING: Record<Currency, string> = { coin: 'Зоосоор · тоглож олсон зоосоор авна', diamond: 'Алмазаар · цэнэглэсэн алмазаар авна' };
+const CURRENCY_HEADING: Record<Currency, string> = { coin: 'Зоосоор · энгийн, хөдөлгөөнгүй', diamond: 'Алмазаар · зурган гоёл' };
+const GAME_SHORT: Record<RankGame, string> = { mafia: 'Мафи', monopoly: 'Монополь' };
+type RankPrize = { game_type: RankGame; level: number; item_key: string | null };
 
 export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: NotifyFn }) {
   const items = useShopItems();
@@ -375,7 +381,13 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
   const [busy, setBusy] = useState<string | null>(null);
   const [preview, setPreview] = useState<ShopItem | null>(null);
   const [topUp, setTopUp] = useState(false);
+  const [prizes, setPrizes] = useState<RankPrize[]>([]);
   const free = useFreeShopping();
+  useEffect(() => {
+    if (!supabase) return;
+    void Promise.resolve(supabase.from('rank_rewards').select('game_type,level,item_key').not('item_key', 'is', null))
+      .then(({ data }) => setPrizes((data as RankPrize[] | null) ?? [])).catch(() => undefined);
+  }, []);
 
   const load = useCallback(async () => {
     if (!supabase) return;
@@ -405,12 +417,21 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
   const bonusReady = !me?.bonus_claimed_at || Date.now() - new Date(me.bonus_claimed_at).getTime() > 20 * 3600_000;
   const wallet: Wallet | null = me ? { coins: me.coins, diamonds: me.diamonds } : null;
   const shown = tab === 'pass' ? [] : items.filter((item) => item.kind === tab);
-  // Round frames are sold for coins, painted ones for diamonds: show each purse as its own section.
-  const sections = (['coin', 'diamond'] as Currency[]).map((currency) => ({ currency, list: shown.filter((item) => (item.currency ?? 'coin') === currency) })).filter((section) => section.list.length);
+  // Plain looks for coins, painted ones for diamonds, each purse its own section; animated ones are rank prizes.
+  const prizeOf = (key: string) => prizes.find((prize) => prize.item_key === key) ?? null;
+  const rankList = shown.filter((item) => item.source === 'rank')
+    .sort((left, right) => (prizeOf(left.key)?.game_type ?? '').localeCompare(prizeOf(right.key)?.game_type ?? '') || (prizeOf(left.key)?.level ?? 99) - (prizeOf(right.key)?.level ?? 99));
+  const sections: Array<{ id: Currency | 'rank'; list: ShopItem[] }> = [
+    { id: 'coin' as const, list: shown.filter((item) => forSale(item) && (item.currency ?? 'coin') === 'coin') },
+    { id: 'rank' as const, list: rankList },
+    { id: 'diamond' as const, list: shown.filter((item) => forSale(item) && item.currency === 'diamond') },
+  ].filter((section) => section.list.length);
   const equippedKey = tab === 'frame' ? me?.frame_key : tab === 'title' ? me?.title_key : tab === 'nameplate' ? me?.nameplate_key : tab === 'border' ? me?.border_key : null;
 
   const card = (item: ShopItem) => {
-    const has = owned.includes(item.key);
+    const prize = item.source === 'rank' ? prizeOf(item.key) : null;
+    // Admins may wear anything; everyone else wears what they own.
+    const has = owned.includes(item.key) || (free && item.source === 'rank');
     const equipped = equippedKey === item.key;
     return <article key={item.key} className={`shop-card ${equipped ? 'is-equipped' : ''} is-${item.currency ?? 'coin'}`}>
       <button type="button" className="shop-visual" onClick={() => setPreview(item)} aria-label={`${item.name} харах`}>
@@ -428,7 +449,9 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
           ? <button type="button" className="secondary-button" disabled={busy !== null} onClick={() => void call(item.key, 'equip_item', { p_kind: item.kind, p_key: null }, 'Тайллаа.')}><Check size={13} /> ЗҮҮСЭН</button>
           : has
             ? <button type="button" className="secondary-button" disabled={busy !== null} onClick={() => void call(item.key, 'equip_item', { p_kind: item.kind, p_key: item.key }, 'Зүүлээ!')}>ЗҮҮХ</button>
-            : <button type="button" className={`primary-button buy-${item.currency ?? 'coin'}`} disabled={busy !== null || !canAfford(item, wallet, free)} onClick={() => void call(item.key, 'buy_item', { p_key: item.key }, `${item.name} таных боллоо!`)}>{free ? <><ShoppingBag size={13} />ҮНЭГҮЙ АВАХ</> : <Price item={item} />}</button>}
+            : !forSale(item)
+              ? <span className="shop-rank-lock"><Lock size={12} />{prize ? <>{GAME_SHORT[prize.game_type]} · {RANK_NAMES[prize.game_type][prize.level - 1]}</> : 'Цол ахиж авна'}</span>
+              : <button type="button" className={`primary-button buy-${item.currency ?? 'coin'}`} disabled={busy !== null || !canAfford(item, wallet, free)} onClick={() => void call(item.key, 'buy_item', { p_key: item.key }, `${item.name} таных боллоо!`)}>{free ? <><ShoppingBag size={13} />ҮНЭГҮЙ АВАХ</> : <Price item={item} />}</button>}
     </article>;
   };
 
@@ -447,11 +470,14 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
       <div className="admin-choice-row shop-tabs" role="tablist">{TABS.map((item) => <button type="button" role="tab" aria-selected={tab === item.key} key={item.key}
         className={`${tab === item.key ? 'is-picked' : ''} ${item.key === 'pass' ? 'is-pass' : ''}`} onClick={() => setTab(item.key)}>{item.key === 'pass' && <Ticket size={12} />}{item.label}</button>)}</div>
       {tab === 'gift' && <p className="admin-note">Бэлгийг тоглолтын үеэр тоглогчийн зураг дээр дарж илгээнэ. Бүх хүнд харагдана. Дээр нь дарж харж болно.</p>}
-      {tab === 'pass' ? <BattlePassSoon /> : sections.map((section) => <section key={section.currency} className={`shop-section is-${section.currency}`}>
-        {sections.length > 1 || section.currency === 'diamond' ? <h3 className="shop-section-title">{section.currency === 'diamond' ? <Gem size={13} /> : <Coins size={13} />}{CURRENCY_HEADING[section.currency]}</h3> : null}
+      {tab === 'pass' ? <BattlePassSoon /> : sections.map((section) => <section key={section.id} className={`shop-section is-${section.id}`}>
+        {sections.length > 1 || section.id !== 'coin'
+          ? <h3 className="shop-section-title">{section.id === 'diamond' ? <Gem size={13} /> : section.id === 'rank' ? <Crown size={13} /> : <Coins size={13} />}{section.id === 'rank' ? 'Цол ахиж авна · хөдөлгөөнт' : CURRENCY_HEADING[section.id]}</h3>
+          : null}
+        {section.id === 'rank' && <p className="shop-section-note">Рэйтинг тоглолтод тухайн цолд анх хүрэхэд автоматаар таных болно.</p>}
         <div className={`shop-grid kind-${tab}`}>{section.list.map(card)}</div>
       </section>)}
-      <p className="admin-note shop-foot"><Coins size={11} /> Зоосыг тоглож олно: ялбал +30 (рэйтинг +50), ялагдвал +10 (+15), өдөрт тоглолтоос 500 хүртэл, өдрийн бонус +100, цол ахихад шагнал. <Gem size={11} /> Алмазыг цэнэглэж авна (тун удахгүй).</p>
+      <p className="admin-note shop-foot"><Coins size={11} /> Зоосыг тоглож олно: ялбал +30 (рэйтинг +50), ялагдвал +10 (+15), өдөрт тоглолтоос 500 хүртэл, өдрийн бонус +100, цол ахихад шагнал. <Crown size={11} /> Хөдөлгөөнт хүрээг цол ахиж авна. <Gem size={11} /> Алмазыг цэнэглэж авна (тун удахгүй).</p>
     </div>
     {topUp && <TopUpModal onClose={() => setTopUp(false)} />}
     {preview && <div className="game-modal-backdrop" onClick={() => setPreview(null)}>
