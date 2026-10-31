@@ -3,6 +3,10 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.mafiashadows.game"
     compileSdk = rootProject.ext.compileSdkVersion
+    buildFeatures {
+        // facebook_client_token below is a generated resource.
+        resValues = true
+    }
     defaultConfig {
         applicationId "com.mafiashadows.game"
         minSdkVersion rootProject.ext.minSdkVersion
