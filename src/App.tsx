@@ -3,7 +3,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
   ArrowLeft, BookOpen, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, LockKeyhole, Moon,
-  MessageSquare, Radio, RefreshCw, Settings as SettingsIcon, Shield, ShieldCheck, ShoppingBag, Swords, Trophy, UserPlus, UserRound, Users, WandSparkles, Zap,
+  MessageSquare, Radio, RefreshCw, Settings as SettingsIcon, Shield, ShieldCheck, ShoppingBag, Swords, Ticket, Trophy, UserPlus, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles, type RoleName } from './gameData';
 import RoleCardArtwork from './RoleCardArtwork';
@@ -12,6 +12,7 @@ import Auth, { takeOAuthPending, type AuthView } from './Auth';
 import { ProfileScreen } from './AccountScreens';
 import { AdminScreen, AnnouncementBanner, BannedOverlay, FeedbackScreen, banActive, type PlayerBan, type StaffRole } from './AdminScreens';
 import { GiftLayer, PlayerCardModal, ShopScreen } from './Social';
+import { BattlePassScreen } from './BattlePass';
 import { RanksScreen } from './Ranks';
 import { FriendsScreen, InviteFriendsModal, useFriends, useMessageToasts, type Friend } from './Friends';
 import { supabase, supabaseConfigured, type PublicProfile } from './supabaseClient';
@@ -30,7 +31,7 @@ import { VolumeControls } from './VolumeControls';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { FullscreenToggle, useFullscreen, type FullscreenState } from './fullscreen';
 
-type Screen = 'menu' | 'hub' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth' | 'feedback' | 'admin' | 'shop' | 'watch' | 'friends' | 'ranks';
+type Screen = 'menu' | 'hub' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth' | 'feedback' | 'admin' | 'shop' | 'watch' | 'friends' | 'ranks' | 'pass';
 
 type RoomSettings = { name: string; maxPlayers: number; isPublic: boolean; password: string; gameType: GameType; ranked: boolean; settings?: Record<string, unknown> };
 const ROOM_STORAGE_KEY = 'mafia-shadows:room';
@@ -292,7 +293,7 @@ export default function App() {
     <main className="viewport">
       <section className={`game-frame screen-${screen}`} aria-label="MAFIA: SHADOWS тоглоом">
         <div className="grain" aria-hidden="true" />
-        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} onFeedback={() => requireAccount('feedback')} onShop={() => requireAccount('shop')} onRanks={() => requireAccount('ranks')} onFriends={() => requireAccount('friends')} friendBadge={friendsState.badge} signedIn={Boolean(userId)} staffRole={staffRole} onAuth={openAuth} fullscreen={fullscreen} />}
+        {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} onFeedback={() => requireAccount('feedback')} onShop={() => requireAccount('shop')} onPass={() => requireAccount('pass')} onRanks={() => requireAccount('ranks')} onFriends={() => requireAccount('friends')} friendBadge={friendsState.badge} signedIn={Boolean(userId)} staffRole={staffRole} onAuth={openAuth} fullscreen={fullscreen} />}
         {screen === 'hub' && <GameHub onBack={goBack} onChoose={(type) => { setGameType(type); setWantRanked(false); setScreen('browse'); }} onJoinCode={() => setScreen('join-room')} />}
         {screen === 'browse' && <RoomBrowser key={gameType} gameType={gameType} rankedFirst={wantRanked} onBack={() => setScreen(wantRanked ? 'ranks' : 'hub')} onCreate={() => setScreen('create-room')} onJoinCode={() => setScreen('join-room')} onEnter={enterRoom} />}
         {screen === 'create-room' && <CreateRoom key={gameType} gameType={gameType} startRanked={wantRanked} onBack={() => setScreen('browse')} onCreate={createRoom} />}
@@ -318,6 +319,7 @@ export default function App() {
         {screen === 'watch' && staffRole === 'admin' && watchRoom && userId && <AdminWatch roomCode={watchRoom} userId={userId} notify={notify} fullscreen={fullscreen}
           onExit={() => { setWatchRoom(null); setScreen('admin'); }} />}
         {screen === 'shop' && userId && <ShopScreen onBack={goBack} notify={notify} />}
+        {screen === 'pass' && userId && <BattlePassScreen onBack={goBack} notify={notify} />}
         {screen === 'ranks' && userId && <RanksScreen userId={userId} onBack={goBack} notify={notify} initialGame={gameType}
           onPlay={(game) => { setGameType(game); setWantRanked(true); setScreen('browse'); }} />}
         {screen === 'friends' && userId && <FriendsScreen userId={userId} playerNo={profile?.player_no ?? null} friendsState={friendsState} myRoom={myRoomInfo}
@@ -342,7 +344,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
   return <div className={`brand-mark ${compact ? 'compact' : ''}`}><span className="brand-emblem"><img src="/assets/brand/emblem-192.png" alt="" width={compact ? 30 : 42} height={compact ? 30 : 42} /></span><span>MAFIA<span className="brand-colon">:</span> <b>SHADOWS</b></span></div>;
 }
 
-function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, onShop, onRanks, onFriends, friendBadge, signedIn, staffRole, onAuth, fullscreen }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; onFeedback: () => void; onShop: () => void; onRanks: () => void; onFriends: () => void; friendBadge: number; signedIn: boolean; staffRole: StaffRole | null; onAuth: (view?: AuthView) => void; fullscreen: FullscreenState }) {
+function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, onShop, onPass, onRanks, onFriends, friendBadge, signedIn, staffRole, onAuth, fullscreen }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; onFeedback: () => void; onShop: () => void; onPass: () => void; onRanks: () => void; onFriends: () => void; friendBadge: number; signedIn: boolean; staffRole: StaffRole | null; onAuth: (view?: AuthView) => void; fullscreen: FullscreenState }) {
   return (
     <div className="menu-screen">
       <header className="menu-top"><Brand /><div className="menu-top-actions"><div className="online-note"><span className="status-dot" /> {signedIn ? 'ОНЛАЙН' : 'НЭВТРЭЭГҮЙ'}</div><FullscreenToggle fullscreen={fullscreen} /></div></header>
@@ -362,6 +364,7 @@ function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, onShop, onRank
         <button onClick={() => onNavigate('profile')}><span className="nav-icon"><UserRound size={16} /></span><span>{i18n.app.profile}</span><ChevronRight size={14} /></button>
         <button className="menu-nav-ranks" onClick={onRanks}><span className="nav-icon"><Trophy size={16} /></span><span>Рэйтинг</span><ChevronRight size={14} /></button>
         <button className="menu-nav-friends" onClick={onFriends}><span className="nav-icon"><Users size={16} /></span><span>Найзууд</span>{friendBadge > 0 ? <b className="admin-count">{friendBadge}</b> : <ChevronRight size={14} />}</button>
+        <button className="menu-nav-pass" onClick={onPass}><span className="nav-icon"><Ticket size={16} /></span><span>Battle Pass</span><ChevronRight size={14} /></button>
         <button className="menu-nav-shop" onClick={onShop}><span className="nav-icon"><ShoppingBag size={16} /></span><span>Дэлгүүр</span><ChevronRight size={14} /></button>
         <button onClick={onFeedback}><span className="nav-icon"><MessageSquare size={16} /></span><span>Санал хүсэлт</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('settings')}><span className="nav-icon"><SettingsIcon size={16} /></span><span>{i18n.app.settings}</span><ChevronRight size={14} /></button>

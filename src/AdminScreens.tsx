@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  ArrowLeft, Ban, Bug, Check, Clock3, Coins, DoorClosed, Eye, Flag, Flame, Gem, History, Inbox, LayoutDashboard, Lightbulb, Lock, LogOut, Megaphone, MessageSquare, RefreshCw, Search, Send, ShieldCheck, Undo2, UserCog, Users, X,
+  ArrowLeft, Ban, Bug, Check, Clock3, Coins, DoorClosed, Eye, Flag, Flame, Gem, History, Inbox, LayoutDashboard, Lightbulb, Lock, LogOut, Megaphone, MessageSquare, Play, RefreshCw, Search, Send, ShieldCheck, Square, Ticket, Undo2, UserCog, Users, X,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import { supabase } from './supabaseClient';
 import { callGame, type NotifyFn } from './multiplayer';
 import { GAMES, type GameType } from './games';
 import { Price, forSale, timeLeft, useShopItems, type Currency, type ShopOffer } from './Social';
+import type { PassSeason } from './BattlePass';
 
 /* ---------- shared bits ---------- */
 
@@ -166,7 +167,7 @@ export function FeedbackScreen({ onBack, notify }: { onBack: () => void; notify:
 
 /* ---------- admin panel ---------- */
 
-type Tab = 'dash' | 'players' | 'feedback' | 'rooms' | 'offers' | 'announce' | 'log';
+type Tab = 'dash' | 'players' | 'feedback' | 'rooms' | 'offers' | 'pass' | 'announce' | 'log';
 type Stats = { players: number; new_today: number; rooms_live: number; rooms_playing: number; open_feedback: number; banned: number };
 type AdminPlayer = {
   id: string; display_name: string; avatar_url: string | null; email: string | null; provider: string; created_at: string;
@@ -183,6 +184,7 @@ const TABS: { key: Tab; label: string; icon: ReactNode; adminOnly?: boolean }[] 
   { key: 'feedback', label: 'Санал, гомдол', icon: <Inbox size={15} /> },
   { key: 'rooms', label: 'Өрөөнүүд', icon: <DoorClosed size={15} />, adminOnly: true },
   { key: 'offers', label: 'Онцлох', icon: <Flame size={15} />, adminOnly: true },
+  { key: 'pass', label: 'Battle Pass', icon: <Ticket size={15} />, adminOnly: true },
   { key: 'announce', label: 'Мэдэгдэл', icon: <Megaphone size={15} />, adminOnly: true },
   { key: 'log', label: 'Түүх', icon: <History size={15} />, adminOnly: true },
 ];
@@ -190,7 +192,8 @@ const BAN_CHOICES = [{ hours: 24, label: '1 өдөр' }, { hours: 72, label: '3 
 const ACTION_LABEL: Record<string, string> = {
   ban: 'Тоглогч хаасан', unban: 'Хаалт арилгасан', 'room-close': 'Өрөө хаасан', 'feedback-resolve': 'Санал шийдсэн',
   'feedback-reopen': 'Санал дахин нээсэн', announcement: 'Мэдэгдэл нийтэлсэн', 'announcement-clear': 'Мэдэгдэл авсан',
-  coins: 'Зоос өгсөн', role: 'Эрх өөрчилсөн', offer: 'Онцлох санал нэмсэн', 'offer-end': 'Онцлох санал зогсоосон',
+  coins: 'Зоос өгсөн', diamonds: 'Алмаз өгсөн', role: 'Эрх өөрчилсөн', offer: 'Онцлох санал нэмсэн', 'offer-end': 'Онцлох санал зогсоосон',
+  'pass-start': 'Battle Pass эхлүүлсэн', 'pass-end': 'Battle Pass дуусгасан',
 };
 const ROOM_STATUS: Record<string, string> = { lobby: 'ЛОББИ', playing: 'ТОГЛОЖ БАЙНА', finished: 'ДУУССАН' };
 
@@ -224,6 +227,7 @@ export function AdminScreen({ role, onBack, notify, onWatch }: { role: StaffRole
         {tab === 'feedback' && <FeedbackTab notify={notify} onChanged={loadStats} />}
         {tab === 'rooms' && isAdmin && <RoomsTab notify={notify} onChanged={loadStats} onWatch={onWatch} />}
         {tab === 'offers' && isAdmin && <OffersTab notify={notify} />}
+        {tab === 'pass' && isAdmin && <PassTab notify={notify} />}
         {tab === 'announce' && isAdmin && <AnnounceTab notify={notify} />}
         {tab === 'log' && isAdmin && <LogTab notify={notify} />}
       </div>
@@ -253,7 +257,7 @@ function PlayersTab({ isAdmin, notify, onChanged }: { isAdmin: boolean; notify: 
   const [search, setSearch] = useState('');
   const [players, setPlayers] = useState<AdminPlayer[] | null>(null);
   const [banning, setBanning] = useState<AdminPlayer | null>(null);
-  const [giving, setGiving] = useState<AdminPlayer | null>(null);
+  const [giving, setGiving] = useState<{ player: AdminPlayer; currency: 'coin' | 'diamond' } | null>(null);
   const [promoting, setPromoting] = useState<AdminPlayer | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -294,7 +298,8 @@ function PlayersTab({ isAdmin, notify, onChanged }: { isAdmin: boolean; notify: 
           <small>{player.total_matches} тоглолт · {player.wins} ялалт · <span className="admin-coins"><Coins size={10} />{player.coins.toLocaleString('en-US')}</span>{player.is_banned && player.ban_reason ? ` · Шалтгаан: ${player.ban_reason}` : ''}</small>
         </div>
         <span className="admin-row-actions">
-          {isAdmin && <button type="button" className="secondary-button" disabled={busy} onClick={() => setGiving(player)} title="Зоос өгөх"><Coins size={13} /> ЗООС</button>}
+          {isAdmin && <button type="button" className="secondary-button" disabled={busy} onClick={() => setGiving({ player, currency: 'coin' })} title="Зоос өгөх, хасах"><Coins size={13} /> ЗООС</button>}
+          {isAdmin && <button type="button" className="secondary-button admin-diamond-button" disabled={busy} onClick={() => setGiving({ player, currency: 'diamond' })} title="Алмаз өгөх, хасах"><Gem size={13} /> АЛМАЗ</button>}
           {isAdmin && <button type="button" className="secondary-button" disabled={busy} onClick={() => setPromoting(player)} title="Эрх өгөх"><UserCog size={13} /> ЭРХ</button>}
           {!player.staff_role && (player.is_banned
             ? <button type="button" className="secondary-button" disabled={busy} onClick={() => void unban(player)}><Undo2 size={13} /> АРИЛГАХ</button>
@@ -303,7 +308,7 @@ function PlayersTab({ isAdmin, notify, onChanged }: { isAdmin: boolean; notify: 
       </li>)}
     </ul>
     {banning && <BanDialog player={banning} onClose={() => setBanning(null)} onDone={() => { setBanning(null); void load(search); onChanged(); }} notify={notify} />}
-    {giving && <CoinsDialog player={giving} onClose={() => setGiving(null)} onDone={() => { setGiving(null); void load(search); }} notify={notify} />}
+    {giving && <CoinsDialog player={giving.player} initialCurrency={giving.currency} onClose={() => setGiving(null)} onDone={() => { setGiving(null); void load(search); }} notify={notify} />}
     {promoting && <RoleDialog player={promoting} onClose={() => setPromoting(null)} onDone={() => { setPromoting(null); void load(search); }} notify={notify} />}
   </div>;
 }
@@ -342,12 +347,19 @@ function BanDialog({ player, onClose, onDone, notify }: { player: AdminPlayer; o
 }
 
 const COIN_PRESETS = [100, 500, 1000, 5000, 10000];
+const DIAMOND_PRESETS = [10, 50, 100, 250, 500];
 
-function CoinsDialog({ player, onClose, onDone, notify }: { player: AdminPlayer; onClose: () => void; onDone: () => void; notify: NotifyFn }) {
-  const [amount, setAmount] = useState('1000');
+function CoinsDialog({ player, initialCurrency = 'coin', onClose, onDone, notify }: { player: AdminPlayer; initialCurrency?: 'coin' | 'diamond'; onClose: () => void; onDone: () => void; notify: NotifyFn }) {
+  const [amount, setAmount] = useState(initialCurrency === 'diamond' ? '100' : '1000');
   const [take, setTake] = useState(false);
   /** Coins are earned in play; diamonds stand in for real-money top-ups until payment is connected. */
-  const [currency, setCurrency] = useState<'coin' | 'diamond'>('coin');
+  const [currency, setCurrencyState] = useState<'coin' | 'diamond'>(initialCurrency);
+  const setCurrency = (next: 'coin' | 'diamond') => {
+    if (next === currency) return;
+    setCurrencyState(next);
+    setAmount(next === 'diamond' ? '100' : '1000');
+  };
+  const presets = currency === 'diamond' ? DIAMOND_PRESETS : COIN_PRESETS;
   const [diamonds, setDiamonds] = useState<number | null>(null);
   useEffect(() => {
     if (!supabase || currency !== 'diamond') return;
@@ -369,7 +381,7 @@ function CoinsDialog({ player, onClose, onDone, notify }: { player: AdminPlayer;
   };
   return <div className="game-modal-backdrop" onClick={onClose}>
     <section className="game-modal admin-ban-modal" role="dialog" aria-modal="true" aria-labelledby="coins-title" onClick={(event) => event.stopPropagation()}>
-      <header><h2 id="coins-title"><Coins size={16} /> {player.display_name}</h2><button type="button" className="icon-button" onClick={onClose} aria-label="Хаах"><X size={15} /></button></header>
+      <header><h2 id="coins-title">{currency === 'diamond' ? <Gem size={16} /> : <Coins size={16} />} {player.display_name}</h2><button type="button" className="icon-button" onClick={onClose} aria-label="Хаах"><X size={15} /></button></header>
       <div className="admin-choice-row" role="radiogroup" aria-label="Валют">
         <button type="button" role="radio" aria-checked={currency === 'coin'} className={currency === 'coin' ? 'is-picked' : ''} onClick={() => setCurrency('coin')}><Coins size={12} /> Зоос</button>
         <button type="button" role="radio" aria-checked={currency === 'diamond'} className={currency === 'diamond' ? 'is-picked' : ''} onClick={() => setCurrency('diamond')}><Gem size={12} /> Алмаз</button>
@@ -379,9 +391,9 @@ function CoinsDialog({ player, onClose, onDone, notify }: { player: AdminPlayer;
         <button type="button" role="radio" aria-checked={!take} className={!take ? 'is-picked' : ''} onClick={() => setTake(false)}>Өгөх</button>
         <button type="button" role="radio" aria-checked={take} className={take ? 'is-picked' : ''} onClick={() => setTake(true)}>Хасах</button>
       </div>
-      <div className="admin-choice-row">{COIN_PRESETS.map((preset) => <button type="button" key={preset} className={value === preset ? 'is-picked' : ''} onClick={() => setAmount(String(preset))}>{preset.toLocaleString('en-US')}</button>)}</div>
+      <div className="admin-choice-row">{presets.map((preset) => <button type="button" key={preset} className={value === preset ? 'is-picked' : ''} onClick={() => setAmount(String(preset))}>{preset.toLocaleString('en-US')}</button>)}</div>
       <label className="auth-field"><span>ХЭМЖЭЭ</span><input inputMode="numeric" value={amount} onChange={(event) => setAmount(event.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 7))} /></label>
-      <label className="auth-field"><span>ШАЛТГААН (заавал биш)</span><input value={reason} maxLength={80} onChange={(event) => setReason(event.target.value)} placeholder="Жишээ нь: Тэмцээний шагнал" /></label>
+      <label className="auth-field"><span>ШАЛТГААН (заавал биш)</span><input value={reason} maxLength={80} onChange={(event) => setReason(event.target.value)} placeholder={currency === 'diamond' ? 'Жишээ нь: 5000₮ цэнэглэлт' : 'Жишээ нь: Тэмцээний шагнал'} /></label>
       <div className="modal-actions">
         <button type="button" className="secondary-button" onClick={onClose}>БОЛИХ</button>
         <button type="button" className="primary-button" disabled={busy || !value} onClick={() => void submit()}>{currency === 'diamond' ? <Gem size={14} /> : <Coins size={14} />} {take ? 'ХАСАХ' : 'ӨГӨХ'}</button>
@@ -596,6 +608,124 @@ function OffersTab({ notify }: { notify: NotifyFn }) {
       {OFFER_DAYS.map((option) => <button type="button" role="radio" aria-checked={days === option} key={option} className={days === option ? 'is-picked' : ''} onClick={() => setDays(option)}>{option} өдөр</button>)}
     </div>
     <button type="button" className="primary-button" disabled={busy || !picked || !price} onClick={() => void create()}><Flame size={14} /> САНАЛ НЭМЭХ</button>
+  </div>;
+}
+
+/* ---------- battle pass ---------- */
+
+type PassRewardRow = { season_id: number; tier: number; track: 'free' | 'premium'; kind: 'coins' | 'diamonds' | 'item'; amount: number; item_key: string | null };
+type PassStats = { players: number; premium: number; claims: number };
+const PASS_DAYS = [30, 42, 60, 90];
+const SEASON_STATUS: Record<PassSeason['status'], { label: string; chip: string }> = {
+  draft: { label: 'БЭЛЭН · ЭХЛЭЭГҮЙ', chip: 'chip-blue' },
+  active: { label: 'ИДЭВХТЭЙ', chip: 'chip-gold' },
+  ended: { label: 'ДУУССАН', chip: 'chip-red' },
+};
+
+/**
+ * Battle Pass seasons are written ahead as drafts (tiers and rewards). An admin starts one when
+ * the game is ready (choosing its length and the gold-track price), and can end it early.
+ */
+function PassTab({ notify }: { notify: NotifyFn }) {
+  const items = useShopItems();
+  const [seasons, setSeasons] = useState<PassSeason[] | null>(null);
+  const [rewards, setRewards] = useState<PassRewardRow[]>([]);
+  const [stats, setStats] = useState<Record<number, PassStats>>({});
+  const [days, setDays] = useState(42);
+  const [price, setPrice] = useState<Record<number, string>>({});
+  const [confirm, setConfirm] = useState<{ id: number; action: 'start' | 'end' } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase.from('pass_seasons').select('id,name,tiers,xp_per_tier,premium_price,status,starts_at,ends_at').order('id', { ascending: false });
+    if (error) notify(failure(error), 'error');
+    const list = (data as PassSeason[] | null) ?? [];
+    setSeasons(list);
+    const ids = list.map((season) => season.id);
+    if (!ids.length) return;
+    const { data: rows } = await supabase.from('pass_rewards').select('season_id,tier,track,kind,amount,item_key').in('season_id', ids);
+    setRewards((rows as PassRewardRow[] | null) ?? []);
+    const live = list.filter((season) => season.status !== 'draft');
+    const entries = await Promise.all(live.map(async (season) => {
+      const { data: result } = await supabase!.rpc('admin_pass_stats', { p_season: season.id });
+      return [season.id, (result as PassStats | null) ?? { players: 0, premium: 0, claims: 0 }] as const;
+    }));
+    setStats(Object.fromEntries(entries));
+  }, [notify]);
+  useEffect(() => { void load(); }, [load]);
+
+  const act = async (season: PassSeason, action: 'start' | 'end') => {
+    if (!supabase) return;
+    const cost = Number(price[season.id] ?? season.premium_price);
+    setBusy(true);
+    const { error } = action === 'start'
+      ? await supabase.rpc('admin_start_pass_season', { p_season: season.id, p_days: days, p_price: cost })
+      : await supabase.rpc('admin_end_pass_season', { p_season: season.id });
+    setBusy(false);
+    setConfirm(null);
+    if (error) { notify(failure(error), 'error'); return; }
+    notify(action === 'start' ? `${season.name} эхэллээ! Тоглогчид одоо XP цуглуулна.` : `${season.name} дууслаа. Тоглогчид 3 хоногийн дотор шагналаа авч болно.`, 'success');
+    void load();
+  };
+
+  const summary = (season: PassSeason, track: 'free' | 'premium') => {
+    const list = rewards.filter((reward) => reward.season_id === season.id && reward.track === track);
+    const coins = list.filter((reward) => reward.kind === 'coins').reduce((sum, reward) => sum + reward.amount, 0);
+    const gems = list.filter((reward) => reward.kind === 'diamonds').reduce((sum, reward) => sum + reward.amount, 0);
+    const looks = list.filter((reward) => reward.kind === 'item').map((reward) => items.find((item) => item.key === reward.item_key)?.name ?? reward.item_key);
+    return <span className={`admin-pass-track is-${track}`}>
+      <b>{track === 'free' ? 'Үнэгүй зам' : 'Алтан зам'}</b>
+      <span><Coins size={11} /> {coins.toLocaleString('en-US')} · <Gem size={11} /> {gems} · {looks.length} гоёл</span>
+      {looks.length > 0 && <small>{looks.join(', ')}</small>}
+    </span>;
+  };
+
+  const active = seasons?.find((season) => season.status === 'active');
+
+  return <div className="admin-pane admin-pass">
+    <p className="admin-note">Улирал бүр урьдчилан бэлдэгдсэн байна (шат, шагнал). Тоглоомоо гаргахдаа энд “ЭХЛҮҮЛЭХ” дарна. Эхлэхэд алтан замын гоёлууд дэлгүүрээс гарч зөвхөн Battle Pass-аар авагдана; улирал дуусахад онцлох санал болж эргэж ирнэ.</p>
+    {seasons === null && <p className="panel-empty">Ачаалж байна…</p>}
+    {seasons?.length === 0 && <p className="panel-empty">Улирал алга.</p>}
+    <ul className="admin-pass-list">{seasons?.map((season) => {
+      const status = SEASON_STATUS[season.status];
+      const numbers = stats[season.id];
+      const asking = confirm?.id === season.id ? confirm.action : null;
+      const cost = price[season.id] ?? String(season.premium_price);
+      return <li key={season.id} className={`is-${season.status}`}>
+        <div className="admin-pass-head">
+          <b><Ticket size={14} /> {season.name}</b>
+          <span className={`chip ${status.chip}`}>{status.label}</span>
+        </div>
+        <small className="admin-pass-meta">{season.tiers} шат · шат бүр {season.xp_per_tier} XP · алтан зам {season.premium_price} алмаз
+          {season.status === 'active' && season.ends_at && <> · <Clock3 size={10} /> {timeLeft(season.ends_at)} үлдсэн</>}
+          {season.status === 'ended' && season.ends_at && <> · {ago(season.ends_at)} дууссан</>}</small>
+        <div className="admin-pass-tracks">{summary(season, 'free')}{summary(season, 'premium')}</div>
+        {numbers && <div className="admin-pass-stats">
+          <span><b>{numbers.players}</b> тоглогч XP авсан</span>
+          <span><b>{numbers.premium}</b> алтан зам авсан</span>
+          <span><b>{numbers.claims}</b> шагнал авагдсан</span>
+        </div>}
+        {season.status === 'draft' && <div className="admin-pass-start">
+          <div className="admin-choice-row" role="radiogroup" aria-label="Улирлын урт">
+            {PASS_DAYS.map((option) => <button type="button" role="radio" aria-checked={days === option} key={option} className={days === option ? 'is-picked' : ''} onClick={() => setDays(option)}>{option} хоног</button>)}
+          </div>
+          <label className="auth-field"><span>АЛТАН ЗАМЫН ҮНЭ (алмаз)</span>
+            <input inputMode="numeric" value={cost} onChange={(event) => setPrice((current) => ({ ...current, [season.id]: event.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 5) }))} /></label>
+          {asking === 'start'
+            ? <div className="admin-confirm"><span>{days} хоногийн улирал {cost} алмазаар эхлүүлэх үү?</span>
+              <button type="button" className="secondary-button" disabled={busy} onClick={() => setConfirm(null)}>БОЛИХ</button>
+              <button type="button" className="primary-button" disabled={busy} onClick={() => void act(season, 'start')}><Check size={14} /> ТИЙМ, ЭХЛҮҮЛЭХ</button></div>
+            : <button type="button" className="primary-button" disabled={busy || Boolean(active) || cost === ''} onClick={() => setConfirm({ id: season.id, action: 'start' })}><Play size={14} /> ЭХЛҮҮЛЭХ</button>}
+          {active && <small className="admin-note">“{active.name}” явж байгаа тул эхлээд түүнийг дуусгана.</small>}
+        </div>}
+        {season.status === 'active' && (asking === 'end'
+          ? <div className="admin-confirm"><span>Улирлыг одоо дуусгах уу? Буцаах боломжгүй.</span>
+            <button type="button" className="secondary-button" disabled={busy} onClick={() => setConfirm(null)}>БОЛИХ</button>
+            <button type="button" className="danger-button" disabled={busy} onClick={() => void act(season, 'end')}><Square size={13} /> ТИЙМ, ДУУСГАХ</button></div>
+          : <button type="button" className="danger-button admin-pass-end" disabled={busy} onClick={() => setConfirm({ id: season.id, action: 'end' })}><Square size={13} /> ДУУСГАХ</button>)}
+      </li>;
+    })}</ul>
   </div>;
 }
 

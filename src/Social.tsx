@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, Bot, Check, Clock3, Coins, Crown, Flag, Flame, Gem, Gift, Landmark, Lock, Plus, Send, ShoppingBag, Sparkles, Ticket, UserPlus, VenetianMask, X } from 'lucide-react';
+import { ArrowLeft, Bot, Check, Clock3, Coins, Crown, Flag, Flame, Gem, Gift, Landmark, Lock, Plus, Send, ShoppingBag, Sparkles, UserPlus, VenetianMask, X } from 'lucide-react';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
 import RankEmblem, { RankChip } from './RankEmblem';
 import { RANK_GAMES, RANK_METALS, RANK_NAMES, parseRankTitle, type RankGame } from './rankRules';
@@ -53,7 +53,7 @@ export function useFreeShopping() {
 export type Wallet = { coins: number; diamonds: number };
 
 /** My coins and diamonds, refreshed on demand. */
-function useMyWallet() {
+export function useMyWallet() {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const refresh = useCallback(async () => {
     if (!supabase) return;
@@ -355,7 +355,7 @@ export function useLongPress(onLongPress: () => void, delay = 450) {
 /* ---------- shop ---------- */
 
 /** How a nameplate looks behind my own name, as it will in a lobby seat or a game row. */
-function PlatePreview({ plateKey, borderKey, me, large = false }: { plateKey: string | null; borderKey?: string; me: { display_name: string; avatar_url: string | null; avatar_key: string; frame_key: string | null } | null; large?: boolean }) {
+export function PlatePreview({ plateKey, borderKey, me, large = false }: { plateKey: string | null; borderKey?: string; me: { display_name: string; avatar_url: string | null; avatar_key: string; frame_key: string | null } | null; large?: boolean }) {
   const plate = nameplate(plateKey);
   return <span className={`plate-preview ${large ? 'is-large' : ''} ${plate.className} ${rowBorderClass(borderKey)}`} style={plate.style}>
     <RowBorder borderKey={borderKey} />
@@ -367,8 +367,8 @@ function PlatePreview({ plateKey, borderKey, me, large = false }: { plateKey: st
 type Owned = { item_key: string };
 type Me = { coins: number; diamonds: number; frame_key: string | null; title_key: string | null; nameplate_key?: string | null; border_key?: string | null; avatar_url: string | null; avatar_key: string; display_name: string; bonus_claimed_at: string | null };
 
-type ShopTab = ShopKind | 'pass' | 'offers';
-const TABS: { key: ShopTab; label: string }[] = [{ key: 'offers', label: 'Онцлох' }, { key: 'frame', label: 'Аватар хүрээ' }, { key: 'nameplate', label: 'Нэрийн хавтан' }, { key: 'border', label: 'Нэрийн хүрээ' }, { key: 'gift', label: 'Бэлэг' }, { key: 'pass', label: 'Battle Pass' }];
+type ShopTab = ShopKind | 'offers';
+const TABS: { key: ShopTab; label: string }[] = [{ key: 'offers', label: 'Онцлох' }, { key: 'frame', label: 'Аватар хүрээ' }, { key: 'nameplate', label: 'Нэрийн хавтан' }, { key: 'border', label: 'Нэрийн хүрээ' }, { key: 'gift', label: 'Бэлэг' }];
 const CURRENCY_HEADING: Record<Currency, string> = { coin: 'Зоосоор · энгийн, хөдөлгөөнгүй', diamond: 'Алмазаар · зурган гоёл' };
 const GAME_SHORT: Record<RankGame, string> = { mafia: 'Мафи', monopoly: 'Монополь' };
 type RankPrize = { game_type: RankGame; level: number; item_key: string | null };
@@ -445,7 +445,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
 
   const bonusReady = !me?.bonus_claimed_at || Date.now() - new Date(me.bonus_claimed_at).getTime() > 20 * 3600_000;
   const wallet: Wallet | null = me ? { coins: me.coins, diamonds: me.diamonds } : null;
-  const shown = tab === 'pass' || tab === 'offers' ? [] : items.filter((item) => item.kind === tab);
+  const shown = tab === 'offers' ? [] : items.filter((item) => item.kind === tab);
   // Plain looks for coins, painted ones for diamonds, each purse its own section; animated ones are rank prizes.
   const prizeOf = (key: string) => prizes.find((prize) => prize.item_key === key) ?? null;
   const offerOf = (key: string) => offers.find((offer) => offer.item_key === key) ?? null;
@@ -527,8 +527,8 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
     </header>
     <div className="panel-body shop-body">
       <div className="admin-choice-row shop-tabs" role="tablist">{TABS.map((item) => <button type="button" role="tab" aria-selected={tab === item.key} key={item.key}
-        className={`${tab === item.key ? 'is-picked' : ''} ${item.key === 'pass' ? 'is-pass' : ''} ${item.key === 'offers' ? 'is-offers' : ''}`} onClick={() => setTab(item.key)}>
-        {item.key === 'pass' && <Ticket size={12} />}{item.key === 'offers' && <Flame size={12} />}{item.label}{item.key === 'offers' && offers.length > 0 && <b className="shop-tab-count">{offers.length}</b>}</button>)}</div>
+        className={`${tab === item.key ? 'is-picked' : ''} ${item.key === 'offers' ? 'is-offers' : ''}`} onClick={() => setTab(item.key)}>
+        {item.key === 'offers' && <Flame size={12} />}{item.label}{item.key === 'offers' && offers.length > 0 && <b className="shop-tab-count">{offers.length}</b>}</button>)}</div>
       {tab === 'gift' && <p className="admin-note">Бэлгийг тоглолтын үеэр тоглогчийн зураг дээр дарж илгээнэ. Бүх хүнд харагдана. Дээр нь дарж харж болно.</p>}
       {tab === 'offers' && <section className="shop-section is-offers">
         <h3 className="shop-section-title"><Flame size={13} />Онцлох · хугацаатай хямдрал</h3>
@@ -537,7 +537,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
           ? <div className="shop-grid kind-offers">{offerItems.map(offerCard)}</div>
           : <p className="panel-empty">Одоогоор онцлох санал алга. Даваа гарагт шинэчлэгдэнэ.</p>}
       </section>}
-      {tab === 'pass' ? <BattlePassSoon /> : sections.map((section) => <section key={section.id} className={`shop-section is-${section.id}`}>
+      {sections.map((section) => <section key={section.id} className={`shop-section is-${section.id}`}>
         {sections.length > 1 || section.id !== 'coin'
           ? <h3 className="shop-section-title">{section.id === 'diamond' ? <Gem size={13} /> : section.id === 'rank' ? <Crown size={13} /> : <Coins size={13} />}{section.id === 'rank' ? 'Цол ахиж авна · хөдөлгөөнт' : CURRENCY_HEADING[section.id]}</h3>
           : null}
@@ -561,21 +561,3 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
   </div>;
 }
 
-/** The season pass, not open yet: a look at how its two tracks will work. */
-function BattlePassSoon() {
-  const tiers = [1, 2, 3, 4, 5, 6, 7, 8];
-  const freePrize = ['50 зоос', 'Бэлэг', '100 зоос', 'Нэрийн хүрээ', '150 зоос', 'Бэлэг', '200 зоос', 'Хүрээ'];
-  const premiumPrize = ['Алмаз', 'Хүрээ', 'Нэрийн хавтан', 'Алмаз', 'Эмоут', 'Нэрийн хүрээ', 'Алмаз', 'Улирлын хүрээ'];
-  return <section className="pass-soon" aria-label="Battle Pass · тун удахгүй">
-    <div className="pass-hero">
-      <span className="pass-badge"><Ticket size={14} /> 1-Р УЛИРАЛ</span>
-      <h2>Battle Pass</h2>
-      <p>Тоглож XP цуглуулаад шат ахих бүрт шагнал авна. Үнэгүй зам бүх хүнд нээлттэй, алтан замыг алмазаар нээнэ.</p>
-      <span className="pass-soon-tag"><Clock3 size={13} /> ТУН УДАХГҮЙ</span>
-    </div>
-    <div className="pass-track" aria-hidden="true">
-      <div className="pass-row"><b>ҮНЭГҮЙ</b>{tiers.map((tier) => <span key={tier} className="pass-cell"><small>{tier}</small>{freePrize[tier - 1]}</span>)}</div>
-      <div className="pass-row is-premium"><b><Crown size={12} /> АЛТАН</b>{tiers.map((tier) => <span key={tier} className="pass-cell"><Lock size={11} /><small>{tier}</small>{premiumPrize[tier - 1]}</span>)}</div>
-    </div>
-  </section>;
-}

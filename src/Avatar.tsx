@@ -36,8 +36,10 @@ const NAMEPLATE_IMAGES: Record<string, string> = {
   'plate-marble': '/assets/nameplates/plain/marble.svg',
   'plate-black-gold': '/assets/nameplates/plain/black-gold.svg',
   'plate-ornament': '/assets/nameplates/plain/ornament.svg',
+  // Battle Pass free track.
+  'plate-season1': '/assets/nameplates/plain/season1.svg',
 };
-const PLAIN_PLATES = new Set(['plate-night-blue', 'plate-paper', 'plate-leather', 'plate-marble', 'plate-black-gold', 'plate-ornament']);
+const PLAIN_PLATES = new Set(['plate-night-blue', 'plate-paper', 'plate-leather', 'plate-marble', 'plate-black-gold', 'plate-ornament', 'plate-season1']);
 
 /** Class and style that put the player's nameplate behind a row (see .has-nameplate in theme.css). */
 export function nameplate(key: string | null | undefined): { className: string; style: CSSProperties } {
@@ -48,7 +50,7 @@ export function nameplate(key: string | null | undefined): { className: string; 
 }
 
 /** Name borders: a ring around a player's whole row (see .row-border in theme.css). The plain ones stand still. */
-const PLAIN_BORDERS = ['border-bronze', 'border-silver', 'border-ivory', 'border-azure', 'border-crimson', 'border-double'];
+const PLAIN_BORDERS = ['border-bronze', 'border-silver', 'border-ivory', 'border-azure', 'border-crimson', 'border-double', 'border-season1'];
 export const BORDER_KEYS = ['border-gold', 'border-neon', 'border-ice', 'border-fire', 'border-ruby', 'border-royal', 'border-jade', ...PLAIN_BORDERS];
 
 /** The border, placed as the first child of a row; the row gets `has-row-border`. */
@@ -59,11 +61,12 @@ export function RowBorder({ borderKey }: { borderKey: string | null | undefined 
 export const rowBorderClass = (key: string | null | undefined) => (key && BORDER_KEYS.includes(key) ? 'has-row-border' : '');
 
 /** Plain rings (coins): still and matte. Two carry a pattern drawn as an image. */
-const PLAIN_FRAMES = ['frame-bronze', 'frame-silver', 'frame-brass', 'frame-wood', 'frame-leather', 'frame-double', 'frame-sky', 'frame-onyx', 'frame-khana', 'frame-ulzii'];
+const PLAIN_FRAMES = ['frame-bronze', 'frame-silver', 'frame-brass', 'frame-wood', 'frame-leather', 'frame-double', 'frame-sky', 'frame-onyx', 'frame-khana', 'frame-ulzii', 'frame-season1'];
 /** Plain rings whose pattern is a picture laid into the ring band (see .frame-khana in theme.css). */
 const RING_ART: Record<string, string> = {
   'frame-khana': '/assets/frames/plain/khana.svg',
   'frame-ulzii': '/assets/frames/plain/ulzii.svg',
+  'frame-season1': '/assets/frames/plain/season1.svg',
 };
 /** Animated rings won by rank (frame-gold … frame-royal were sold before ranks gave them). */
 const ANIMATED_FRAMES = ['frame-gold', 'frame-neon', 'frame-ice', 'frame-fire', 'frame-blood', 'frame-royal', 'frame-smoke', 'frame-coins', 'frame-tycoon'];
