@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  ArrowLeft, Ban, Bug, Check, Coins, DoorClosed, Eye, Flag, Gem, History, Inbox, LayoutDashboard, Lightbulb, Lock, LogOut, Megaphone, MessageSquare, RefreshCw, Search, Send, ShieldCheck, Undo2, UserCog, Users, X,
+  ArrowLeft, Ban, Bug, Check, Clock3, Coins, DoorClosed, Eye, Flag, Flame, Gem, History, Inbox, LayoutDashboard, Lightbulb, Lock, LogOut, Megaphone, MessageSquare, RefreshCw, Search, Send, ShieldCheck, Undo2, UserCog, Users, X,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import { supabase } from './supabaseClient';
 import { callGame, type NotifyFn } from './multiplayer';
 import { GAMES, type GameType } from './games';
+import { Price, forSale, timeLeft, useShopItems, type Currency, type ShopOffer } from './Social';
 
 /* ---------- shared bits ---------- */
 
@@ -165,7 +166,7 @@ export function FeedbackScreen({ onBack, notify }: { onBack: () => void; notify:
 
 /* ---------- admin panel ---------- */
 
-type Tab = 'dash' | 'players' | 'feedback' | 'rooms' | 'announce' | 'log';
+type Tab = 'dash' | 'players' | 'feedback' | 'rooms' | 'offers' | 'announce' | 'log';
 type Stats = { players: number; new_today: number; rooms_live: number; rooms_playing: number; open_feedback: number; banned: number };
 type AdminPlayer = {
   id: string; display_name: string; avatar_url: string | null; email: string | null; provider: string; created_at: string;
@@ -181,6 +182,7 @@ const TABS: { key: Tab; label: string; icon: ReactNode; adminOnly?: boolean }[] 
   { key: 'players', label: 'Тоглогчид', icon: <Users size={15} /> },
   { key: 'feedback', label: 'Санал, гомдол', icon: <Inbox size={15} /> },
   { key: 'rooms', label: 'Өрөөнүүд', icon: <DoorClosed size={15} />, adminOnly: true },
+  { key: 'offers', label: 'Онцлох', icon: <Flame size={15} />, adminOnly: true },
   { key: 'announce', label: 'Мэдэгдэл', icon: <Megaphone size={15} />, adminOnly: true },
   { key: 'log', label: 'Түүх', icon: <History size={15} />, adminOnly: true },
 ];
@@ -188,7 +190,7 @@ const BAN_CHOICES = [{ hours: 24, label: '1 өдөр' }, { hours: 72, label: '3 
 const ACTION_LABEL: Record<string, string> = {
   ban: 'Тоглогч хаасан', unban: 'Хаалт арилгасан', 'room-close': 'Өрөө хаасан', 'feedback-resolve': 'Санал шийдсэн',
   'feedback-reopen': 'Санал дахин нээсэн', announcement: 'Мэдэгдэл нийтэлсэн', 'announcement-clear': 'Мэдэгдэл авсан',
-  coins: 'Зоос өгсөн', role: 'Эрх өөрчилсөн',
+  coins: 'Зоос өгсөн', role: 'Эрх өөрчилсөн', offer: 'Онцлох санал нэмсэн', 'offer-end': 'Онцлох санал зогсоосон',
 };
 const ROOM_STATUS: Record<string, string> = { lobby: 'ЛОББИ', playing: 'ТОГЛОЖ БАЙНА', finished: 'ДУУССАН' };
 
@@ -221,6 +223,7 @@ export function AdminScreen({ role, onBack, notify, onWatch }: { role: StaffRole
         {tab === 'players' && <PlayersTab isAdmin={isAdmin} notify={notify} onChanged={loadStats} />}
         {tab === 'feedback' && <FeedbackTab notify={notify} onChanged={loadStats} />}
         {tab === 'rooms' && isAdmin && <RoomsTab notify={notify} onChanged={loadStats} onWatch={onWatch} />}
+        {tab === 'offers' && isAdmin && <OffersTab notify={notify} />}
         {tab === 'announce' && isAdmin && <AnnounceTab notify={notify} />}
         {tab === 'log' && isAdmin && <LogTab notify={notify} />}
       </div>
@@ -512,6 +515,87 @@ function RoomsTab({ notify, onChanged, onWatch }: { notify: NotifyFn; onChanged:
           : <button type="button" className="secondary-button" onClick={() => setConfirm(room.room_code)}><DoorClosed size={13} /> ХААХ</button>}
       </li>)}
     </ul>
+  </div>;
+}
+
+const OFFER_DAYS = [1, 3, 7, 14];
+const KIND_LABEL: Record<string, string> = { frame: 'Хүрээ', nameplate: 'Нэрийн хавтан', border: 'Нэрийн хүрээ' };
+
+/**
+ * Limited offers: the weekly discount runs by itself (two painted looks, 20% off, Monday to Monday);
+ * here an admin adds any look (not a rank prize) at a price for a few days, or ends one early.
+ */
+function OffersTab({ notify }: { notify: NotifyFn }) {
+  const items = useShopItems();
+  const [offers, setOffers] = useState<ShopOffer[] | null>(null);
+  const [itemKey, setItemKey] = useState('');
+  const [currency, setCurrency] = useState<Currency>('diamond');
+  const [price, setPrice] = useState('');
+  const [days, setDays] = useState(3);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase.from('shop_offers').select('id,item_key,price,currency,starts_at,ends_at,auto').gt('ends_at', new Date().toISOString()).order('ends_at');
+    if (error) notify(failure(error), 'error');
+    setOffers((data as ShopOffer[] | null) ?? []);
+  }, [notify]);
+  useEffect(() => { void load(); }, [load]);
+
+  const choices = items.filter((item) => ['frame', 'nameplate', 'border'].includes(item.kind) && item.source !== 'rank');
+  const picked = choices.find((item) => item.key === itemKey) ?? null;
+  const pick = (key: string) => {
+    setItemKey(key);
+    const item = choices.find((entry) => entry.key === key);
+    if (item) { setCurrency(item.currency ?? 'coin'); setPrice(String(Math.max(1, Math.round(item.price * 0.8)))); }
+  };
+  const amount = Number(price || 0);
+  const nameOf = (key: string) => items.find((item) => item.key === key)?.name ?? key;
+
+  const create = async () => {
+    if (!supabase || !picked) return;
+    setBusy(true);
+    const { error } = await supabase.rpc('admin_create_offer', { p_item: picked.key, p_price: amount, p_currency: currency, p_hours: days * 24 });
+    setBusy(false);
+    if (error) { notify(failure(error), 'error'); return; }
+    notify(`${picked.name} онцлох санал боллоо.`, 'success');
+    setItemKey(''); setPrice(''); void load();
+  };
+  const end = async (offer: ShopOffer) => {
+    if (!supabase) return;
+    setBusy(true);
+    const { error } = await supabase.rpc('admin_end_offer', { p_offer: offer.id });
+    setBusy(false);
+    if (error) { notify(failure(error), 'error'); return; }
+    notify('Санал зогслоо.', 'success'); void load();
+  };
+
+  return <div className="admin-pane admin-offers">
+    <p className="admin-note">Долоо хоног бүр 2 зурган гоёл 20% хямдарч автоматаар гарна (даваагаас даваа). Энд гараар нэмэх эсвэл зогсоож болно. Цолны шагналыг онцлох болгох боломжгүй.</p>
+    <ul className="admin-offer-list">
+      {offers === null && <li className="panel-empty">Ачаалж байна…</li>}
+      {offers?.length === 0 && <li className="panel-empty">Одоо идэвхтэй санал алга.</li>}
+      {offers?.map((offer) => <li key={offer.id}>
+        <span><b>{nameOf(offer.item_key)}</b><small>{offer.auto ? 'Долоо хоногийн' : 'Гараар нэмсэн'} · <Clock3 size={10} /> {timeLeft(offer.ends_at)} үлдсэн</small></span>
+        <Price item={offer} />
+        <button type="button" className="secondary-button" disabled={busy} onClick={() => void end(offer)}><X size={13} /> ЗОГСООХ</button>
+      </li>)}
+    </ul>
+    <h4 className="admin-subhead">Шинэ санал</h4>
+    <label className="auth-field"><span>ГОЁЛ</span>
+      <select value={itemKey} onChange={(event) => pick(event.target.value)}>
+        <option value="">Сонгоно уу</option>
+        {choices.map((item) => <option key={item.key} value={item.key}>{KIND_LABEL[item.kind]} · {item.name} ({item.price} {item.currency === 'diamond' ? 'алмаз' : 'зоос'}{forSale(item) ? '' : ' · зөвхөн онцлох'})</option>)}
+      </select>
+    </label>
+    <div className="admin-choice-row" role="radiogroup" aria-label="Валют">
+      {(['diamond', 'coin'] as Currency[]).map((option) => <button type="button" role="radio" aria-checked={currency === option} key={option} className={currency === option ? 'is-picked' : ''} onClick={() => setCurrency(option)}>
+        {option === 'diamond' ? <><Gem size={12} /> Алмаз</> : <><Coins size={12} /> Зоос</>}</button>)}
+    </div>
+    <label className="auth-field"><span>ҮНЭ{picked ? ` · ердийн ${picked.price}` : ''}</span><input inputMode="numeric" value={price} onChange={(event) => setPrice(event.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 7))} /></label>
+    <div className="admin-choice-row" role="radiogroup" aria-label="Хугацаа">
+      {OFFER_DAYS.map((option) => <button type="button" role="radio" aria-checked={days === option} key={option} className={days === option ? 'is-picked' : ''} onClick={() => setDays(option)}>{option} өдөр</button>)}
+    </div>
+    <button type="button" className="primary-button" disabled={busy || !picked || !price} onClick={() => void create()}><Flame size={14} /> САНАЛ НЭМЭХ</button>
   </div>;
 }
 

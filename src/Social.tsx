@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, Bot, Check, Clock3, Coins, Crown, Flag, Gem, Gift, Landmark, Lock, Plus, Send, ShoppingBag, Sparkles, Ticket, UserPlus, VenetianMask, X } from 'lucide-react';
+import { ArrowLeft, Bot, Check, Clock3, Coins, Crown, Flag, Flame, Gem, Gift, Landmark, Lock, Plus, Send, ShoppingBag, Sparkles, Ticket, UserPlus, VenetianMask, X } from 'lucide-react';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
 import RankEmblem, { RankChip } from './RankEmblem';
 import { RANK_GAMES, RANK_METALS, RANK_NAMES, parseRankTitle, type RankGame } from './rankRules';
@@ -367,15 +367,43 @@ function PlatePreview({ plateKey, borderKey, me, large = false }: { plateKey: st
 type Owned = { item_key: string };
 type Me = { coins: number; diamonds: number; frame_key: string | null; title_key: string | null; nameplate_key?: string | null; border_key?: string | null; avatar_url: string | null; avatar_key: string; display_name: string; bonus_claimed_at: string | null };
 
-type ShopTab = ShopKind | 'pass';
-const TABS: { key: ShopTab; label: string }[] = [{ key: 'frame', label: 'Аватар хүрээ' }, { key: 'nameplate', label: 'Нэрийн хавтан' }, { key: 'border', label: 'Нэрийн хүрээ' }, { key: 'gift', label: 'Бэлэг' }, { key: 'pass', label: 'Battle Pass' }];
+type ShopTab = ShopKind | 'pass' | 'offers';
+const TABS: { key: ShopTab; label: string }[] = [{ key: 'offers', label: 'Онцлох' }, { key: 'frame', label: 'Аватар хүрээ' }, { key: 'nameplate', label: 'Нэрийн хавтан' }, { key: 'border', label: 'Нэрийн хүрээ' }, { key: 'gift', label: 'Бэлэг' }, { key: 'pass', label: 'Battle Pass' }];
 const CURRENCY_HEADING: Record<Currency, string> = { coin: 'Зоосоор · энгийн, хөдөлгөөнгүй', diamond: 'Алмазаар · зурган гоёл' };
 const GAME_SHORT: Record<RankGame, string> = { mafia: 'Мафи', monopoly: 'Монополь' };
 type RankPrize = { game_type: RankGame; level: number; item_key: string | null };
 
+/** A look sold for a while at its own price (a weekly discount, or one an admin set). */
+export type ShopOffer = { id: string; item_key: string; price: number; currency: Currency; starts_at: string; ends_at: string; auto: boolean };
+
+/** Offers running now; reloads when the screen asks and drops ended ones as time passes. */
+export function useShopOffers() {
+  const [offers, setOffers] = useState<ShopOffer[]>([]);
+  const [now, setNow] = useState(() => Date.now());
+  const load = useCallback(async () => {
+    if (!supabase) return;
+    const { data } = await supabase.from('shop_offers').select('id,item_key,price,currency,starts_at,ends_at,auto').gt('ends_at', new Date().toISOString()).order('ends_at');
+    setOffers((data as ShopOffer[] | null) ?? []);
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
+  const running = offers.filter((offer) => new Date(offer.starts_at).getTime() <= now && new Date(offer.ends_at).getTime() > now);
+  return { offers: running, reload: load, now };
+}
+
+/** "2 өдөр 5 цаг", "5 цаг 12 мин", "12 мин". */
+export function timeLeft(iso: string, now = Date.now()) {
+  const minutes = Math.max(0, Math.floor((new Date(iso).getTime() - now) / 60_000));
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  if (days > 0) return `${days} өдөр ${hours} цаг`;
+  if (hours > 0) return `${hours} цаг ${minutes % 60} мин`;
+  return `${Math.max(1, minutes)} мин`;
+}
+
 export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: NotifyFn }) {
   const items = useShopItems();
-  const [tab, setTab] = useState<ShopTab>('frame');
+  const [tab, setTab] = useState<ShopTab>('offers');
   const [me, setMe] = useState<Me | null>(null);
   const [owned, setOwned] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -383,6 +411,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
   const [topUp, setTopUp] = useState(false);
   const [prizes, setPrizes] = useState<RankPrize[]>([]);
   const free = useFreeShopping();
+  const { offers, reload: reloadOffers, now } = useShopOffers();
   useEffect(() => {
     if (!supabase) return;
     void Promise.resolve(supabase.from('rank_rewards').select('game_type,level,item_key').not('item_key', 'is', null))
@@ -408,17 +437,18 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
     setBusy(key);
     const { error } = await supabase.rpc(fn, args);
     setBusy(null);
-    if (error) { notify(failure(error), 'error'); return; }
+    if (error) { notify(failure(error), 'error'); if (fn === 'buy_offer') void reloadOffers(); return; }
     notify(done, 'success');
-    if (fn === 'buy_item') playSfx('buy');
+    if (fn === 'buy_item' || fn === 'buy_offer') playSfx('buy');
     void load();
   };
 
   const bonusReady = !me?.bonus_claimed_at || Date.now() - new Date(me.bonus_claimed_at).getTime() > 20 * 3600_000;
   const wallet: Wallet | null = me ? { coins: me.coins, diamonds: me.diamonds } : null;
-  const shown = tab === 'pass' ? [] : items.filter((item) => item.kind === tab);
+  const shown = tab === 'pass' || tab === 'offers' ? [] : items.filter((item) => item.kind === tab);
   // Plain looks for coins, painted ones for diamonds, each purse its own section; animated ones are rank prizes.
   const prizeOf = (key: string) => prizes.find((prize) => prize.item_key === key) ?? null;
+  const offerOf = (key: string) => offers.find((offer) => offer.item_key === key) ?? null;
   const rankList = shown.filter((item) => item.source === 'rank')
     .sort((left, right) => (prizeOf(left.key)?.game_type ?? '').localeCompare(prizeOf(right.key)?.game_type ?? '') || (prizeOf(left.key)?.level ?? 99) - (prizeOf(right.key)?.level ?? 99));
   const sections: Array<{ id: Currency | 'rank'; list: ShopItem[] }> = [
@@ -426,32 +456,61 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
     { id: 'rank' as const, list: rankList },
     { id: 'diamond' as const, list: shown.filter((item) => forSale(item) && item.currency === 'diamond') },
   ].filter((section) => section.list.length);
-  const equippedKey = tab === 'frame' ? me?.frame_key : tab === 'title' ? me?.title_key : tab === 'nameplate' ? me?.nameplate_key : tab === 'border' ? me?.border_key : null;
+  const equippedFor = (kind: ShopKind) => kind === 'frame' ? me?.frame_key : kind === 'title' ? me?.title_key : kind === 'nameplate' ? me?.nameplate_key : kind === 'border' ? me?.border_key : null;
+  const offerItems = offers.map((offer) => ({ offer, item: items.find((item) => item.key === offer.item_key) })).filter((entry): entry is { offer: ShopOffer; item: ShopItem } => Boolean(entry.item));
 
-  const card = (item: ShopItem) => {
+  const visual = (item: ShopItem) => <button type="button" className="shop-visual" onClick={() => setPreview(item)} aria-label={`${item.name} харах`}>
+    {item.kind === 'frame' && <Avatar name={me?.display_name ?? 'Би'} color={me?.avatar_key ?? 'rose'} url={me?.avatar_url} frame={item.key} className="shop-avatar" />}
+    {item.kind === 'gift' && <span className="gift-icon is-floating">{item.icon}</span>}
+    {item.kind === 'title' && <TitlePlaque titleKey={item.key} name={item.name} size="lg" />}
+    {item.kind === 'nameplate' && <PlatePreview plateKey={item.key} me={me} />}
+    {item.kind === 'border' && <PlatePreview plateKey={me?.nameplate_key ?? null} borderKey={item.key} me={me} />}
+  </button>;
+
+  /** Wear / take off / buy (at the offer's price while one runs) / locked rank prize. */
+  const action = (item: ShopItem, offer: ShopOffer | null) => {
     const prize = item.source === 'rank' ? prizeOf(item.key) : null;
     // Admins may wear anything; everyone else wears what they own.
     const has = owned.includes(item.key) || (free && item.source === 'rank');
-    const equipped = equippedKey === item.key;
-    return <article key={item.key} className={`shop-card ${equipped ? 'is-equipped' : ''} is-${item.currency ?? 'coin'}`}>
-      <button type="button" className="shop-visual" onClick={() => setPreview(item)} aria-label={`${item.name} харах`}>
-        {item.kind === 'frame' && <Avatar name={me?.display_name ?? 'Би'} color={me?.avatar_key ?? 'rose'} url={me?.avatar_url} frame={item.key} className="shop-avatar" />}
-        {item.kind === 'gift' && <span className="gift-icon is-floating">{item.icon}</span>}
-        {item.kind === 'title' && <TitlePlaque titleKey={item.key} name={item.name} size="lg" />}
-        {item.kind === 'nameplate' && <PlatePreview plateKey={item.key} me={me} />}
-        {item.kind === 'border' && <PlatePreview plateKey={me?.nameplate_key ?? null} borderKey={item.key} me={me} />}
-      </button>
+    const equipped = equippedFor(item.kind) === item.key;
+    if (item.kind === 'gift') return <span className="shop-price"><Price item={item} free={free} /></span>;
+    if (equipped) return <button type="button" className="secondary-button" disabled={busy !== null} onClick={() => void call(item.key, 'equip_item', { p_kind: item.kind, p_key: null }, 'Тайллаа.')}><Check size={13} /> ЗҮҮСЭН</button>;
+    if (has) return <button type="button" className="secondary-button" disabled={busy !== null} onClick={() => void call(item.key, 'equip_item', { p_kind: item.kind, p_key: item.key }, 'Зүүлээ!')}>ЗҮҮХ</button>;
+    if (offer) {
+      const deal: ShopItem = { ...item, price: offer.price, currency: offer.currency };
+      return <button type="button" className={`primary-button buy-${offer.currency}`} disabled={busy !== null || !canAfford(deal, wallet, free)}
+        onClick={() => void call(item.key, 'buy_offer', { p_offer: offer.id }, `${item.name} таных боллоо!`)}>{free ? <><ShoppingBag size={13} />ҮНЭГҮЙ АВАХ</> : <Price item={deal} />}</button>;
+    }
+    if (!forSale(item)) return <span className="shop-rank-lock"><Lock size={12} />{prize ? <>{GAME_SHORT[prize.game_type]} · {RANK_NAMES[prize.game_type][prize.level - 1]}</> : item.source === 'rank' ? 'Цол ахиж авна' : 'Одоогоор худалдаагүй'}</span>;
+    return <button type="button" className={`primary-button buy-${item.currency ?? 'coin'}`} disabled={busy !== null || !canAfford(item, wallet, free)} onClick={() => void call(item.key, 'buy_item', { p_key: item.key }, `${item.name} таных боллоо!`)}>{free ? <><ShoppingBag size={13} />ҮНЭГҮЙ АВАХ</> : <Price item={item} />}</button>;
+  };
+
+  /** "−20%" when the offer is cheaper in the same purse, otherwise just "ОНЦЛОХ". */
+  const discountOf = (item: ShopItem, offer: ShopOffer) => item.currency === offer.currency && item.price > 0 && offer.price < item.price ? Math.round((1 - offer.price / item.price) * 100) : 0;
+
+  const card = (item: ShopItem) => {
+    const offer = offerOf(item.key);
+    const discount = offer ? discountOf(item, offer) : 0;
+    return <article key={item.key} className={`shop-card ${equippedFor(item.kind) === item.key ? 'is-equipped' : ''} is-${item.currency ?? 'coin'} ${offer ? 'has-offer' : ''}`}>
+      {offer && <span className="offer-badge">{discount ? `−${discount}%` : 'ОНЦЛОХ'}</span>}
+      {visual(item)}
       <b>{item.name}</b>
-      <small>{item.description}</small>
-      {item.kind === 'gift'
-        ? <span className="shop-price"><Price item={item} free={free} /></span>
-        : equipped
-          ? <button type="button" className="secondary-button" disabled={busy !== null} onClick={() => void call(item.key, 'equip_item', { p_kind: item.kind, p_key: null }, 'Тайллаа.')}><Check size={13} /> ЗҮҮСЭН</button>
-          : has
-            ? <button type="button" className="secondary-button" disabled={busy !== null} onClick={() => void call(item.key, 'equip_item', { p_kind: item.kind, p_key: item.key }, 'Зүүлээ!')}>ЗҮҮХ</button>
-            : !forSale(item)
-              ? <span className="shop-rank-lock"><Lock size={12} />{prize ? <>{GAME_SHORT[prize.game_type]} · {RANK_NAMES[prize.game_type][prize.level - 1]}</> : 'Цол ахиж авна'}</span>
-              : <button type="button" className={`primary-button buy-${item.currency ?? 'coin'}`} disabled={busy !== null || !canAfford(item, wallet, free)} onClick={() => void call(item.key, 'buy_item', { p_key: item.key }, `${item.name} таных боллоо!`)}>{free ? <><ShoppingBag size={13} />ҮНЭГҮЙ АВАХ</> : <Price item={item} />}</button>}
+      <small>{offer ? <><Clock3 size={10} /> {timeLeft(offer.ends_at, now)} үлдсэн</> : item.description}</small>
+      {action(item, offer)}
+    </article>;
+  };
+
+  const offerCard = ({ offer, item }: { offer: ShopOffer; item: ShopItem }) => {
+    const discount = discountOf(item, offer);
+    const owns = owned.includes(item.key);
+    return <article key={offer.id} className={`shop-card is-offer is-${offer.currency} ${equippedFor(item.kind) === item.key ? 'is-equipped' : ''}`}>
+      <span className="offer-badge">{discount ? `−${discount}%` : 'ОНЦЛОХ'}</span>
+      {visual(item)}
+      <b>{item.name}</b>
+      <small className="offer-kind">{item.kind === 'frame' ? 'Аватар хүрээ' : item.kind === 'nameplate' ? 'Нэрийн хавтан' : 'Нэрийн хүрээ'}{item.source === 'limited' ? ' · зөвхөн энд' : ''}</small>
+      <span className="offer-time"><Clock3 size={11} /> {timeLeft(offer.ends_at, now)} үлдсэн</span>
+      {discount > 0 && !owns && <s className="offer-old"><Price item={item} size={10} /></s>}
+      {action(item, offer)}
     </article>;
   };
 
@@ -468,8 +527,16 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
     </header>
     <div className="panel-body shop-body">
       <div className="admin-choice-row shop-tabs" role="tablist">{TABS.map((item) => <button type="button" role="tab" aria-selected={tab === item.key} key={item.key}
-        className={`${tab === item.key ? 'is-picked' : ''} ${item.key === 'pass' ? 'is-pass' : ''}`} onClick={() => setTab(item.key)}>{item.key === 'pass' && <Ticket size={12} />}{item.label}</button>)}</div>
+        className={`${tab === item.key ? 'is-picked' : ''} ${item.key === 'pass' ? 'is-pass' : ''} ${item.key === 'offers' ? 'is-offers' : ''}`} onClick={() => setTab(item.key)}>
+        {item.key === 'pass' && <Ticket size={12} />}{item.key === 'offers' && <Flame size={12} />}{item.label}{item.key === 'offers' && offers.length > 0 && <b className="shop-tab-count">{offers.length}</b>}</button>)}</div>
       {tab === 'gift' && <p className="admin-note">Бэлгийг тоглолтын үеэр тоглогчийн зураг дээр дарж илгээнэ. Бүх хүнд харагдана. Дээр нь дарж харж болно.</p>}
+      {tab === 'offers' && <section className="shop-section is-offers">
+        <h3 className="shop-section-title"><Flame size={13} />Онцлох · хугацаатай хямдрал</h3>
+        <p className="shop-section-note">Долоо хоног бүрийн даваа гарагт 2 зурган гоёл хямдарч гарна. Хугацаа дуусахад буцаад үндсэн үнэдээ орно.</p>
+        {offerItems.length
+          ? <div className="shop-grid kind-offers">{offerItems.map(offerCard)}</div>
+          : <p className="panel-empty">Одоогоор онцлох санал алга. Даваа гарагт шинэчлэгдэнэ.</p>}
+      </section>}
       {tab === 'pass' ? <BattlePassSoon /> : sections.map((section) => <section key={section.id} className={`shop-section is-${section.id}`}>
         {sections.length > 1 || section.id !== 'coin'
           ? <h3 className="shop-section-title">{section.id === 'diamond' ? <Gem size={13} /> : section.id === 'rank' ? <Crown size={13} /> : <Coins size={13} />}{section.id === 'rank' ? 'Цол ахиж авна · хөдөлгөөнт' : CURRENCY_HEADING[section.id]}</h3>
