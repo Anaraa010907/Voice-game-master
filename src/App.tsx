@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
-  ArrowLeft, BookOpen, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, LockKeyhole, Moon,
+  ArrowLeft, BookOpen, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, Languages, LockKeyhole, Moon,
   MessageSquare, Radio, RefreshCw, Settings as SettingsIcon, Shield, ShieldCheck, ShoppingBag, Swords, Ticket, Trophy, UserPlus, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles, type RoleName } from './gameData';
+import { LANG, setLang, t, type Lang } from './lang';
 import RoleCardArtwork from './RoleCardArtwork';
 import GameScreen from './Game';
 import Auth, { takeOAuthPending, type AuthView } from './Auth';
@@ -347,31 +348,31 @@ function Brand({ compact = false }: { compact?: boolean }) {
 function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, onShop, onPass, onRanks, onFriends, friendBadge, signedIn, staffRole, onAuth, fullscreen }: { onNavigate: (screen: Screen) => void; onPlay: () => void; onCreate: () => void; onJoin: () => void; onFeedback: () => void; onShop: () => void; onPass: () => void; onRanks: () => void; onFriends: () => void; friendBadge: number; signedIn: boolean; staffRole: StaffRole | null; onAuth: (view?: AuthView) => void; fullscreen: FullscreenState }) {
   return (
     <div className="menu-screen">
-      <header className="menu-top"><Brand /><div className="menu-top-actions"><div className="online-note"><span className="status-dot" /> {signedIn ? 'ОНЛАЙН' : 'НЭВТРЭЭГҮЙ'}</div><FullscreenToggle fullscreen={fullscreen} /></div></header>
+      <header className="menu-top"><Brand /><div className="menu-top-actions"><div className="online-note"><span className="status-dot" /> {signedIn ? t('ОНЛАЙН', 'ONLINE') : t('НЭВТРЭЭГҮЙ', 'SIGNED OUT')}</div><FullscreenToggle fullscreen={fullscreen} /></div></header>
       <div className="city-art" aria-hidden="true"><div className="moon-glow" /><div className="cityline" /><div className="rain-lines" /></div>
       <AnnouncementBanner />
       <div className="menu-copy">
         <div className="eyebrow"><span /> {i18n.app.cityOfSecrets} <span /></div>
-        <h1>Хэнд ч <i>бүү итгэ.</i></h1>
+        <h1>{t('Хэнд ч', 'Trust')} <i>{t('бүү итгэ.', 'no one.')}</i></h1>
         <p>{i18n.app.darkStory}</p>
         <button className="primary-button play-button" onClick={onPlay}><span className="play-triangle" /> {i18n.app.playNow.toUpperCase()} <ChevronRight size={17} /></button>
         <div className="menu-subtext"><Users size={13} /> {i18n.app.tableCount} <span className="sub-divider" /> {i18n.app.duration}</div>
       </div>
-      <nav className="menu-nav" aria-label="Үндсэн цэс">
+      <nav className="menu-nav" aria-label={t('Үндсэн цэс', 'Main menu')}>
         <button onClick={onCreate}><span className="nav-icon"><Users size={16} /></span><span>{i18n.app.createRoom}</span><ChevronRight size={14} /></button>
         <button onClick={onJoin}><span className="nav-icon"><Radio size={16} /></span><span>{i18n.app.joinRoom}</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('roles')}><span className="nav-icon"><Shield size={16} /></span><span>{i18n.app.roleGallery}</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('profile')}><span className="nav-icon"><UserRound size={16} /></span><span>{i18n.app.profile}</span><ChevronRight size={14} /></button>
-        <button className="menu-nav-ranks" onClick={onRanks}><span className="nav-icon"><Trophy size={16} /></span><span>Рэйтинг</span><ChevronRight size={14} /></button>
-        <button className="menu-nav-friends" onClick={onFriends}><span className="nav-icon"><Users size={16} /></span><span>Найзууд</span>{friendBadge > 0 ? <b className="admin-count">{friendBadge}</b> : <ChevronRight size={14} />}</button>
+        <button className="menu-nav-ranks" onClick={onRanks}><span className="nav-icon"><Trophy size={16} /></span><span>{t('Рэйтинг', 'Rankings')}</span><ChevronRight size={14} /></button>
+        <button className="menu-nav-friends" onClick={onFriends}><span className="nav-icon"><Users size={16} /></span><span>{t('Найзууд', 'Friends')}</span>{friendBadge > 0 ? <b className="admin-count">{friendBadge}</b> : <ChevronRight size={14} />}</button>
         <button className="menu-nav-pass" onClick={onPass}><span className="nav-icon"><Ticket size={16} /></span><span>Battle Pass</span><ChevronRight size={14} /></button>
-        <button className="menu-nav-shop" onClick={onShop}><span className="nav-icon"><ShoppingBag size={16} /></span><span>Дэлгүүр</span><ChevronRight size={14} /></button>
-        <button onClick={onFeedback}><span className="nav-icon"><MessageSquare size={16} /></span><span>Санал хүсэлт</span><ChevronRight size={14} /></button>
+        <button className="menu-nav-shop" onClick={onShop}><span className="nav-icon"><ShoppingBag size={16} /></span><span>{t('Дэлгүүр', 'Shop')}</span><ChevronRight size={14} /></button>
+        <button onClick={onFeedback}><span className="nav-icon"><MessageSquare size={16} /></span><span>{t('Санал хүсэлт', 'Feedback')}</span><ChevronRight size={14} /></button>
         <button onClick={() => onNavigate('settings')}><span className="nav-icon"><SettingsIcon size={16} /></span><span>{i18n.app.settings}</span><ChevronRight size={14} /></button>
-        {staffRole && <button className="menu-nav-admin" onClick={() => onNavigate('admin')}><span className="nav-icon"><ShieldCheck size={16} /></span><span>{staffRole === 'admin' ? 'Админ' : 'Модератор'}</span><ChevronRight size={14} /></button>}
+        {staffRole && <button className="menu-nav-admin" onClick={() => onNavigate('admin')}><span className="nav-icon"><ShieldCheck size={16} /></span><span>{staffRole === 'admin' ? t('Админ', 'Admin') : t('Модератор', 'Moderator')}</span><ChevronRight size={14} /></button>}
         <button onClick={() => onAuth(signedIn ? 'sign-out' : 'sign-in')}><span className="nav-icon"><LockKeyhole size={16} /></span><span>{signedIn ? i18n.app.signOut : i18n.auth.signInAccount}</span><ChevronRight size={14} /></button>
       </nav>
-      <footer className="menu-footer"><span>{i18n.app.afterDark.toUpperCase()}</span><span>{i18n.app.version} <i>•</i> ОНЛАЙН ДУУТ ТОГЛООМ</span></footer>
+      <footer className="menu-footer"><span>{i18n.app.afterDark.toUpperCase()}</span><span>{i18n.app.version} <i>•</i> {t('ОНЛАЙН ДУУТ ТОГЛООМ', 'ONLINE VOICE GAME')}</span></footer>
     </div>
   );
 }
@@ -740,17 +741,17 @@ function RoleGallery({ onBack }: { onBack: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [openIndex]);
 
-  return <div className="inner-screen gallery-screen card-gallery"><TopBar title="ДҮРИЙН ЛАВЛАХ" subtitle={`${roles.length} НУУЦ ДҮР`} onBack={onBack} />
+  return <div className="inner-screen gallery-screen card-gallery"><TopBar title={t('ДҮРИЙН ЛАВЛАХ', 'ROLE GALLERY')} subtitle={t(`${roles.length} НУУЦ ДҮР`, `${roles.length} SECRET ROLES`)} onBack={onBack} />
     <div className="card-gallery-strip">
-      {roles.map((item, index) => <button type="button" key={item.id} className={`card-gallery-item team-${item.team}`} onClick={() => setOpenIndex(index)} aria-label={`${item.displayName} картыг томоор харах`}>
+      {roles.map((item, index) => <button type="button" key={item.id} className={`card-gallery-item team-${item.team}`} onClick={() => setOpenIndex(index)} aria-label={t(`${item.displayName} картыг томоор харах`, `Open the ${item.displayName} card`)}>
         <RoleCardArtwork role={item} />
       </button>)}
     </div>
-    <p className="card-gallery-hint">Картан дээр дарж томоор харна уу</p>
+    <p className="card-gallery-hint">{t('Картан дээр дарж томоор харна уу', 'Tap a card to see it up close')}</p>
     {open && <div className="card-viewer" role="dialog" aria-modal="true" aria-label={open.displayName} onClick={() => setOpenIndex(null)}>
-      <button type="button" className="card-viewer-nav is-prev" aria-label="Өмнөх карт" onClick={(event) => { event.stopPropagation(); step(-1); }}><ChevronRight size={22} /></button>
+      <button type="button" className="card-viewer-nav is-prev" aria-label={t('Өмнөх карт', 'Previous card')} onClick={(event) => { event.stopPropagation(); step(-1); }}><ChevronRight size={22} /></button>
       <div className="card-viewer-card" onClick={(event) => event.stopPropagation()}><RoleCardArtwork role={open} /></div>
-      <button type="button" className="card-viewer-nav is-next" aria-label="Дараагийн карт" onClick={(event) => { event.stopPropagation(); step(1); }}><ChevronRight size={22} /></button>
+      <button type="button" className="card-viewer-nav is-next" aria-label={t('Дараагийн карт', 'Next card')} onClick={(event) => { event.stopPropagation(); step(1); }}><ChevronRight size={22} /></button>
       <button type="button" className="card-viewer-close" aria-label="Хаах" onClick={() => setOpenIndex(null)}><X size={20} /></button>
     </div>}
   </div>;
@@ -758,7 +759,28 @@ function RoleGallery({ onBack }: { onBack: () => void }) {
 
 function Settings({ onBack, onProfile, onAuth, signedIn }: { onBack: () => void; onProfile: () => void; onAuth: () => void; signedIn: boolean }) {
   const [reduceMotion, setReduceMotion] = useState(motionReduced());
-  return <div className="inner-screen simple-screen"><TopBar title="ТОХИРГОО" subtitle="ТОХИРГОО" onBack={onBack} /><div className="settings-content">  <div className="settings-intro"><div className="eyebrow left-eye">ӨӨРТӨӨ ТОХИРУУЛ</div><h1>Уур амьсгалаа <i>сонго.</i></h1></div><div className="setting-list"><VolumeControls /><SettingRow icon={<WandSparkles size={17} />} title="Хөдөлгөөнийг багасгах" detail="Анивчих эффект, хөдөлгөөнт шилжилтийг унтраах" checked={reduceMotion} onToggle={() => { setMotionReduced(!reduceMotion); setReduceMotion(!reduceMotion); }} /><SettingsLink icon={<UserRound size={17} />} label="Профайл" detail={signedIn ? 'Нэр болон аватар засах' : 'Бүртгэлээ харахын тулд нэвтэрнэ үү'} onClick={onProfile} /><SettingsLink icon={<LockKeyhole size={17} />} label={signedIn ? 'Гарах' : 'Нэвтрэх / бүртгэл үүсгэх'} detail={signedIn ? 'Supabase бүртгэлээс гарах' : 'Бүртгэлийн боломжийг нээх'} onClick={onAuth} /></div><span className="settings-version">MAFIA: SHADOWS <i>•</i> ХУВИЛБАР 0.1.0</span></div></div>;
+  return <div className="inner-screen simple-screen"><TopBar title={t('ТОХИРГОО', 'SETTINGS')} subtitle={t('ТОХИРГОО', 'SETTINGS')} onBack={onBack} /><div className="settings-content">
+    <div className="settings-intro"><div className="eyebrow left-eye">{t('ӨӨРТӨӨ ТОХИРУУЛ', 'MAKE IT YOURS')}</div><h1>{t('Уур амьсгалаа', 'Set the')} <i>{t('сонго.', 'mood.')}</i></h1></div>
+    <div className="setting-list">
+      <LanguageRow />
+      <VolumeControls />
+      <SettingRow icon={<WandSparkles size={17} />} title={t('Хөдөлгөөнийг багасгах', 'Reduce motion')} detail={t('Анивчих эффект, хөдөлгөөнт шилжилтийг унтраах', 'Turn off flashing effects and animated transitions')} checked={reduceMotion} onToggle={() => { setMotionReduced(!reduceMotion); setReduceMotion(!reduceMotion); }} />
+      <SettingsLink icon={<UserRound size={17} />} label={t('Профайл', 'Profile')} detail={signedIn ? t('Нэр болон аватар засах', 'Edit your name and avatar') : t('Бүртгэлээ харахын тулд нэвтэрнэ үү', 'Sign in to see your account')} onClick={onProfile} />
+      <SettingsLink icon={<LockKeyhole size={17} />} label={signedIn ? t('Гарах', 'Sign out') : t('Нэвтрэх / бүртгэл үүсгэх', 'Sign in / create account')} detail={signedIn ? t('Бүртгэлээсээ гарах', 'Sign out of your account') : t('Бүртгэлийн боломжийг нээх', 'Unlock account features')} onClick={onAuth} />
+    </div>
+    <span className="settings-version">MAFIA: SHADOWS <i>•</i> {t('ХУВИЛБАР', 'VERSION')} 0.1.0</span></div></div>;
+}
+
+/** Монгол / English. Changing it reloads the app in the chosen language. */
+function LanguageRow() {
+  const options: Array<{ code: Lang; label: string }> = [{ code: 'mn', label: 'Монгол' }, { code: 'en', label: 'English' }];
+  return <div className="setting-row language-row"><span className="setting-icon"><Languages size={17} /></span>
+    <span className="setting-copy"><b>{t('Хэл', 'Language')}</b><small>{t('Апп-ын хэлийг сонгох', 'Choose the app language')}</small></span>
+    <span className="language-switch" role="radiogroup" aria-label={t('Хэл', 'Language')}>
+      {options.map((option) => <button type="button" role="radio" key={option.code} aria-checked={LANG === option.code} className={LANG === option.code ? 'is-picked' : ''}
+        onClick={() => setLang(option.code)}>{option.label}</button>)}
+    </span>
+  </div>;
 }
 
 function SettingsLink({ icon, label, detail, onClick }: { icon: ReactNode; label: string; detail: string; onClick: () => void }) {

@@ -4964,3 +4964,131 @@ button.rank-chip:active { filter: brightness(1.15); }
 .admin-pass .admin-confirm span { flex: 1 1 160px; color: #e9dfcc; font-size: 11px; }
 .admin-pass-end { justify-self: start; }
 .viewport .game-frame .admin-diamond-button { color: #8fd3ff; }
+
+/* ---------- Role card face: picture on the left, text drawn by the app on the right ----------
+ * The text follows the player's language. Sizes are in units of the text panel (cqw), so the card
+ * reads the same in the gallery, the viewer, the reveal and the small corner card. */
+.viewport .game-frame .role-card-artwork.has-panel {
+  --accent: #d2b073;
+  --accent-glow: rgba(210, 176, 115, .45);
+}
+.viewport .game-frame .role-card-artwork.has-panel.faction-mafia { --accent: #e0646b; --accent-glow: rgba(214, 60, 70, .55); }
+.viewport .game-frame .role-card-artwork.has-panel.faction-citizens { --accent: #74c4d6; --accent-glow: rgba(80, 170, 200, .45); }
+.viewport .game-frame .role-card-artwork.has-panel.faction-neutral { --accent: #c08cff; --accent-glow: rgba(160, 90, 240, .5); }
+
+.viewport .game-frame .role-card-artwork .role-card-portrait {
+  position: absolute;
+  left: 5.6%;
+  top: 10.6%;
+  bottom: 12.4%;
+  width: 38.2%;
+  overflow: hidden;
+  border: 1px solid rgba(214, 178, 110, .6);
+  border-radius: 3px;
+  background: #0b0b0f;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), 0 4px 12px rgba(0, 0, 0, .55);
+}
+.viewport .game-frame .role-card-artwork .role-card-portrait > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 22%;
+  transform: scale(1.03);
+}
+.role-card-portrait-fallback { display: grid; place-items: center; width: 100%; height: 100%; color: var(--accent); }
+.role-card-portrait-fallback svg { width: 38%; height: auto; opacity: .8; }
+
+.viewport .game-frame .role-card-artwork .role-card-panel {
+  position: absolute;
+  left: 46.8%;
+  right: 7.2%;
+  top: 12%;
+  bottom: 12.6%;
+  container-type: size;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #e9ddc6;
+  text-align: left;
+}
+.role-card-panel > header { position: relative; z-index: 1; display: flex; align-items: center; gap: 4cqw; }
+.role-card-emblem {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 17cqw;
+  height: 17cqw;
+  border: .9cqw solid #d9b46a;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--accent) 35%, #2a1d10), #120c08 72%);
+  box-shadow: 0 0 3cqw var(--accent-glow), inset 0 0 2cqw rgba(0, 0, 0, .8);
+  color: #f1d79a;
+}
+.role-card-emblem svg { width: 9cqw; height: 9cqw; }
+.role-card-title { display: grid; gap: 1.2cqw; min-width: 0; }
+.role-card-title b {
+  font-family: var(--display);
+  font-size: 10.5cqw;
+  font-weight: 700;
+  line-height: .98;
+  text-transform: uppercase;
+  text-wrap: balance;
+  background: linear-gradient(180deg, #fff1c8 0%, #e6c37a 48%, #a8792e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 .4cqw .6cqw rgba(0, 0, 0, .8));
+}
+.role-card-title small { color: var(--accent); font-size: 4.3cqw; font-weight: 800; letter-spacing: .35cqw; text-transform: uppercase; }
+.role-card-rule {
+  position: relative;
+  z-index: 1;
+  display: block;
+  height: 1px;
+  margin: 5cqw 0 4.5cqw;
+  background: linear-gradient(90deg, transparent, rgba(226, 190, 120, .85) 18%, rgba(226, 190, 120, .85) 82%, transparent);
+}
+.role-card-rule::after { content: ''; position: absolute; left: 50%; top: 50%; width: 1.6cqw; height: 1.6cqw; background: #e2be78; transform: translate(-50%, -50%) rotate(45deg); }
+.role-card-panel > h3 {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 2.4cqw;
+  margin: 0 0 2.6cqw;
+  color: #e6c37a;
+  font-family: var(--display);
+  font-size: 6.4cqw;
+  font-weight: 700;
+  letter-spacing: .2cqw;
+  text-transform: uppercase;
+}
+.role-card-panel > h3 svg { flex: none; width: 6cqw; height: 6cqw; color: #e6c37a; }
+.role-card-panel > p {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  padding-left: 8.4cqw;
+  color: #eadfca;
+  font-size: 6.1cqw;
+  line-height: 1.3;
+  text-shadow: 0 .3cqw .8cqw rgba(0, 0, 0, .9);
+}
+.role-card-skyline {
+  position: absolute;
+  left: -2cqw;
+  right: -2cqw;
+  bottom: 0;
+  height: 26cqh;
+  background: linear-gradient(0deg, color-mix(in srgb, var(--accent) 55%, #1a0d0d) 0%, rgba(30, 14, 14, .9) 55%, rgba(20, 12, 12, .2) 100%);
+  -webkit-mask: var(--skyline) bottom / 100% 100% no-repeat;
+  mask: var(--skyline) bottom / 100% 100% no-repeat;
+  opacity: .4;
+  pointer-events: none;
+}
+
+/* Settings: language switch (Монгол / English). */
+.viewport .game-frame .language-row { cursor: default; }
+.language-switch { display: inline-flex; margin-left: auto; padding: 2px; border: 1px solid rgba(210, 176, 115, .35); border-radius: 999px; background: rgba(10, 11, 16, .7); }
+.viewport .game-frame .language-switch button { min-width: 64px; height: 26px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: #b8b0a4; font-size: 11px; font-weight: 700; letter-spacing: .4px; }
+.viewport .game-frame .language-switch button.is-picked { background: linear-gradient(180deg, #e9c983, #b48a45); color: #23180b; }

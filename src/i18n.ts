@@ -1,4 +1,8 @@
-export const i18n = {
+import { en } from './i18n.en.ts';
+import { isEnglish } from './lang.ts';
+
+/** Mongolian texts (the default language); English is in i18n.en.ts with the same keys. */
+const mn = {
   app: {
     title: 'MAFIA: SHADOWS',
     subtitle: 'Гудамжны цуурай',
@@ -427,12 +431,17 @@ export const i18n = {
   },
 };
 
+export type I18n = typeof mn;
+export const i18n: I18n = isEnglish ? en : mn;
+
 export const translatePhase = (phase: string) => i18n.game.phase[phase as keyof typeof i18n.game.phase] ?? phase;
 export const translateTeam = (team: string) => i18n.game.team[team as keyof typeof i18n.game.team] ?? team;
 export const translateRole = (role: string) => i18n.game.roles[role as keyof typeof i18n.game.roles] ?? role;
 export const translateRoleDescription = (role: string) => i18n.game.roleDescriptions[role as keyof typeof i18n.game.roleDescriptions] ?? role;
 export const translateRank = (rank: string) => i18n.game.rankNames[rank as keyof typeof i18n.game.rankNames] ?? rank;
 export const translateMessage = (message: string): string => {
+  // The game server writes its messages in English; only Mongolian needs them translated.
+  if (isEnglish) return message;
   const map: Record<string, string> = {
     'Enter a room code in the format NIGHT-7X.': 'Өрөөний кодыг NIGHT-7X хэлбэрээр оруулна уу.',
     'No demo room has that code. Try NIGHT-7X or create a room in this tab.': 'Энэ кодтой туршилтын өрөө олдсонгүй. NIGHT-7X кодыг ашиглах эсвэл энэ таб дээр өрөө үүсгэнэ үү.',
