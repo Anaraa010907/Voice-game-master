@@ -1,5 +1,5 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { supabase } from './supabaseClient';
+import { regionalFunction, supabase } from './supabaseClient';
 
 /**
  * Facebook sign-in through the Facebook app installed on the phone (Android). The native
@@ -31,7 +31,7 @@ export async function signInWithFacebookApp(): Promise<NativeFacebookOutcome> {
   if (result.cancelled) return { kind: 'cancelled' };
   if (!result.accessToken) return { kind: 'fallback' };
 
-  const { data, error } = await supabase.functions.invoke('facebook-login', { body: { accessToken: result.accessToken } });
+  const { data, error } = await supabase.functions.invoke(regionalFunction('facebook-login'), { body: { accessToken: result.accessToken } });
   if (error) {
     let payload: { error?: string; fallback?: boolean } | null = null;
     const response = (error as { context?: Response }).context;

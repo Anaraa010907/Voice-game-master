@@ -15,6 +15,15 @@ export const supabase = supabaseConfigured
     })
   : null;
 
+/**
+ * The database is in Tokyo (ap-northeast-1). Edge Functions otherwise start in whichever region is
+ * nearest the player and then reach the database across the sea on every query; the game function
+ * makes many queries per move, so it runs next to the database instead. The region goes in the query
+ * string rather than the x-region header, so the functions' CORS rules need no change.
+ */
+export const FUNCTION_REGION = 'ap-northeast-1';
+export const regionalFunction = (name: string) => `${name}?forceFunctionRegion=${FUNCTION_REGION}`;
+
 export type PublicProfile = {
   id: string;
   display_name: string;

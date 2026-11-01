@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { supabase } from './supabaseClient';
+import { regionalFunction, supabase } from './supabaseClient';
 import { translateMessage } from './i18n';
 import type { PrivateGameView, PublicGameView } from './gameEngine';
 
@@ -17,7 +17,7 @@ export type RoomSeat = { user_id: string; seat: number; display_name: string; co
  */
 export async function invokeFunction<T>(name: 'game' | 'livekit-voice', body: Record<string, unknown>): Promise<T> {
   if (!supabase) throw new Error('Сервер тохируулагдаагүй байна. .env.local файлыг шалгана уу.');
-  const { data, error } = await supabase.functions.invoke(name, { body });
+  const { data, error } = await supabase.functions.invoke(regionalFunction(name), { body });
   if (error) {
     let message = 'Сервертэй холбогдож чадсангүй. Дахин оролдоно уу.';
     const response = (error as { context?: Response }).context;
