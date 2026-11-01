@@ -222,6 +222,8 @@ const voicePhase = (state: AnyGame): VoicePhase => isBoard(state)
   : state.phase === 'Role Reveal' ? 'role-reveal' : state.phase.toLowerCase() as VoicePhase;
 const isFinished = (state: AnyGame) => isBoard(state) ? state.phase === 'finished' : state.phase === 'Results';
 const gameType = (value: unknown): GameType => GAME_TYPES.includes(value as GameType) ? value as GameType : 'mafia';
+/** Rooms are split into language pools so strangers in a voice room can talk; older apps send no language and are Mongolian. */
+const roomLanguage = (value: unknown): 'mn' | 'en' => value === 'en' ? 'en' : 'mn';
 
 class GameServer {
   constructor(private admin: SupabaseClient, private userId: string) {}
@@ -271,7 +273,7 @@ class GameServer {
 
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const roomCodeValue = roomCode();
-      const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate, game_type: type, settings: roomSettings(type, body.settings, ranked), ranked });
+      const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate, game_type: type, settings: roomSettings(type, body.settings, ranked), ranked, language: roomLanguage(body.language) });
       if (error?.code === '23505') continue;
       if (error) throw error;
       const seat: Seat = { user_id: this.userId, seat: 1, display_name: me.name, color: me.color, ready: true, avatar_url: me.url };
@@ -531,13 +533,13 @@ class GameServer {
     }
   }
 
-  /** Open public lobbies that still have a free seat, fullest first. */
+  /** Open public lobbies of one language pool that still have a free seat, fullest first. */
   async list(body: Body = {}) {
     const type = gameType(body.gameType);
     const since = new Date(Date.now() - LISTED_LOBBY_HOURS * 3600 * 1000).toISOString();
     const { data: rooms, error } = await this.admin.from('game_rooms')
       .select('room_code,name,host_id,max_players,updated_at,ranked')
-      .eq('status', 'lobby').eq('is_private', false).eq('game_type', type).gte('updated_at', since)
+      .eq('status', 'lobby').eq('is_private', false).eq('game_type', type).eq('language', roomLanguage(body.language)).gte('updated_at', since)
       .order('updated_at', { ascending: false }).limit(50);
     if (error) throw error;
     type ListedRow = { room_code: string; name: string; host_id: string; max_players: number; ranked?: boolean };

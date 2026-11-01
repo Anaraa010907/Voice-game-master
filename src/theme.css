@@ -5092,3 +5092,26 @@ button.rank-chip:active { filter: brightness(1.15); }
 .language-switch { display: inline-flex; margin-left: auto; padding: 2px; border: 1px solid rgba(210, 176, 115, .35); border-radius: 999px; background: rgba(10, 11, 16, .7); }
 .viewport .game-frame .language-switch button { min-width: 64px; height: 26px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: #b8b0a4; font-size: 11px; font-weight: 700; letter-spacing: .4px; }
 .viewport .game-frame .language-switch button.is-picked { background: linear-gradient(180deg, #e9c983, #b48a45); color: #23180b; }
+
+/* Language pools: the room-list switch, the language field when creating a room, the lobby badge. */
+.viewport .game-frame .room-lang-pick { display: grid; gap: 5px; }
+.viewport .game-frame .room-lang-pick > span:first-child { display: inline-flex; align-items: center; gap: 5px; color: var(--gold); font-size: 9px; font-weight: 700; letter-spacing: .14em; }
+.viewport .game-frame .room-lang-pick .language-switch { display: flex; margin: 0; }
+.viewport .game-frame .room-lang-pick .language-switch button { flex: 1; min-width: 0; height: 28px; }
+.viewport .game-frame .room-form .wide-field { grid-column: 1 / -1; }
+.room-lang-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-right: 7px;
+  padding: 2px 7px;
+  border: 1px solid rgba(160, 190, 230, .45);
+  border-radius: 999px;
+  background: rgba(20, 32, 52, .75);
+  color: #c9dcf5;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  vertical-align: middle;
+  white-space: nowrap;
+}

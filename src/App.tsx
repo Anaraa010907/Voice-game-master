@@ -6,7 +6,7 @@ import {
   MessageSquare, Radio, RefreshCw, Settings as SettingsIcon, Shield, ShieldCheck, ShoppingBag, Swords, Ticket, Trophy, UserPlus, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles, type RoleName } from './gameData';
-import { LANG, setLang, t, type Lang } from './lang';
+import { LANG, ROOM_LANGS, roomLangName, setLang, t, type Lang } from './lang';
 import RoleCardArtwork from './RoleCardArtwork';
 import GameScreen from './Game';
 import Auth, { takeOAuthPending, type AuthView } from './Auth';
@@ -34,7 +34,7 @@ import { FullscreenToggle, useFullscreen, type FullscreenState } from './fullscr
 
 type Screen = 'menu' | 'hub' | 'browse' | 'create-room' | 'join-room' | 'lobby' | 'game' | 'roles' | 'profile' | 'settings' | 'auth' | 'feedback' | 'admin' | 'shop' | 'watch' | 'friends' | 'ranks' | 'pass';
 
-type RoomSettings = { name: string; maxPlayers: number; isPublic: boolean; password: string; gameType: GameType; ranked: boolean; settings?: Record<string, unknown> };
+type RoomSettings = { name: string; maxPlayers: number; isPublic: boolean; password: string; gameType: GameType; ranked: boolean; language: Lang; settings?: Record<string, unknown> };
 const ROOM_STORAGE_KEY = 'mafia-shadows:room';
 
 const readStoredRoom = () => {
@@ -61,6 +61,8 @@ export default function App() {
   const [gameType, setGameType] = useState<GameType>('mafia');
   /** Set when the player came from the ranking screen: ranked rooms are listed first and new rooms start ranked. */
   const [wantRanked, setWantRanked] = useState(false);
+  // Which language pool the room list shows and new rooms join: the app language unless the player picks the other one.
+  const [roomLang, setRoomLang] = useState<Lang>(LANG);
   const [notice, setNotice] = useState<{ text: string; tone: NoticeTone } | null>(null);
   const noticeTimer = useRef<number | null>(null);
   const [namePromptDismissed, setNamePromptDismissed] = useState(false);
@@ -296,8 +298,8 @@ export default function App() {
         <div className="grain" aria-hidden="true" />
         {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} onFeedback={() => requireAccount('feedback')} onShop={() => requireAccount('shop')} onPass={() => requireAccount('pass')} onRanks={() => requireAccount('ranks')} onFriends={() => requireAccount('friends')} friendBadge={friendsState.badge} signedIn={Boolean(userId)} staffRole={staffRole} onAuth={openAuth} fullscreen={fullscreen} />}
         {screen === 'hub' && <GameHub onBack={goBack} onChoose={(type) => { setGameType(type); setWantRanked(false); setScreen('browse'); }} onJoinCode={() => setScreen('join-room')} />}
-        {screen === 'browse' && <RoomBrowser key={gameType} gameType={gameType} rankedFirst={wantRanked} onBack={() => setScreen(wantRanked ? 'ranks' : 'hub')} onCreate={() => setScreen('create-room')} onJoinCode={() => setScreen('join-room')} onEnter={enterRoom} />}
-        {screen === 'create-room' && <CreateRoom key={gameType} gameType={gameType} startRanked={wantRanked} onBack={() => setScreen('browse')} onCreate={createRoom} />}
+        {screen === 'browse' && <RoomBrowser key={gameType} gameType={gameType} rankedFirst={wantRanked} language={roomLang} onLanguage={setRoomLang} onBack={() => setScreen(wantRanked ? 'ranks' : 'hub')} onCreate={() => setScreen('create-room')} onJoinCode={() => setScreen('join-room')} onEnter={enterRoom} />}
+        {screen === 'create-room' && <CreateRoom key={gameType} gameType={gameType} startRanked={wantRanked} startLanguage={roomLang} onBack={() => setScreen('browse')} onCreate={createRoom} />}
         {screen === 'join-room' && <JoinRoom onBack={() => setScreen('menu')} onJoin={joinRoom} />}
         {screen === 'lobby' && roomCode && userId && (
           <RoomScreen
@@ -377,12 +379,13 @@ function Menu({ onNavigate, onPlay, onCreate, onJoin, onFeedback, onShop, onPass
   );
 }
 
-function CreateRoom({ gameType, startRanked, onBack, onCreate }: { gameType: GameType; startRanked: boolean; onBack: () => void; onCreate: (room: RoomSettings) => Promise<void> }) {
+function CreateRoom({ gameType, startRanked, startLanguage, onBack, onCreate }: { gameType: GameType; startRanked: boolean; startLanguage: Lang; onBack: () => void; onCreate: (room: RoomSettings) => Promise<void> }) {
   const game = GAMES[gameType];
   const [name, setName] = useState(game.defaultRoomName);
   const [maxPlayers, setMaxPlayers] = useState(game.defaultSize);
   const [isPublic, setIsPublic] = useState(true);
   const [ranked, setRanked] = useState(startRanked);
+  const [language, setLanguage] = useState<Lang>(startLanguage);
   const [password, setPassword] = useState('');
   const [rounds, setRounds] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -396,7 +399,7 @@ function CreateRoom({ gameType, startRanked, onBack, onCreate }: { gameType: Gam
     setBusy(true);
     try {
       const open = ranked || isPublic;
-      await onCreate({ name: name.trim(), maxPlayers, isPublic: open, password: open ? '' : password, gameType, ranked, ...(gameType === 'monopoly' ? { settings: { rounds: ranked ? null : rounds } } : {}) });
+      await onCreate({ name: name.trim(), maxPlayers, isPublic: open, password: open ? '' : password, gameType, ranked, language, ...(gameType === 'monopoly' ? { settings: { rounds: ranked ? null : rounds } } : {}) });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('Өрөө үүсгэж чадсангүй.', 'Could not create the room.'));
     } finally {
@@ -407,7 +410,8 @@ function CreateRoom({ gameType, startRanked, onBack, onCreate }: { gameType: Gam
   return <div className="inner-screen setup-screen"><TopBar title={t('ӨРӨӨ ҮҮСГЭХ', 'CREATE ROOM')} subtitle={t('ӨРӨӨНИЙ ТӨХИРГӨӨ', 'ROOM SETTINGS')} onBack={onBack} /><div className="setup-content"><div className="setup-heading"><div className="eyebrow left-eye">{t(`ТӨХИРГӨӨ СОНГОХ`, `CHOOSE YOUR SETTINGS`)}</div><h1>{t(`Өөрийнхөө `, `Build your `)}<i>{t(`өрөөг`, `own room`)}</i>{t(` бүтээ.`, `.`)}</h1><p><b className="setup-game-name">{game.title}</b>{t(` · Өрөөний кодыг найзууддаа илгээгээрэй. Дор хаяж ${game.minPlayers} хүн нэгдвэл тоглоом эхэлнэ.`, ` · Send the room code to your friends. The game starts once at least ${game.minPlayers} players join.`)}</p></div><form className="room-form" onSubmit={submit}>
     <label className="form-field room-name-field"><span>{i18n.app.roomName.toUpperCase()}</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder={t('Өрөөний нэрээ оруулна уу', 'Enter a room name')} /></label>
     <label className="form-field"><span>{i18n.app.maxPlayers.toUpperCase()}</span><select value={maxPlayers} onChange={(event) => setMaxPlayers(Number(event.target.value))}>{game.sizes.map((count) => <option key={count} value={count}>{t(`${count} тоглогч`, `${count} players`)}</option>)}</select></label>
-    {gameType === 'monopoly' && <label className="form-field"><span>{t(`ТОГЛОХ ХУГАЦАА`, `GAME LENGTH`)}</span><select disabled={ranked} value={ranked || rounds === null ? 'all' : rounds} onChange={(event) => setRounds(event.target.value === 'all' ? null : Number(event.target.value))}>{ROUND_OPTIONS.map((option) => <option key={String(option)} value={option === null ? 'all' : option}>{option === null ? t('Бусад нь дампууртал', 'Until the others go bankrupt') : roundsLabel(option)}</option>)}</select></label>}
+    <label className="form-field"><span>{t(`ЯРИХ ХЭЛ`, `ROOM LANGUAGE`)}</span><select value={language} onChange={(event) => setLanguage(event.target.value as Lang)}>{ROOM_LANGS.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}</select></label>
+    {gameType === 'monopoly' && <label className="form-field wide-field"><span>{t(`ТОГЛОХ ХУГАЦАА`, `GAME LENGTH`)}</span><select disabled={ranked} value={ranked || rounds === null ? 'all' : rounds} onChange={(event) => setRounds(event.target.value === 'all' ? null : Number(event.target.value))}>{ROUND_OPTIONS.map((option) => <option key={String(option)} value={option === null ? 'all' : option}>{option === null ? t('Бусад нь дампууртал', 'Until the others go bankrupt') : roundsLabel(option)}</option>)}</select></label>}
     <div className={`private-setting ranked-setting ${ranked ? 'is-on' : ''}`}><span><b><Swords size={13} />{t(` Рэйтинг тоглолт`, ` Ranked match`)}</b><small>{ranked ? (gameType === 'monopoly' ? t('Цол, оноо хожино · бусад нь дампууртал тоглоно', 'Win rank points · play until the others go bankrupt') : t('Цол, оноо хожино · стандарт дүрэм, тогтмол цаг', 'Win rank points · standard rules, fixed timers')) : t('Энгийн тоглолт: оноо, цол өөрчлөгдөхгүй', 'Casual match: no change to points or rank')}</small></span><button type="button" role="switch" aria-checked={ranked} aria-label={t('Рэйтинг тоглолт', 'Ranked match')} className={`toggle ${ranked ? 'toggle-on' : ''}`} onClick={() => setRanked((value) => !value)}><i /></button></div>
     <div className={`private-setting ${ranked ? 'is-disabled' : ''}`}><span><b>{t(`Нийтэд нээлттэй`, `Public room`)}</b><small>{ranked ? t('Рэйтинг өрөө үргэлж нийтэд нээлттэй', 'Ranked rooms are always public') : isPublic ? t('Өрөөний жагсаалтад харагдана, хэн ч нэгдэнэ', 'Listed in the room list; anyone can join') : t('Зөвхөн кодоор нэгдэнэ, нууц үг тавьж болно', 'Join by code only; you can set a password')}</small></span><button type="button" role="switch" aria-checked={ranked || isPublic} disabled={ranked} className={`toggle ${ranked || isPublic ? 'toggle-on' : ''}`} onClick={() => setIsPublic((value) => !value)}><i /></button></div>
     {!ranked && !isPublic && <label className="form-field password-field"><span>{t(`ӨРӨӨНИЙ НУУЦ ҮГ `, `ROOM PASSWORD `)}<small>{t(`СОНГОЛТТОЙ`, `OPTIONAL`)}</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} maxLength={32} placeholder={t('Нууц үггүй орж болно', 'Leave empty for no password')} autoComplete="new-password" /></label>}
@@ -464,7 +468,7 @@ function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoos
 }
 
 /** Open public lobbies, refreshed automatically, plus quick join. */
-function RoomBrowser({ gameType, rankedFirst, onBack, onCreate, onJoinCode, onEnter }: { gameType: GameType; rankedFirst: boolean; onBack: () => void; onCreate: () => void; onJoinCode: () => void; onEnter: (code: string) => void }) {
+function RoomBrowser({ gameType, rankedFirst, language, onLanguage, onBack, onCreate, onJoinCode, onEnter }: { gameType: GameType; rankedFirst: boolean; language: Lang; onLanguage: (language: Lang) => void; onBack: () => void; onCreate: () => void; onJoinCode: () => void; onEnter: (code: string) => void }) {
   const game = GAMES[gameType];
   const [rooms, setRooms] = useState<ListedRoom[] | null>(null);
   const [error, setError] = useState('');
@@ -472,14 +476,14 @@ function RoomBrowser({ gameType, rankedFirst, onBack, onCreate, onJoinCode, onEn
 
   const load = useCallback(async () => {
     try {
-      const result = await callGame<{ rooms: ListedRoom[] }>('list', { gameType });
+      const result = await callGame<{ rooms: ListedRoom[] }>('list', { gameType, language });
       const list = Array.isArray(result?.rooms) ? result.rooms : [];
       setRooms(rankedFirst ? [...list].sort((left, right) => Number(Boolean(right.ranked)) - Number(Boolean(left.ranked))) : list);
       setError('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('Өрөөнүүдийг ачаалж чадсангүй.', 'Could not load the rooms.'));
     }
-  }, [gameType, rankedFirst]);
+  }, [gameType, rankedFirst, language]);
 
   useEffect(() => {
     void load();
@@ -503,9 +507,11 @@ function RoomBrowser({ gameType, rankedFirst, onBack, onCreate, onJoinCode, onEn
   const quick = async () => {
     setBusy('quick');
     try {
-      const result = await callGame<{ roomCode: string | null }>('quick', { gameType, ranked: rankedFirst });
+      const result = await callGame<{ roomCode: string | null }>('quick', { gameType, ranked: rankedFirst, language });
       if (result.roomCode) onEnter(result.roomCode);
-      else setError(t('Одоогоор нээлттэй өрөө алга. Өөрөө өрөө үүсгээд бусдыг хүлээгээрэй.', 'No open rooms right now. Create one and wait for others to join.'));
+      else setError(language === 'en'
+        ? t('Англи хэлтэй нээлттэй өрөө одоогоор алга. Өөрөө өрөө үүсгээд бусдыг хүлээгээрэй.', 'No open English rooms right now. Create one and wait for others to join.')
+        : t('Монгол хэлтэй нээлттэй өрөө одоогоор алга. Өөрөө өрөө үүсгээд бусдыг хүлээгээрэй.', 'No open Mongolian rooms right now. Create one and wait for others to join.'));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('Өрөө олдсонгүй.', 'Room not found.'));
     } finally {
@@ -513,11 +519,11 @@ function RoomBrowser({ gameType, rankedFirst, onBack, onCreate, onJoinCode, onEn
     }
   };
 
-  return <div className="inner-screen browse-screen"><TopBar title={game.title.toUpperCase()} subtitle={t('НЭЭЛТТЭЙ ӨРӨӨНҮҮД', 'OPEN ROOMS')} onBack={onBack} trailing={<button className="icon-button" onClick={() => { void load(); }} aria-label={t('Шинэчлэх', 'Refresh')} title={t('Шинэчлэх', 'Refresh')}><RefreshCw size={15} /></button>} />
+  return <div className="inner-screen browse-screen"><TopBar title={game.title.toUpperCase()} subtitle={t(`НЭЭЛТТЭЙ ӨРӨӨНҮҮД · ${roomLangName(language).toUpperCase()}`, `OPEN ROOMS · ${roomLangName(language).toUpperCase()}`)} onBack={onBack} trailing={<button className="icon-button" onClick={() => { void load(); }} aria-label={t('Шинэчлэх', 'Refresh')} title={t('Шинэчлэх', 'Refresh')}><RefreshCw size={15} /></button>} />
     <div className="browse-content">
       <section className="browse-list" aria-live="polite">
         {rooms === null && !error && <div className="browse-empty">{t(`Өрөөнүүдийг хайж байна…`, `Looking for rooms…`)}</div>}
-        {rooms !== null && rooms.length === 0 && <div className="browse-empty"><Users size={20} /><b>{t(`Нээлттэй өрөө алга`, `No open rooms`)}</b><span>{t(`Өөрөө өрөө үүсгээд кодоо найзууддаа илгээгээрэй.`, `Create a room and send its code to your friends.`)}</span></div>}
+        {rooms !== null && rooms.length === 0 && <div className="browse-empty"><Users size={20} /><b>{language === 'en' ? t(`Англи хэлтэй нээлттэй өрөө алга`, `No open English rooms`) : t(`Монгол хэлтэй нээлттэй өрөө алга`, `No open Mongolian rooms`)}</b><span>{t(`Өөрөө өрөө үүсгээд кодоо найзууддаа илгээгээрэй.`, `Create a room and send its code to your friends.`)}</span></div>}
         {rooms?.map((room) => <div className={`browse-room ${room.ranked ? 'is-ranked' : ''}`} key={room.roomCode}>
           <div className="browse-room-copy"><b>{room.ranked && <span className="ranked-badge"><Swords size={10} />{t(` РЭЙТИНГ`, ` RANKED`)}</span>}{room.name}</b><span>{t(`Эзэн: ${room.hostName} · ${room.roomCode}`, `Host: ${room.hostName} · ${room.roomCode}`)}</span></div>
           <div className="browse-room-count"><div className="browse-seats" aria-hidden="true">{Array.from({ length: room.maxPlayers }, (_, index) => <i key={index} className={index < room.players ? 'taken' : ''} />)}</div><span>{room.players}/{room.maxPlayers}</span></div>
@@ -525,11 +531,16 @@ function RoomBrowser({ gameType, rankedFirst, onBack, onCreate, onJoinCode, onEn
         </div>)}
       </section>
       <aside className="browse-actions">
+        <div className="room-lang-pick"><span><Languages size={12} />{t(` ЯРИХ ХЭЛ`, ` ROOM LANGUAGE`)}</span>
+          <span className="language-switch" role="radiogroup" aria-label={t('Өрөөний хэл', 'Room language')}>
+            {ROOM_LANGS.map((option) => <button type="button" role="radio" key={option.code} aria-checked={language === option.code} className={language === option.code ? 'is-picked' : ''}
+              onClick={() => { if (option.code !== language) { setRooms(null); setError(''); onLanguage(option.code); } }}>{option.label}</button>)}
+          </span></div>
         <button className="primary-button browse-quick" disabled={Boolean(busy)} onClick={quick}><Zap size={16} /> {busy === 'quick' ? t('ХАЙЖ БАЙНА…', 'SEARCHING…') : t('ХУРДАН НЭГДЭХ', 'QUICK JOIN')}</button>
         <button className="secondary-button" onClick={onCreate}><Users size={15} /> {i18n.app.createRoom.toUpperCase()}</button>
         <button className="secondary-button" onClick={onJoinCode}><Radio size={15} />{t(` КОДООР НЭГДЭХ`, ` JOIN BY CODE`)}</button>
         {error && <p className="form-error" role="alert">{error}</p>}
-        <p className="browse-note">{t(`${game.title}: дор хаяж ${game.minPlayers} хүн хэрэгтэй. Хурдан нэгдэх нь хамгийн дүүрэх дөхсөн өрөөнд оруулна.`, `${game.title}: needs at least ${game.minPlayers} players. Quick join puts you in the room closest to full.`)}</p>
+        <p className="browse-note">{t(`${game.title}: дор хаяж ${game.minPlayers} хүн хэрэгтэй. Хурдан нэгдэх нь сонгосон хэлтэй, хамгийн дүүрэх дөхсөн өрөөнд оруулна. Кодоор бол ямар ч хэлтэй өрөөнд нэгдэнэ.`, `${game.title}: needs at least ${game.minPlayers} players. Quick join puts you in the fullest room of the chosen language. With a code you can join a room of any language.`)}</p>
       </aside>
     </div>
   </div>;
@@ -614,7 +625,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
             <div><div className="eyebrow left-eye">{t(`ХОТ СЭРЭХЭЭСЭЭ ӨМНӨ`, `BEFORE THE CITY WAKES`)}</div><h1>{t(`Бүлгээ `, `Gather your `)}<i>{t(`цуглуулаарай.`, `crew.`)}</i></h1></div>
             <div className="room-code"><span>{i18n.app.roomCode.toUpperCase()}</span><strong>{roomCode}</strong><button aria-label={t('Өрөөний код хуулах', 'Copy room code')} title={t('Өрөөний код хуулах', 'Copy room code')} onClick={onCopy}>{copied ? <Check size={16} /> : <Clipboard size={16} />}</button></div>
           </div>
-          <div className="lobby-toolbar"><span><Users size={14} />{t(` ТОГЛОГЧИД `, ` PLAYERS `)}<b>{String(seats.length).padStart(2, '0')}</b> <span className="muted">/ {room.max_players}</span></span><span className="room-visibility">{room.ranked && <span className="ranked-badge"><Swords size={10} />{t(` РЭЙТИНГ`, ` RANKED`)}</span>}{room.is_private ? t('ХУВИЙН · ЗӨВХӨН КОДООР', 'PRIVATE · CODE ONLY') : t('НИЙТЭД НЭЭЛТТЭЙ', 'PUBLIC')}</span></div>
+          <div className="lobby-toolbar"><span><Users size={14} />{t(` ТОГЛОГЧИД `, ` PLAYERS `)}<b>{String(seats.length).padStart(2, '0')}</b> <span className="muted">/ {room.max_players}</span></span><span className="room-visibility"><span className="room-lang-badge"><Languages size={10} />{` ${roomLangName(room.language).toUpperCase()}`}</span>{room.ranked && <span className="ranked-badge"><Swords size={10} />{t(` РЭЙТИНГ`, ` RANKED`)}</span>}{room.is_private ? t('ХУВИЙН · ЗӨВХӨН КОДООР', 'PRIVATE · CODE ONLY') : t('НИЙТЭД НЭЭЛТТЭЙ', 'PUBLIC')}</span></div>
           <div className="player-grid">
             {seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={seat.user_id === userId}
               onRemoveBot={isHost && seat.is_bot ? () => run('bot-remove', { seat: seat.seat }) : undefined} busy={busy} onProfile={() => setProfileSeat(seat)} />)}

@@ -9,7 +9,7 @@ import { GAMES, type GameType } from './games';
 import { Price, forSale, timeLeft, useShopItems, type Currency, type ShopOffer } from './Social';
 import type { PassSeason } from './BattlePass';
 
-import { isEnglish, t } from './lang';
+import { isEnglish, roomLangName, t } from './lang';
 import { translateMessage } from './i18n';
 /* ---------- shared bits ---------- */
 
@@ -177,7 +177,7 @@ type AdminPlayer = {
   is_banned: boolean; banned_until: string | null; ban_reason: string | null;
 };
 type AdminFeedback = MyFeedback & { user_id: string; display_name: string; avatar_url: string | null; target_user: string | null; target_name: string | null; room_code: string | null };
-type AdminRoom = { room_code: string; name: string; game_type: string; status: string; is_private: boolean; players: number; bots: number; max_players: number; host_name: string; updated_at: string };
+type AdminRoom = { room_code: string; name: string; game_type: string; status: string; is_private: boolean; players: number; bots: number; max_players: number; host_name: string; updated_at: string; language?: string };
 type AdminAction = { id: number; admin_name: string; action: string; target: string | null; detail: string | null; created_at: string };
 
 const TABS: { key: Tab; label: string; icon: ReactNode; adminOnly?: boolean }[] = [
@@ -496,7 +496,11 @@ function RoomsTab({ notify, onChanged, onWatch }: { notify: NotifyFn; onChanged:
     if (!supabase) return;
     const { data, error } = await supabase.rpc('admin_list_rooms');
     if (error) { notify(failure(error), 'error'); return; }
-    setRooms((data as AdminRoom[] | null) ?? []);
+    const list = (data as AdminRoom[] | null) ?? [];
+    // Each room's language pool (admins can read every room).
+    const { data: pools } = list.length ? await supabase.from('game_rooms').select('room_code,language').in('room_code', list.map((room) => room.room_code)) : { data: [] };
+    const languageOf = new Map(((pools ?? []) as Array<{ room_code: string; language: string }>).map((row) => [row.room_code, row.language]));
+    setRooms(list.map((room) => ({ ...room, language: languageOf.get(room.room_code) ?? 'mn' })));
   }, [notify]);
   useEffect(() => { void load(); }, [load]);
 
@@ -519,7 +523,7 @@ function RoomsTab({ notify, onChanged, onWatch }: { notify: NotifyFn; onChanged:
       {rooms?.map((room) => <li key={room.room_code}>
         <div className="admin-row-main">
           <b>{room.name} <span className="chip">{room.room_code}</span>{room.is_private && <Lock size={11} />}</b>
-          <small>{GAMES[room.game_type as GameType]?.title ?? room.game_type}{t(` · эзэн ${room.host_name} · ${room.players} хүн`, ` · host ${room.host_name} · ${room.players} players`)}{room.bots ? t(` + ${room.bots} бот`, ` + ${room.bots} bots`) : ''} / {room.max_players} · {ago(room.updated_at)}</small>
+          <small>{GAMES[room.game_type as GameType]?.title ?? room.game_type} · {roomLangName(room.language)}{t(` · эзэн ${room.host_name} · ${room.players} хүн`, ` · host ${room.host_name} · ${room.players} players`)}{room.bots ? t(` + ${room.bots} бот`, ` + ${room.bots} bots`) : ''} / {room.max_players} · {ago(room.updated_at)}</small>
         </div>
         <span className={`chip room-${room.status}`}>{ROOM_STATUS[room.status] ?? room.status}</span>
         <button type="button" className="primary-button admin-watch-button" onClick={() => onWatch(room.room_code)}><Eye size={13} />{t(` ҮЗЭХ`, ` WATCH`)}</button>

@@ -35,3 +35,7 @@ export function setLang(next: Lang) {
 
 /** English count with the right noun form: plural(1, 'night') → "1 night", plural(2, 'night') → "2 nights". */
 export const plural = (count: number, noun: string, many = `${noun}s`) => `${count} ${count === 1 ? noun : many}`;
+
+/** Rooms belong to one language pool so strangers in a voice room can talk. */
+export const ROOM_LANGS: Array<{ code: Lang; label: string }> = [{ code: 'mn', label: 'Монгол' }, { code: 'en', label: 'English' }];
+export const roomLangName = (code?: string | null) => (code === 'en' ? t('Англи', 'English') : t('Монгол', 'Mongolian'));
