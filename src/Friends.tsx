@@ -6,6 +6,8 @@ import type { NotifyFn } from './multiplayer';
 import { GAMES, type GameType } from './games';
 import { GiftPicker, sendFriendGift, useShopItems } from './Social';
 
+import { t } from './lang';
+import { translateMessage } from './i18n';
 /** Chat lifetime (the server deletes on the same rule): a read message lasts a day after it was read, an unread one five days. */
 const READ_LIFETIME_MS = 24 * 3600_000;
 const UNREAD_LIFETIME_MS = 5 * 24 * 3600_000;
@@ -24,7 +26,7 @@ export type Friend = {
 type Found = { id: string; display_name: string; avatar_url: string | null; avatar_key: string; frame_key: string | null; player_no: number; relation: 'friend' | 'incoming' | 'outgoing' | null };
 type Message = { id: number; sender: string; recipient: string; kind: 'text' | 'invite' | 'gift'; body: string; room_code: string | null; gift_key: string | null; created_at: string; read_at?: string | null };
 
-const failure = (error: { message?: string } | null | undefined) => error?.message || 'Алдаа гарлаа. Дахин оролдоно уу.';
+const failure = (error: { message?: string } | null | undefined) => (error?.message ? translateMessage(error.message) : '') || t('Алдаа гарлаа. Дахин оролдоно уу.', 'Something went wrong. Please try again.');
 
 /** My friends and requests, kept fresh by realtime and a slow poll; also keeps my "online" mark alive. */
 export function useFriends(userId: string | null) {
@@ -66,9 +68,9 @@ export function useMessageToasts(userId: string | null, quiet: boolean, notify: 
         if (quietRef.current) return;
         const message = payload.new as Message;
         const { data } = await client.rpc('my_friends');
-        const sender = ((data as Friend[] | null) ?? []).find((friend) => friend.id === message.sender)?.display_name ?? 'Найз';
-        notify(message.kind === 'invite' ? `${sender} таныг «${message.body}» өрөөнд урилаа. Найзууд хэсгээс нэгдээрэй.`
-          : message.kind === 'gift' ? `${sender} танд ${message.body} бэлэглэлээ!` : `${sender}: ${message.body.slice(0, 60)}`, 'info');
+        const sender = ((data as Friend[] | null) ?? []).find((friend) => friend.id === message.sender)?.display_name ?? t('Найз', 'Friend');
+        notify(message.kind === 'invite' ? t(`${sender} таныг «${message.body}» өрөөнд урилаа. Найзууд хэсгээс нэгдээрэй.`, `${sender} invited you to the room “${message.body}”. Join from Friends.`)
+          : message.kind === 'gift' ? t(`${sender} танд ${message.body} бэлэглэлээ!`, `${sender} sent you ${message.body}!`) : `${sender}: ${message.body.slice(0, 60)}`, 'info');
       })
       .subscribe();
     return () => { void client.removeChannel(channel); };
@@ -78,9 +80,9 @@ export function useMessageToasts(userId: string | null, quiet: boolean, notify: 
 /** "Онлайн", "Тоглож байна · Мафи", "Лобби · …" or "Офлайн". */
 function presenceLine(friend: Friend) {
   const game = friend.game_type ? GAMES[friend.game_type as GameType]?.title ?? friend.game_type : '';
-  if (friend.room_status === 'playing') return { text: `Тоглож байна · ${game}`, tone: 'is-playing' };
-  if (friend.room_status === 'lobby') return { text: `Лобби · ${friend.room_name ?? game}`, tone: 'is-lobby' };
-  return friend.online ? { text: 'Онлайн', tone: 'is-online' } : { text: 'Офлайн', tone: '' };
+  if (friend.room_status === 'playing') return { text: t(`Тоглож байна · ${game}`, `Playing · ${game}`), tone: 'is-playing' };
+  if (friend.room_status === 'lobby') return { text: t(`Лобби · ${friend.room_name ?? game}`, `Lobby · ${friend.room_name ?? game}`), tone: 'is-lobby' };
+  return friend.online ? { text: t('Онлайн', 'Online'), tone: 'is-online' } : { text: t('Офлайн', 'Offline'), tone: '' };
 }
 
 const clock = (iso: string) => {
@@ -113,7 +115,7 @@ export function FriendsScreen({ userId, playerNo, friendsState, myRoom, onBack, 
   const search = async (event?: FormEvent) => {
     event?.preventDefault();
     if (!supabase) return;
-    if (query.trim().replace('#', '').length < 2) { notify('Дор хаяж 2 тэмдэгт эсвэл ID бичнэ үү.'); return; }
+    if (query.trim().replace('#', '').length < 2) { notify(t('Дор хаяж 2 тэмдэгт эсвэл ID бичнэ үү.', 'Type at least 2 characters or an ID.')); return; }
     const { data, error } = await supabase.rpc('search_players', { p_query: query.trim() });
     if (error) { notify(failure(error), 'error'); return; }
     setFound((data as Found[] | null) ?? []);
@@ -132,45 +134,45 @@ export function FriendsScreen({ userId, playerNo, friendsState, myRoom, onBack, 
 
   const copyId = async () => {
     if (!playerNo) return;
-    try { await navigator.clipboard.writeText(String(playerNo)); notify('ID хуулагдлаа.', 'success'); } catch { notify(`Таны ID: #${playerNo}`); }
+    try { await navigator.clipboard.writeText(String(playerNo)); notify(t('ID хуулагдлаа.', 'ID copied.'), 'success'); } catch { notify(t(`Таны ID: #${playerNo}`, `Your ID: #${playerNo}`)); }
   };
 
   return <div className="inner-screen panel-screen friends-screen">
     <header className="top-bar panel-top-bar">
-      <button className="icon-button" onClick={onBack} aria-label="Буцах"><ArrowLeft size={17} /></button>
-      <div className="top-title"><span>НАЙЗУУД</span><strong>НАЙЗУУД {accepted.length ? `· ${accepted.length}` : ''}</strong></div>
-      <div className="panel-top-trailing">{playerNo && <button type="button" className="my-id" onClick={() => void copyId()} title="ID хуулах">Миний ID <b>#{playerNo}</b><Clipboard size={12} /></button>}</div>
+      <button className="icon-button" onClick={onBack} aria-label={t('Буцах', 'Back')}><ArrowLeft size={17} /></button>
+      <div className="top-title"><span>{t(`НАЙЗУУД`, `FRIENDS`)}</span><strong>{t(`НАЙЗУУД `, `FRIENDS `)}{accepted.length ? `· ${accepted.length}` : ''}</strong></div>
+      <div className="panel-top-trailing">{playerNo && <button type="button" className="my-id" onClick={() => void copyId()} title={t('ID хуулах', 'Copy ID')}>{t(`Миний ID `, `My ID `)}<b>#{playerNo}</b><Clipboard size={12} /></button>}</div>
     </header>
     <div className="friends-layout">
       <aside className="friends-side">
         <form className="admin-search" onSubmit={(event) => void search(event)}>
-          <Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ID эсвэл нэрээр хайх" aria-label="Тоглогч хайх" />
-          <button type="submit" className="secondary-button">ХАЙХ</button>
+          <Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('ID эсвэл нэрээр хайх', 'Search by ID or name')} aria-label={t('Тоглогч хайх', 'Find players')} />
+          <button type="submit" className="secondary-button">{t(`ХАЙХ`, `SEARCH`)}</button>
         </form>
         {found && <section className="friends-group">
-          <header><span>ХАЙЛТЫН ҮР ДҮН</span><button type="button" className="icon-button" onClick={() => { setFound(null); setQuery(''); }} aria-label="Хаах"><X size={12} /></button></header>
-          {found.length === 0 && <p className="panel-empty">Тоглогч олдсонгүй.</p>}
+          <header><span>{t(`ХАЙЛТЫН ҮР ДҮН`, `SEARCH RESULTS`)}</span><button type="button" className="icon-button" onClick={() => { setFound(null); setQuery(''); }} aria-label={t('Хаах', 'Close')}><X size={12} /></button></header>
+          {found.length === 0 && <p className="panel-empty">{t(`Тоглогч олдсонгүй.`, `No players found.`)}</p>}
           {found.map((player) => <div className="friend-row" key={player.id}>
             <Avatar name={player.display_name} color={player.avatar_key} url={player.avatar_url} frame={player.frame_key} />
             <span className="friend-copy"><b>{player.display_name}</b><small>#{player.player_no}</small></span>
-            {player.relation === 'friend' ? <span className="chip">НАЙЗ</span>
-              : player.relation === 'outgoing' ? <span className="chip">ИЛГЭЭСЭН</span>
-                : <button type="button" className="primary-button" disabled={busy} onClick={() => void act('send_friend_request', { p_user: player.id }, player.relation === 'incoming' ? 'Найз боллоо!' : 'Хүсэлт илгээлээ.')}>
-                  <UserPlus size={13} /> {player.relation === 'incoming' ? 'ЗӨВШӨӨРӨХ' : 'НЭМЭХ'}</button>}
+            {player.relation === 'friend' ? <span className="chip">{t(`НАЙЗ`, `FRIEND`)}</span>
+              : player.relation === 'outgoing' ? <span className="chip">{t(`ИЛГЭЭСЭН`, `SENT`)}</span>
+                : <button type="button" className="primary-button" disabled={busy} onClick={() => void act('send_friend_request', { p_user: player.id }, player.relation === 'incoming' ? t('Найз боллоо!', 'You’re friends now!') : t('Хүсэлт илгээлээ.', 'Request sent.'))}>
+                  <UserPlus size={13} /> {player.relation === 'incoming' ? t('ЗӨВШӨӨРӨХ', 'ACCEPT') : t('НЭМЭХ', 'ADD')}</button>}
           </div>)}
         </section>}
         {incoming.length > 0 && <section className="friends-group">
-          <header><span>НАЙЗЫН ХҮСЭЛТ · {incoming.length}</span></header>
+          <header><span>{t(`НАЙЗЫН ХҮСЭЛТ · ${incoming.length}`, `FRIEND REQUESTS · ${incoming.length}`)}</span></header>
           {incoming.map((friend) => <div className="friend-row is-request" key={friend.id}>
             <Avatar name={friend.display_name} color={friend.avatar_key} url={friend.avatar_url} frame={friend.frame_key} />
             <span className="friend-copy"><b>{friend.display_name}</b><small>#{friend.player_no}</small></span>
-            <button type="button" className="primary-button" disabled={busy} onClick={() => void act('respond_friend_request', { p_user: friend.id, p_accept: true }, 'Найз боллоо!')} aria-label="Зөвшөөрөх"><Check size={14} /></button>
-            <button type="button" className="secondary-button" disabled={busy} onClick={() => void act('respond_friend_request', { p_user: friend.id, p_accept: false }, 'Хүсэлтийг цуцаллаа.')} aria-label="Татгалзах"><X size={14} /></button>
+            <button type="button" className="primary-button" disabled={busy} onClick={() => void act('respond_friend_request', { p_user: friend.id, p_accept: true }, t('Найз боллоо!', 'You’re friends now!'))} aria-label={t('Зөвшөөрөх', 'Accept')}><Check size={14} /></button>
+            <button type="button" className="secondary-button" disabled={busy} onClick={() => void act('respond_friend_request', { p_user: friend.id, p_accept: false }, t('Хүсэлтийг цуцаллаа.', 'Request declined.'))} aria-label={t('Татгалзах', 'Decline')}><X size={14} /></button>
           </div>)}
         </section>}
         <section className="friends-group">
-          <header><span>НАЙЗУУД</span></header>
-          {accepted.length === 0 && <p className="panel-empty">Одоогоор найз алга. Найзынхаа ID эсвэл нэрийг дээр хайгаад нэмээрэй.</p>}
+          <header><span>{t(`НАЙЗУУД`, `FRIENDS`)}</span></header>
+          {accepted.length === 0 && <p className="panel-empty">{t(`Одоогоор найз алга. Найзынхаа ID эсвэл нэрийг дээр хайгаад нэмээрэй.`, `No friends yet. Search for a friend’s ID or name above to add them.`)}</p>}
           {accepted.map((friend) => {
             const presence = presenceLine(friend);
             return <button type="button" className={`friend-row is-friend ${selectedId === friend.id ? 'is-selected' : ''}`} key={friend.id} onClick={() => setSelectedId(friend.id)}>
@@ -181,11 +183,11 @@ export function FriendsScreen({ userId, playerNo, friendsState, myRoom, onBack, 
           })}
         </section>
         {outgoing.length > 0 && <section className="friends-group">
-          <header><span>ИЛГЭЭСЭН ХҮСЭЛТ</span></header>
+          <header><span>{t(`ИЛГЭЭСЭН ХҮСЭЛТ`, `SENT REQUESTS`)}</span></header>
           {outgoing.map((friend) => <div className="friend-row" key={friend.id}>
             <Avatar name={friend.display_name} color={friend.avatar_key} url={friend.avatar_url} frame={friend.frame_key} />
-            <span className="friend-copy"><b>{friend.display_name}</b><small>Хариу хүлээж байна</small></span>
-            <button type="button" className="secondary-button" disabled={busy} onClick={() => void act('remove_friend', { p_user: friend.id }, 'Хүсэлтээ буцаалаа.')}>БУЦААХ</button>
+            <span className="friend-copy"><b>{friend.display_name}</b><small>{t(`Хариу хүлээж байна`, `Waiting for an answer`)}</small></span>
+            <button type="button" className="secondary-button" disabled={busy} onClick={() => void act('remove_friend', { p_user: friend.id }, t('Хүсэлтээ буцаалаа.', 'Request withdrawn.'))}>{t(`БУЦААХ`, `WITHDRAW`)}</button>
           </div>)}
         </section>}
       </aside>
@@ -193,7 +195,7 @@ export function FriendsScreen({ userId, playerNo, friendsState, myRoom, onBack, 
         {selected
           ? <FriendPanel key={selected.id} friend={selected} userId={userId} myRoom={myRoom} notify={notify} onJoinRoom={onJoinRoom}
             onRead={reload} onRemoved={() => { setSelectedId(null); void reload(); }} />
-          : <div className="friends-empty"><Users size={28} /><p>Найзаа сонговол энд чатлах, бэлэг илгээх, өрөөндөө урих боломжтой.</p></div>}
+          : <div className="friends-empty"><Users size={28} /><p>{t(`Найзаа сонговол энд чатлах, бэлэг илгээх, өрөөндөө урих боломжтой.`, `Choose a friend to chat, send gifts or invite them to your room.`)}</p></div>}
       </section>
     </div>
   </div>;
@@ -260,7 +262,7 @@ function FriendPanel({ friend, userId, myRoom, notify, onJoinRoom, onRead, onRem
     const { error } = await supabase.rpc('invite_friend', { p_to: friend.id, p_room: myRoom.code });
     setBusy(false);
     if (error) { notify(failure(error), 'error'); return; }
-    notify(`${friend.display_name}-г өрөөндөө урилаа.`, 'success');
+    notify(t(`${friend.display_name}-г өрөөндөө урилаа.`, `You invited ${friend.display_name} to your room.`), 'success');
     void load();
   };
 
@@ -268,7 +270,7 @@ function FriendPanel({ friend, userId, myRoom, notify, onJoinRoom, onRead, onRem
     if (!supabase) return;
     const { error } = await supabase.rpc('remove_friend', { p_user: friend.id });
     if (error) { notify(failure(error), 'error'); return; }
-    notify(`${friend.display_name}-г найзаас хаслаа.`);
+    notify(t(`${friend.display_name}-г найзаас хаслаа.`, `You removed ${friend.display_name} from your friends.`));
     onRemoved();
   };
 
@@ -279,45 +281,45 @@ function FriendPanel({ friend, userId, myRoom, notify, onJoinRoom, onRead, onRem
       <Avatar name={friend.display_name} color={friend.avatar_key} url={friend.avatar_url} frame={friend.frame_key} className="friend-head-avatar" />
       <span className="friend-copy"><b>{friend.display_name} <small>#{friend.player_no}</small></b><small className={presence.tone}>{presence.text}</small></span>
       <span className="friend-head-actions">
-        {myRoom && myRoom.status === 'lobby' && <button type="button" className="primary-button" disabled={busy} onClick={() => void invite()}><DoorOpen size={13} /> УРИХ</button>}
-        <button type="button" className={view === 'gift' ? 'primary-button' : 'secondary-button'} onClick={() => setView(view === 'gift' ? 'chat' : 'gift')}>{view === 'gift' ? <><MessageCircle size={13} /> ЧАТ</> : <><Gift size={13} /> БЭЛЭГ</>}</button>
+        {myRoom && myRoom.status === 'lobby' && <button type="button" className="primary-button" disabled={busy} onClick={() => void invite()}><DoorOpen size={13} />{t(` УРИХ`, ` INVITE`)}</button>}
+        <button type="button" className={view === 'gift' ? 'primary-button' : 'secondary-button'} onClick={() => setView(view === 'gift' ? 'chat' : 'gift')}>{view === 'gift' ? <><MessageCircle size={13} />{t(` ЧАТ`, ` CHAT`)}</> : <><Gift size={13} />{t(` БЭЛЭГ`, ` GIFT`)}</>}</button>
         {confirmRemove
-          ? <><button type="button" className="danger-button" onClick={() => void remove()}>ХАСАХ</button><button type="button" className="icon-button" onClick={() => setConfirmRemove(false)} aria-label="Болих"><X size={13} /></button></>
-          : <button type="button" className="icon-button" onClick={() => setConfirmRemove(true)} aria-label="Найзаас хасах" title="Найзаас хасах"><UserMinus size={14} /></button>}
+          ? <><button type="button" className="danger-button" onClick={() => void remove()}>{t(`ХАСАХ`, `REMOVE`)}</button><button type="button" className="icon-button" onClick={() => setConfirmRemove(false)} aria-label={t('Болих', 'Cancel')}><X size={13} /></button></>
+          : <button type="button" className="icon-button" onClick={() => setConfirmRemove(true)} aria-label={t('Найзаас хасах', 'Remove friend')} title={t('Найзаас хасах', 'Remove friend')}><UserMinus size={14} /></button>}
       </span>
     </header>
     {view === 'gift'
       ? <div className="friend-gift">{inGame
-        ? <p className="panel-empty">Тоглолтын үеэр хүрээ, нэрийн хавтан бэлэглэх боломжгүй. Тоглолт дууссаны дараа илгээнэ үү.</p>
-        : <GiftPicker targetName={friend.display_name} allowCosmetics busy={busy} note="Бэлэг чатанд харагдана."
+        ? <p className="panel-empty">{t(`Тоглолтын үеэр хүрээ, нэрийн хавтан бэлэглэх боломжгүй. Тоглолт дууссаны дараа илгээнэ үү.`, `Frames and nameplates can’t be gifted during a match. Send them after it ends.`)}</p>
+        : <GiftPicker targetName={friend.display_name} allowCosmetics busy={busy} note={t('Бэлэг чатанд харагдана.', 'The gift shows in the chat.')}
           onSend={(item) => { setBusy(true); void sendFriendGift(friend.id, item).then((problem) => {
             setBusy(false);
             if (problem) { notify(problem, 'error'); return; }
-            notify(`${friend.display_name}-д ${item.name} илгээлээ!`, 'success');
+            notify(t(`${friend.display_name}-д ${item.name} илгээлээ!`, `You sent ${item.name} to ${friend.display_name}!`), 'success');
             setView('chat'); void load();
           }); }} />}</div>
       : <>
         <ol className="chat-list" ref={list} aria-live="polite">
-          <li className="chat-expiry-note"><Clock3 size={11} /> Уншсан мессеж 1 хоногийн, уншаагүй мессеж 5 хоногийн дараа устна.</li>
-          {messages.length === 0 && <li className="chat-empty">Мэндчилгээ бичээд эхлээрэй 👋</li>}
+          <li className="chat-expiry-note"><Clock3 size={11} />{t(` Уншсан мессеж 1 хоногийн, уншаагүй мессеж 5 хоногийн дараа устна.`, ` Read messages are deleted after 1 day, unread ones after 5 days.`)}</li>
+          {messages.length === 0 && <li className="chat-empty">{t(`Мэндчилгээ бичээд эхлээрэй 👋`, `Say hello to get started 👋`)}</li>}
           {messages.map((message) => {
             const mine = message.sender === userId;
             const gift = message.kind === 'gift' ? giftName(message.gift_key) : null;
             return <li key={message.id} className={`chat-message ${mine ? 'is-mine' : ''} kind-${message.kind}`}>
               {message.kind === 'invite'
-                ? <div className="chat-card"><DoorOpen size={16} /><span><b>{mine ? 'Та урилаа' : 'Урилга'}</b>«{message.body}» өрөө</span>
+                ? <div className="chat-card"><DoorOpen size={16} /><span><b>{mine ? t('Та урилаа', 'You invited them') : t('Урилга', 'Invitation')}</b>{t(`«${message.body}» өрөө`, `Room “${message.body}”`)}</span>
                   {!mine && <button type="button" className="primary-button" disabled={busy || myRoom?.code === message.room_code} onClick={() => { if (message.room_code) { setBusy(true); void onJoinRoom(message.room_code).finally(() => setBusy(false)); } }}>
-                    {myRoom?.code === message.room_code ? 'ӨРӨӨНД БАЙНА' : 'НЭГДЭХ'}</button>}</div>
+                    {myRoom?.code === message.room_code ? t('ӨРӨӨНД БАЙНА', 'IN THE ROOM') : t('НЭГДЭХ', 'JOIN')}</button>}</div>
                 : message.kind === 'gift'
-                  ? <div className="chat-card is-gift"><span className="gift-icon">{gift?.icon || '🎁'}</span><span><b>{mine ? 'Та бэлэглэлээ' : 'Бэлэг ирлээ!'}</b>{message.body}</span></div>
+                  ? <div className="chat-card is-gift"><span className="gift-icon">{gift?.icon || '🎁'}</span><span><b>{mine ? t('Та бэлэглэлээ', 'You sent a gift') : t('Бэлэг ирлээ!', 'A gift for you!')}</b>{message.body}</span></div>
                   : <p>{message.body}</p>}
               <small>{clock(message.created_at)}</small>
             </li>;
           })}
         </ol>
         <form className="chat-input" onSubmit={(event) => void send(event)}>
-          <input value={draft} maxLength={500} onChange={(event) => setDraft(event.target.value)} placeholder={`${friend.display_name}-д бичих…`} aria-label="Мессеж" />
-          <button type="submit" className="primary-button" disabled={busy || !draft.trim()} aria-label="Илгээх"><Send size={14} /></button>
+          <input value={draft} maxLength={500} onChange={(event) => setDraft(event.target.value)} placeholder={t(`${friend.display_name}-д бичих…`, `Write to ${friend.display_name}…`)} aria-label={t('Мессеж', 'Message')} />
+          <button type="submit" className="primary-button" disabled={busy || !draft.trim()} aria-label={t('Илгээх', 'Send')}><Send size={14} /></button>
         </form>
       </>}
   </div>;
@@ -336,19 +338,19 @@ export function InviteFriendsModal({ roomCode, friends, onClose, notify }: { roo
   };
   return <div className="game-modal-backdrop" onClick={onClose}>
     <section className="game-modal admin-ban-modal invite-modal" role="dialog" aria-modal="true" aria-labelledby="invite-title" onClick={(event) => event.stopPropagation()}>
-      <header><h2 id="invite-title"><UserPlus size={16} /> Найзаа урих</h2><button type="button" className="icon-button" onClick={onClose} aria-label="Хаах"><X size={15} /></button></header>
-      {accepted.length === 0 && <p className="panel-empty">Найз алга. Үндсэн цэсний "Найзууд" хэсгээс найз нэмээрэй.</p>}
+      <header><h2 id="invite-title"><UserPlus size={16} />{t(` Найзаа урих`, ` Invite friends`)}</h2><button type="button" className="icon-button" onClick={onClose} aria-label={t('Хаах', 'Close')}><X size={15} /></button></header>
+      {accepted.length === 0 && <p className="panel-empty">{t(`Найз алга. Үндсэн цэсний "Найзууд" хэсгээс найз нэмээрэй.`, `No friends yet. Add some from “Friends” in the main menu.`)}</p>}
       <div className="invite-list">{accepted.map((friend) => {
         const presence = presenceLine(friend);
         const here = friend.room_code === roomCode;
         return <div className="friend-row" key={friend.id}>
           <Avatar name={friend.display_name} color={friend.avatar_key} url={friend.avatar_url} frame={friend.frame_key}><i className={`presence-dot ${presence.tone}`} /></Avatar>
-          <span className="friend-copy"><b>{friend.display_name}</b><small className={presence.tone}>{here ? 'Энэ өрөөнд байна' : presence.text}</small></span>
+          <span className="friend-copy"><b>{friend.display_name}</b><small className={presence.tone}>{here ? t('Энэ өрөөнд байна', 'In this room') : presence.text}</small></span>
           <button type="button" className={sent.includes(friend.id) ? 'secondary-button' : 'primary-button'} disabled={here || sent.includes(friend.id)} onClick={() => void invite(friend)}>
-            {sent.includes(friend.id) ? <><Check size={13} /> УРЬСАН</> : 'УРИХ'}</button>
+            {sent.includes(friend.id) ? <><Check size={13} />{t(` УРЬСАН`, ` INVITED`)}</> : t('УРИХ', 'INVITE')}</button>
         </div>;
       })}</div>
-      <p className="admin-note">Урилга найзын тань чатанд очно. Нууц үгтэй өрөө байсан ч урилгаар шууд нэгдэнэ.</p>
+      <p className="admin-note">{t(`Урилга найзын тань чатанд очно. Нууц үгтэй өрөө байсан ч урилгаар шууд нэгдэнэ.`, `The invitation goes to your friend’s chat. They can join directly even if the room has a password.`)}</p>
     </section>
   </div>;
 }

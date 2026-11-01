@@ -7,6 +7,8 @@ import { supabase } from './supabaseClient';
 import type { NotifyFn, RoomSeat } from './multiplayer';
 import { playSfx } from './sfx';
 
+import { isEnglish, t } from './lang';
+import { translateMessage } from './i18n';
 /* ---------- shop catalogue ---------- */
 
 export type ShopKind = 'gift' | 'frame' | 'title' | 'nameplate' | 'border';
@@ -22,8 +24,10 @@ let catalogue: Promise<ShopItem[]> | null = null;
 /** The shop's items, loaded once per app start. */
 export function loadShopItems(): Promise<ShopItem[]> {
   if (!supabase) return Promise.resolve([]);
-  catalogue ??= Promise.resolve(supabase.from('shop_items').select('key,kind,name,description,icon,price,sort,currency,source').order('sort'))
-    .then(({ data }) => (data as ShopItem[] | null) ?? [])
+  catalogue ??= Promise.resolve(supabase.from('shop_items').select('key,kind,name,description,name_en,description_en,icon,price,sort,currency,source').order('sort'))
+    // English mode shows each item's English name and description when it has them.
+    .then(({ data }) => ((data as Array<ShopItem & { name_en?: string | null; description_en?: string | null }> | null) ?? [])
+      .map(({ name_en, description_en, ...item }) => (isEnglish ? { ...item, name: name_en || item.name, description: description_en || item.description } : item)))
     .catch(() => { catalogue = null; return []; });
   return catalogue;
 }
@@ -72,23 +76,23 @@ export function useMyWallet() {
 export const canAfford = (item: ShopItem, wallet: Wallet | null, free: boolean) =>
   free || wallet === null || (item.currency === 'diamond' ? wallet.diamonds : wallet.coins) >= item.price;
 
-const failure = (error: { message?: string } | null | undefined) => error?.message || 'Алдаа гарлаа. Дахин оролдоно уу.';
+const failure = (error: { message?: string } | null | undefined) => (error?.message ? translateMessage(error.message) : '') || t('Алдаа гарлаа. Дахин оролдоно уу.', 'Something went wrong. Please try again.');
 const failureOf = (result: { error: { message?: string } | null }) => result.error ? failure(result.error) : '';
 
 export function CoinCount({ value, className = '' }: { value: number | null; className?: string }) {
-  return <span className={`coin-count ${className}`} title="Зоос: тоглож олно"><Coins size={13} />{value === null ? '…' : value.toLocaleString('en-US')}</span>;
+  return <span className={`coin-count ${className}`} title={t('Зоос: тоглож олно', 'Coins: earned by playing')}><Coins size={13} />{value === null ? '…' : value.toLocaleString('en-US')}</span>;
 }
 
 export function DiamondCount({ value, className = '', onTopUp }: { value: number | null; className?: string; onTopUp?: () => void }) {
   const body = <><Gem size={13} />{value === null ? '…' : value.toLocaleString('en-US')}{onTopUp && <Plus size={12} className="diamond-plus" />}</>;
   return onTopUp
-    ? <button type="button" className={`diamond-count is-button ${className}`} onClick={onTopUp} aria-label="Алмаз цэнэглэх" title="Алмаз цэнэглэх">{body}</button>
-    : <span className={`diamond-count ${className}`} title="Алмаз: цэнэглэж авна">{body}</span>;
+    ? <button type="button" className={`diamond-count is-button ${className}`} onClick={onTopUp} aria-label={t('Алмаз цэнэглэх', 'Top up diamonds')} title={t('Алмаз цэнэглэх', 'Top up diamonds')}>{body}</button>
+    : <span className={`diamond-count ${className}`} title={t('Алмаз: цэнэглэж авна', 'Diamonds: bought with a top-up')}>{body}</span>;
 }
 
 /** An item's price with its currency's icon. */
 export function Price({ item, free = false, size = 12 }: { item: Pick<ShopItem, 'price' | 'currency'>; free?: boolean; size?: number }) {
-  if (free) return <>ҮНЭГҮЙ</>;
+  if (free) return <>{t(`ҮНЭГҮЙ`, `FREE`)}</>;
   return <span className={`price is-${item.currency}`}>{item.currency === 'diamond' ? <Gem size={size} /> : <Coins size={size} />}{item.price.toLocaleString('en-US')}</span>;
 }
 
@@ -97,10 +101,10 @@ export function TopUpModal({ onClose }: { onClose: () => void }) {
   return <div className="game-modal-backdrop" onClick={onClose}>
     <section className="game-modal topup-modal" role="dialog" aria-modal="true" aria-labelledby="topup-title" onClick={(event) => event.stopPropagation()}>
       <div className="modal-symbol topup-symbol"><Gem size={18} /></div>
-      <h2 id="topup-title">Алмаз цэнэглэх</h2>
-      <div className="topup-packs" aria-hidden="true">{[[60, '…'], [330, '…'], [700, '…'], [1500, '…']].map(([gems]) => <span key={gems}><Gem size={14} /><b>{gems}</b><small>Тун удахгүй</small></span>)}</div>
-      <p><Clock3 size={12} /> Тун удахгүй. Төлбөр холбогдсоны дараа алмазаа эндээс цэнэглэнэ. Одоогоор админ гараар нэмж өгнө.</p>
-      <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>ХААХ</button></div>
+      <h2 id="topup-title">{t(`Алмаз цэнэглэх`, `Top up diamonds`)}</h2>
+      <div className="topup-packs" aria-hidden="true">{[[60, '…'], [330, '…'], [700, '…'], [1500, '…']].map(([gems]) => <span key={gems}><Gem size={14} /><b>{gems}</b><small>{t(`Тун удахгүй`, `Coming soon`)}</small></span>)}</div>
+      <p><Clock3 size={12} />{t(` Тун удахгүй. Төлбөр холбогдсоны дараа алмазаа эндээс цэнэглэнэ. Одоогоор админ гараар нэмж өгнө.`, ` Coming soon. Once payments are connected you’ll top up diamonds here. For now an admin adds them by hand.`)}</p>
+      <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>{t(`ХААХ`, `CLOSE`)}</button></div>
     </section>
   </div>;
 }
@@ -169,14 +173,14 @@ export function GiftLayer({ roomCode }: { roomCode: string }) {
   return <div className="gift-layer" aria-live="polite" key={showing.id}>
     <div className="gift-burst" aria-hidden="true">{Array.from({ length: 12 }, (_, index) => <i key={index} style={{ ['--i' as string]: index }} />)}</div>
     <div className="gift-big" aria-hidden="true">{item?.icon || '🎁'}</div>
-    <p className="gift-caption"><span><b>{showing.from_name}</b> → <b>{showing.to_name}</b></span><small>{item?.name ?? 'Бэлэг'} илгээлээ</small></p>
+    <p className="gift-caption"><span><b>{showing.from_name}</b> → <b>{showing.to_name}</b></span><small>{item?.name ?? t('Бэлэг', 'A gift')}{t(` илгээлээ`, ` sent`)}</small></p>
   </div>;
 }
 
 /* ---------- choosing a gift ---------- */
 
 type GiftTab = 'gift' | 'frame' | 'nameplate' | 'border';
-const GIFT_TABS: { key: GiftTab; label: string }[] = [{ key: 'gift', label: 'Бэлэг' }, { key: 'frame', label: 'Хүрээ' }, { key: 'nameplate', label: 'Нэрийн хавтан' }, { key: 'border', label: 'Нэрийн хүрээ' }];
+const GIFT_TABS: { key: GiftTab; label: string }[] = [{ key: 'gift', label: t('Бэлэг', 'Gift') }, { key: 'frame', label: t('Хүрээ', 'Frame') }, { key: 'nameplate', label: t('Нэрийн хавтан', 'Nameplate') }, { key: 'border', label: t('Нэрийн хүрээ', 'Name border') }];
 
 /**
  * The gift grid. Frames and nameplates (given to a friend to keep) are offered only outside a game;
@@ -193,7 +197,7 @@ export function GiftPicker({ targetName, allowCosmetics, busy, note, onBack, onS
   const shown = items.filter((item) => item.kind === tab && forSale(item));
   const choice = items.find((item) => item.key === picked);
   return <>
-    <div className="pcard-subhead">{onBack && <button type="button" className="icon-button" onClick={onBack} aria-label="Буцах"><ArrowLeft size={14} /></button>}<b>{targetName}-д бэлэг</b><CoinCount value={wallet?.coins ?? null} /><DiamondCount value={wallet?.diamonds ?? null} /></div>
+    <div className="pcard-subhead">{onBack && <button type="button" className="icon-button" onClick={onBack} aria-label={t('Буцах', 'Back')}><ArrowLeft size={14} /></button>}<b>{t(`${targetName}-д бэлэг`, `A gift for ${targetName}`)}</b><CoinCount value={wallet?.coins ?? null} /><DiamondCount value={wallet?.diamonds ?? null} /></div>
     {allowCosmetics && <div className="admin-choice-row gift-tabs" role="tablist">{GIFT_TABS.map((item) => <button type="button" role="tab" aria-selected={tab === item.key} key={item.key}
       className={tab === item.key ? 'is-picked' : ''} onClick={() => { setTab(item.key); setPicked(null); }}>{item.label}</button>)}</div>}
     <div className={`gift-grid kind-${tab}`}>{shown.map((item) => <button type="button" key={item.key} className={picked === item.key ? 'is-picked' : ''} disabled={!canAfford(item, wallet, free)}
@@ -203,9 +207,9 @@ export function GiftPicker({ targetName, allowCosmetics, busy, note, onBack, onS
       {item.kind === 'nameplate' && <span className={`gift-plate-preview ${nameplate(item.key).className}`} style={nameplate(item.key).style} />}
       {item.kind === 'border' && <span className={`gift-plate-preview gift-border-preview ${rowBorderClass(item.key)}`}><RowBorder borderKey={item.key} /></span>}
       <b>{item.name}</b><small><Price item={item} free={free} size={10} /></small></button>)}</div>
-    <p className="pcard-note">{tab === 'gift' ? note : 'Найз тань энэ барааг өөрийн болгож авна. Аль хэдийн байгаа бол илгээгдэхгүй.'}</p>
+    <p className="pcard-note">{tab === 'gift' ? note : t('Найз тань энэ барааг өөрийн болгож авна. Аль хэдийн байгаа бол илгээгдэхгүй.', 'Your friend keeps this item. If they already have it, it isn’t sent.')}</p>
     <div className="modal-actions"><button type="button" className="primary-button" disabled={busy || !choice} onClick={() => choice && onSend(choice)}>
-      <Gift size={14} /> {choice ? (free ? 'ҮНЭГҮЙ ИЛГЭЭХ' : `${choice.price} ${choice.currency === 'diamond' ? 'АЛМАЗААР' : 'ЗООСООР'} ИЛГЭЭХ`) : 'БЭЛЭГ СОНГОНО УУ'}</button></div>
+      <Gift size={14} /> {choice ? (free ? t('ҮНЭГҮЙ ИЛГЭЭХ', 'SEND FOR FREE') : t(`${choice.price} ${choice.currency === 'diamond' ? 'АЛМАЗААР' : 'ЗООСООР'} ИЛГЭЭХ`, `SEND FOR ${choice.price} ${choice.currency === 'diamond' ? 'DIAMONDS' : 'COINS'}`)) : t('БЭЛЭГ СОНГОНО УУ', 'CHOOSE A GIFT')}</button></div>
   </>;
 }
 
@@ -218,11 +222,11 @@ type Card = {
   ranks?: { game_type: RankGame; points: number; wins: number; matches: number }[];
 };
 
-const REPORT_REASONS = ['Доромжилсон, хараасан', 'Хуурсан, луйвардсан', 'Тоглоомыг зориуд эвдсэн', 'Зохисгүй нэр, зураг', 'Бусад'];
+const REPORT_REASONS = [t('Доромжилсон, хараасан', 'Insults or swearing'), t('Хуурсан, луйвардсан', 'Cheating or scamming'), t('Тоглоомыг зориуд эвдсэн', 'Ruining the game on purpose'), t('Зохисгүй нэр, зураг', 'Inappropriate name or picture'), t('Бусад', 'Other')];
 
 /** Sends a frame, nameplate or gift to a friend outside a room. Returns '' or the error. */
 export async function sendFriendGift(to: string, item: ShopItem) {
-  if (!supabase) return 'Сервер тохируулагдаагүй байна.';
+  if (!supabase) return t('Сервер тохируулагдаагүй байна.', 'The server is not set up.');
   const { error } = await supabase.rpc('send_friend_gift', { p_to: to, p_key: item.key });
   return error ? failure(error) : '';
 }
@@ -260,7 +264,7 @@ export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, not
       : await sendFriendGift(seat.user_id, item);
     setBusy(false);
     if (problem) { notify(problem, 'error'); return; }
-    notify(item.kind === 'gift' ? 'Бэлэг илгээгдлээ!' : `${item.name} бэлэглэлээ!`, 'success');
+    notify(item.kind === 'gift' ? t('Бэлэг илгээгдлээ!', 'Gift sent!') : t(`${item.name} бэлэглэлээ!`, `You gave ${item.name}!`), 'success');
     onClose();
   };
 
@@ -270,7 +274,7 @@ export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, not
     const { data, error } = await supabase.rpc('send_friend_request', { p_user: seat.user_id });
     setBusy(false);
     if (error) { notify(failure(error), 'error'); return; }
-    notify(data === 'friend' ? 'Та хоёр найз боллоо!' : 'Найзын хүсэлт илгээлээ.', 'success');
+    notify(data === 'friend' ? t('Та хоёр найз боллоо!', 'You are friends now!') : t('Найзын хүсэлт илгээлээ.', 'Friend request sent.'), 'success');
   };
 
   const sendReport = async () => {
@@ -279,7 +283,7 @@ export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, not
     const { error } = await supabase.rpc('report_player', { p_target: seat.user_id, p_room: roomCode, p_reason: reason, p_message: note.trim() });
     setBusy(false);
     if (error) { notify(failure(error), 'error'); return; }
-    notify('Гомдол админд илгээгдлээ. Баярлалаа.', 'success');
+    notify(t('Гомдол админд илгээгдлээ. Баярлалаа.', 'Your report was sent to the admins. Thank you.'), 'success');
     onClose();
   };
 
@@ -287,15 +291,15 @@ export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, not
   const giftIcon = (key: string) => items.find((item) => item.key === key)?.icon || '🎁';
   let body: ReactNode;
   if (view === 'gift') {
-    body = <GiftPicker targetName={name} allowCosmetics={!inGame} busy={busy} note="Бэлэг ширээн дээрх бүх хүнд харагдана." onBack={() => setView('card')} onSend={(item) => void sendGift(item)} />;
+    body = <GiftPicker targetName={name} allowCosmetics={!inGame} busy={busy} note={t('Бэлэг ширээн дээрх бүх хүнд харагдана.', 'Everyone at the table sees the gift.')} onBack={() => setView('card')} onSend={(item) => void sendGift(item)} />;
   } else if (view === 'report') {
     body = <>
-      <div className="pcard-subhead"><button type="button" className="icon-button" onClick={() => setView('card')} aria-label="Буцах"><ArrowLeft size={14} /></button><b>{name}-г мэдээлэх</b></div>
-      <div className="admin-choice-row report-reasons" role="radiogroup" aria-label="Шалтгаан">{REPORT_REASONS.map((item) => <button type="button" role="radio" aria-checked={reason === item} key={item}
+      <div className="pcard-subhead"><button type="button" className="icon-button" onClick={() => setView('card')} aria-label={t('Буцах', 'Back')}><ArrowLeft size={14} /></button><b>{t(`${name}-г мэдээлэх`, `Report ${name}`)}</b></div>
+      <div className="admin-choice-row report-reasons" role="radiogroup" aria-label={t('Шалтгаан', 'Reason')}>{REPORT_REASONS.map((item) => <button type="button" role="radio" aria-checked={reason === item} key={item}
         className={reason === item ? 'is-picked' : ''} onClick={() => setReason(item)}>{item}</button>)}</div>
-      <label className="feedback-text"><textarea value={note} maxLength={600} onChange={(event) => setNote(event.target.value)} placeholder="Юу болсныг товч бичнэ үү (заавал биш)" /><small>{note.length}/600</small></label>
-      <p className="pcard-note">Гомдлыг зөвхөн админ харна. Тоглогчид мэдэгдэхгүй.</p>
-      <div className="modal-actions"><button type="button" className="primary-button" disabled={busy} onClick={() => void sendReport()}><Send size={14} /> АДМИНД ИЛГЭЭХ</button></div>
+      <label className="feedback-text"><textarea value={note} maxLength={600} onChange={(event) => setNote(event.target.value)} placeholder={t('Юу болсныг товч бичнэ үү (заавал биш)', 'Briefly describe what happened (optional)')} /><small>{note.length}/600</small></label>
+      <p className="pcard-note">{t(`Гомдлыг зөвхөн админ харна. Тоглогчид мэдэгдэхгүй.`, `Only admins see reports. The player is not told.`)}</p>
+      <div className="modal-actions"><button type="button" className="primary-button" disabled={busy} onClick={() => void sendReport()}><Send size={14} />{t(` АДМИНД ИЛГЭЭХ`, ` SEND TO ADMINS`)}</button></div>
     </>;
   } else {
     body = <>
@@ -305,31 +309,31 @@ export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, not
           {isBot && <i className="bot-badge"><Bot size={12} /></i>}
         </Avatar>
         <div className="pcard-name">
-          <h2>{name}{isMe && <small>ЧИ</small>}</h2>
+          <h2>{name}{isMe && <small>{t(`ЧИ`, `YOU`)}</small>}</h2>
           <TitleBadge titleKey={card?.title_key} items={items} size="lg" />
           {card && <div className="pcard-ranks">{RANK_GAMES.map((game) => <RankChip key={game} game={game} points={card.ranks?.find((entry) => entry.game_type === game)?.points ?? 0} />)}</div>}
-          {isBot && <span className="pcard-rank">Бот тоглогч · дасгалын ширээнд</span>}
+          {isBot && <span className="pcard-rank">{t(`Бот тоглогч · дасгалын ширээнд`, `Bot player · practice table`)}</span>}
         </div>
       </div>
       {loadError && <p className="pcard-note">{loadError}</p>}
       {card && <>
         <div className="pcard-stats">
-          <span><b>{card.total_matches}</b>Тоглолт</span><span><b>{card.wins}</b>Ялалт</span>
-          <span><b>{Math.round(card.win_rate)}%</b>Ялалтын хувь</span><span><b>{card.gift_total}</b>Бэлэг</span>
+          <span><b>{card.total_matches}</b>{t(`Тоглолт`, `Matches`)}</span><span><b>{card.wins}</b>{t(`Ялалт`, `Wins`)}</span>
+          <span><b>{Math.round(card.win_rate)}%</b>{t(`Ялалтын хувь`, `Win rate`)}</span><span><b>{card.gift_total}</b>{t(`Бэлэг`, `Gifts`)}</span>
         </div>
-        {card.gifts.length > 0 && <div className="pcard-gifts" aria-label="Хүлээн авсан бэлгүүд">{card.gifts.slice(0, 8).map((entry) => <span key={entry.gift_key}>{giftIcon(entry.gift_key)}<small>×{entry.count}</small></span>)}</div>}
+        {card.gifts.length > 0 && <div className="pcard-gifts" aria-label={t('Хүлээн авсан бэлгүүд', 'Gifts received')}>{card.gifts.slice(0, 8).map((entry) => <span key={entry.gift_key}>{giftIcon(entry.gift_key)}<small>×{entry.count}</small></span>)}</div>}
       </>}
       {!isMe && !isBot && <div className="modal-actions pcard-actions">
-        <button type="button" className="secondary-button" disabled={busy} onClick={() => void addFriend()}><UserPlus size={14} /> НАЙЗ</button>
-        <button type="button" className="secondary-button" onClick={() => setView('report')}><Flag size={14} /> ГОМДОЛ</button>
-        <button type="button" className="primary-button" onClick={() => setView('gift')}><Gift size={14} /> БЭЛЭГ ИЛГЭЭХ</button>
+        <button type="button" className="secondary-button" disabled={busy} onClick={() => void addFriend()}><UserPlus size={14} />{t(` НАЙЗ`, ` FRIEND`)}</button>
+        <button type="button" className="secondary-button" onClick={() => setView('report')}><Flag size={14} />{t(` ГОМДОЛ`, ` REPORT`)}</button>
+        <button type="button" className="primary-button" onClick={() => setView('gift')}><Gift size={14} />{t(` БЭЛЭГ ИЛГЭЭХ`, ` SEND A GIFT`)}</button>
       </div>}
     </>;
   }
 
   return <div className="game-modal-backdrop pcard-backdrop" onClick={onClose}>
-    <section className="game-modal pcard" role="dialog" aria-modal="true" aria-label={`${name} — профайл`} onClick={(event) => event.stopPropagation()}>
-      <button type="button" className="icon-button pcard-close" onClick={onClose} aria-label="Хаах"><X size={15} /></button>
+    <section className="game-modal pcard" role="dialog" aria-modal="true" aria-label={t(`${name} — профайл`, `${name} — profile`)} onClick={(event) => event.stopPropagation()}>
+      <button type="button" className="icon-button pcard-close" onClick={onClose} aria-label={t('Хаах', 'Close')}><X size={15} /></button>
       {body}
     </section>
   </div>;
@@ -359,8 +363,8 @@ export function PlatePreview({ plateKey, borderKey, me, large = false }: { plate
   const plate = nameplate(plateKey);
   return <span className={`plate-preview ${large ? 'is-large' : ''} ${plate.className} ${rowBorderClass(borderKey)}`} style={plate.style}>
     <RowBorder borderKey={borderKey} />
-    <Avatar name={me?.display_name ?? 'Би'} color={me?.avatar_key ?? 'rose'} url={me?.avatar_url} />
-    <b>{me?.display_name ?? 'Таны нэр'}</b>
+    <Avatar name={me?.display_name ?? t('Би', 'Me')} color={me?.avatar_key ?? 'rose'} url={me?.avatar_url} />
+    <b>{me?.display_name ?? t('Таны нэр', 'Your name')}</b>
   </span>;
 }
 
@@ -368,9 +372,9 @@ type Owned = { item_key: string };
 type Me = { coins: number; diamonds: number; frame_key: string | null; title_key: string | null; nameplate_key?: string | null; border_key?: string | null; avatar_url: string | null; avatar_key: string; display_name: string; bonus_claimed_at: string | null };
 
 type ShopTab = ShopKind | 'offers';
-const TABS: { key: ShopTab; label: string }[] = [{ key: 'offers', label: 'Онцлох' }, { key: 'frame', label: 'Аватар хүрээ' }, { key: 'nameplate', label: 'Нэрийн хавтан' }, { key: 'border', label: 'Нэрийн хүрээ' }, { key: 'gift', label: 'Бэлэг' }];
-const CURRENCY_HEADING: Record<Currency, string> = { coin: 'Зоосоор · энгийн, хөдөлгөөнгүй', diamond: 'Алмазаар · зурган гоёл' };
-const GAME_SHORT: Record<RankGame, string> = { mafia: 'Мафи', monopoly: 'Монополь' };
+const TABS: { key: ShopTab; label: string }[] = [{ key: 'offers', label: t('Онцлох', 'Featured') }, { key: 'frame', label: t('Аватар хүрээ', 'Avatar frame') }, { key: 'nameplate', label: t('Нэрийн хавтан', 'Nameplate') }, { key: 'border', label: t('Нэрийн хүрээ', 'Name border') }, { key: 'gift', label: t('Бэлэг', 'Gift') }];
+const CURRENCY_HEADING: Record<Currency, string> = { coin: t('Зоосоор · энгийн, хөдөлгөөнгүй', 'For coins · plain, still'), diamond: t('Алмазаар · зурган гоёл', 'For diamonds · painted looks') };
+const GAME_SHORT: Record<RankGame, string> = { mafia: t('Мафи', 'Mafia'), monopoly: t('Монополь', 'Monopoly') };
 type RankPrize = { game_type: RankGame; level: number; item_key: string | null };
 
 /** A look sold for a while at its own price (a weekly discount, or one an admin set). */
@@ -396,9 +400,9 @@ export function timeLeft(iso: string, now = Date.now()) {
   const minutes = Math.max(0, Math.floor((new Date(iso).getTime() - now) / 60_000));
   const days = Math.floor(minutes / 1440);
   const hours = Math.floor((minutes % 1440) / 60);
-  if (days > 0) return `${days} өдөр ${hours} цаг`;
-  if (hours > 0) return `${hours} цаг ${minutes % 60} мин`;
-  return `${Math.max(1, minutes)} мин`;
+  if (days > 0) return t(`${days} өдөр ${hours} цаг`, `${days}d ${hours}h`);
+  if (hours > 0) return t(`${hours} цаг ${minutes % 60} мин`, `${hours}h ${minutes % 60}m`);
+  return t(`${Math.max(1, minutes)} мин`, `${Math.max(1, minutes)}m`);
 }
 
 export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: NotifyFn }) {
@@ -459,8 +463,8 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
   const equippedFor = (kind: ShopKind) => kind === 'frame' ? me?.frame_key : kind === 'title' ? me?.title_key : kind === 'nameplate' ? me?.nameplate_key : kind === 'border' ? me?.border_key : null;
   const offerItems = offers.map((offer) => ({ offer, item: items.find((item) => item.key === offer.item_key) })).filter((entry): entry is { offer: ShopOffer; item: ShopItem } => Boolean(entry.item));
 
-  const visual = (item: ShopItem) => <button type="button" className="shop-visual" onClick={() => setPreview(item)} aria-label={`${item.name} харах`}>
-    {item.kind === 'frame' && <Avatar name={me?.display_name ?? 'Би'} color={me?.avatar_key ?? 'rose'} url={me?.avatar_url} frame={item.key} className="shop-avatar" />}
+  const visual = (item: ShopItem) => <button type="button" className="shop-visual" onClick={() => setPreview(item)} aria-label={t(`${item.name} харах`, `View ${item.name}`)}>
+    {item.kind === 'frame' && <Avatar name={me?.display_name ?? t('Би', 'Me')} color={me?.avatar_key ?? 'rose'} url={me?.avatar_url} frame={item.key} className="shop-avatar" />}
     {item.kind === 'gift' && <span className="gift-icon is-floating">{item.icon}</span>}
     {item.kind === 'title' && <TitlePlaque titleKey={item.key} name={item.name} size="lg" />}
     {item.kind === 'nameplate' && <PlatePreview plateKey={item.key} me={me} />}
@@ -474,15 +478,15 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
     const has = owned.includes(item.key) || (free && item.source === 'rank');
     const equipped = equippedFor(item.kind) === item.key;
     if (item.kind === 'gift') return <span className="shop-price"><Price item={item} free={free} /></span>;
-    if (equipped) return <button type="button" className="secondary-button" disabled={busy !== null} onClick={() => void call(item.key, 'equip_item', { p_kind: item.kind, p_key: null }, 'Тайллаа.')}><Check size={13} /> ЗҮҮСЭН</button>;
-    if (has) return <button type="button" className="secondary-button" disabled={busy !== null} onClick={() => void call(item.key, 'equip_item', { p_kind: item.kind, p_key: item.key }, 'Зүүлээ!')}>ЗҮҮХ</button>;
+    if (equipped) return <button type="button" className="secondary-button" disabled={busy !== null} onClick={() => void call(item.key, 'equip_item', { p_kind: item.kind, p_key: null }, t('Тайллаа.', 'Removed.'))}><Check size={13} />{t(` ЗҮҮСЭН`, ` EQUIPPED`)}</button>;
+    if (has) return <button type="button" className="secondary-button" disabled={busy !== null} onClick={() => void call(item.key, 'equip_item', { p_kind: item.kind, p_key: item.key }, t('Зүүлээ!', 'Equipped!'))}>{t(`ЗҮҮХ`, `EQUIP`)}</button>;
     if (offer) {
       const deal: ShopItem = { ...item, price: offer.price, currency: offer.currency };
       return <button type="button" className={`primary-button buy-${offer.currency}`} disabled={busy !== null || !canAfford(deal, wallet, free)}
-        onClick={() => void call(item.key, 'buy_offer', { p_offer: offer.id }, `${item.name} таных боллоо!`)}>{free ? <><ShoppingBag size={13} />ҮНЭГҮЙ АВАХ</> : <Price item={deal} />}</button>;
+        onClick={() => void call(item.key, 'buy_offer', { p_offer: offer.id }, t(`${item.name} таных боллоо!`, `${item.name} is yours!`))}>{free ? <><ShoppingBag size={13} />{t(`ҮНЭГҮЙ АВАХ`, `GET FOR FREE`)}</> : <Price item={deal} />}</button>;
     }
-    if (!forSale(item)) return <span className="shop-rank-lock"><Lock size={12} />{prize ? <>{GAME_SHORT[prize.game_type]} · {RANK_NAMES[prize.game_type][prize.level - 1]}</> : item.source === 'rank' ? 'Цол ахиж авна' : 'Одоогоор худалдаагүй'}</span>;
-    return <button type="button" className={`primary-button buy-${item.currency ?? 'coin'}`} disabled={busy !== null || !canAfford(item, wallet, free)} onClick={() => void call(item.key, 'buy_item', { p_key: item.key }, `${item.name} таных боллоо!`)}>{free ? <><ShoppingBag size={13} />ҮНЭГҮЙ АВАХ</> : <Price item={item} />}</button>;
+    if (!forSale(item)) return <span className="shop-rank-lock"><Lock size={12} />{prize ? <>{GAME_SHORT[prize.game_type]} · {RANK_NAMES[prize.game_type][prize.level - 1]}</> : item.source === 'rank' ? t('Цол ахиж авна', 'Won by ranking up') : t('Одоогоор худалдаагүй', 'Not for sale right now')}</span>;
+    return <button type="button" className={`primary-button buy-${item.currency ?? 'coin'}`} disabled={busy !== null || !canAfford(item, wallet, free)} onClick={() => void call(item.key, 'buy_item', { p_key: item.key }, t(`${item.name} таных боллоо!`, `${item.name} is yours!`))}>{free ? <><ShoppingBag size={13} />{t(`ҮНЭГҮЙ АВАХ`, `GET FOR FREE`)}</> : <Price item={item} />}</button>;
   };
 
   /** "−20%" when the offer is cheaper in the same purse, otherwise just "ОНЦЛОХ". */
@@ -492,10 +496,10 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
     const offer = offerOf(item.key);
     const discount = offer ? discountOf(item, offer) : 0;
     return <article key={item.key} className={`shop-card ${equippedFor(item.kind) === item.key ? 'is-equipped' : ''} is-${item.currency ?? 'coin'} ${offer ? 'has-offer' : ''}`}>
-      {offer && <span className="offer-badge">{discount ? `−${discount}%` : 'ОНЦЛОХ'}</span>}
+      {offer && <span className="offer-badge">{discount ? `−${discount}%` : t('ОНЦЛОХ', 'FEATURED')}</span>}
       {visual(item)}
       <b>{item.name}</b>
-      <small>{offer ? <><Clock3 size={10} /> {timeLeft(offer.ends_at, now)} үлдсэн</> : item.description}</small>
+      <small>{offer ? <><Clock3 size={10} />{t(` ${timeLeft(offer.ends_at, now)} үлдсэн`, ` ${timeLeft(offer.ends_at, now)} left`)}</> : item.description}</small>
       {action(item, offer)}
     </article>;
   };
@@ -504,11 +508,11 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
     const discount = discountOf(item, offer);
     const owns = owned.includes(item.key);
     return <article key={offer.id} className={`shop-card is-offer is-${offer.currency} ${equippedFor(item.kind) === item.key ? 'is-equipped' : ''}`}>
-      <span className="offer-badge">{discount ? `−${discount}%` : 'ОНЦЛОХ'}</span>
+      <span className="offer-badge">{discount ? `−${discount}%` : t('ОНЦЛОХ', 'FEATURED')}</span>
       {visual(item)}
       <b>{item.name}</b>
-      <small className="offer-kind">{item.kind === 'frame' ? 'Аватар хүрээ' : item.kind === 'nameplate' ? 'Нэрийн хавтан' : 'Нэрийн хүрээ'}{item.source === 'limited' ? ' · зөвхөн энд' : ''}</small>
-      <span className="offer-time"><Clock3 size={11} /> {timeLeft(offer.ends_at, now)} үлдсэн</span>
+      <small className="offer-kind">{item.kind === 'frame' ? t('Аватар хүрээ', 'Avatar frame') : item.kind === 'nameplate' ? t('Нэрийн хавтан', 'Nameplate') : t('Нэрийн хүрээ', 'Name border')}{item.source === 'limited' ? t(' · зөвхөн энд', ' · only here') : ''}</small>
+      <span className="offer-time"><Clock3 size={11} />{t(` ${timeLeft(offer.ends_at, now)} үлдсэн`, ` ${timeLeft(offer.ends_at, now)} left`)}</span>
       {discount > 0 && !owns && <s className="offer-old"><Price item={item} size={10} /></s>}
       {action(item, offer)}
     </article>;
@@ -516,11 +520,11 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
 
   return <div className="inner-screen panel-screen shop-screen">
     <header className="top-bar panel-top-bar">
-      <button className="icon-button" onClick={onBack} aria-label="Буцах"><ArrowLeft size={17} /></button>
-      <div className="top-title"><span>ХОТЫН ДЭЛГҮҮР</span><strong>ДЭЛГҮҮР</strong></div>
+      <button className="icon-button" onClick={onBack} aria-label={t('Буцах', 'Back')}><ArrowLeft size={17} /></button>
+      <div className="top-title"><span>{t(`ХОТЫН ДЭЛГҮҮР`, `CITY SHOP`)}</span><strong>{t(`ДЭЛГҮҮР`, `SHOP`)}</strong></div>
       <div className="panel-top-trailing">
         <button type="button" className={`shop-bonus ${bonusReady ? 'is-ready' : ''}`} disabled={!bonusReady || busy !== null}
-          onClick={() => void call('bonus', 'claim_daily_bonus', {}, 'Өдрийн бонус +100 зоос!')}><Gift size={13} /> {bonusReady ? 'ӨДРИЙН +100' : 'МАРГААШ'}</button>
+          onClick={() => void call('bonus', 'claim_daily_bonus', {}, t('Өдрийн бонус +100 зоос!', 'Daily bonus +100 coins!'))}><Gift size={13} /> {bonusReady ? t('ӨДРИЙН +100', 'DAILY +100') : t('МАРГААШ', 'TOMORROW')}</button>
         <CoinCount value={me?.coins ?? null} className="is-big" />
         <DiamondCount value={me?.diamonds ?? null} className="is-big" onTopUp={() => setTopUp(true)} />
       </div>
@@ -529,33 +533,33 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
       <div className="admin-choice-row shop-tabs" role="tablist">{TABS.map((item) => <button type="button" role="tab" aria-selected={tab === item.key} key={item.key}
         className={`${tab === item.key ? 'is-picked' : ''} ${item.key === 'offers' ? 'is-offers' : ''}`} onClick={() => setTab(item.key)}>
         {item.key === 'offers' && <Flame size={12} />}{item.label}{item.key === 'offers' && offers.length > 0 && <b className="shop-tab-count">{offers.length}</b>}</button>)}</div>
-      {tab === 'gift' && <p className="admin-note">Бэлгийг тоглолтын үеэр тоглогчийн зураг дээр дарж илгээнэ. Бүх хүнд харагдана. Дээр нь дарж харж болно.</p>}
+      {tab === 'gift' && <p className="admin-note">{t(`Бэлгийг тоглолтын үеэр тоглогчийн зураг дээр дарж илгээнэ. Бүх хүнд харагдана. Дээр нь дарж харж болно.`, `Send gifts during a match by tapping a player’s picture. Everyone sees them, and you can tap one to look.`)}</p>}
       {tab === 'offers' && <section className="shop-section is-offers">
-        <h3 className="shop-section-title"><Flame size={13} />Онцлох · хугацаатай хямдрал</h3>
-        <p className="shop-section-note">Долоо хоног бүрийн даваа гарагт 2 зурган гоёл хямдарч гарна. Хугацаа дуусахад буцаад үндсэн үнэдээ орно.</p>
+        <h3 className="shop-section-title"><Flame size={13} />{t(`Онцлох · хугацаатай хямдрал`, `Featured · limited-time deals`)}</h3>
+        <p className="shop-section-note">{t(`Долоо хоног бүрийн даваа гарагт 2 зурган гоёл хямдарч гарна. Хугацаа дуусахад буцаад үндсэн үнэдээ орно.`, `Every Monday two painted looks go on sale. When time runs out they return to their normal price.`)}</p>
         {offerItems.length
           ? <div className="shop-grid kind-offers">{offerItems.map(offerCard)}</div>
-          : <p className="panel-empty">Одоогоор онцлох санал алга. Даваа гарагт шинэчлэгдэнэ.</p>}
+          : <p className="panel-empty">{t(`Одоогоор онцлох санал алга. Даваа гарагт шинэчлэгдэнэ.`, `No featured offers right now. They refresh on Monday.`)}</p>}
       </section>}
       {sections.map((section) => <section key={section.id} className={`shop-section is-${section.id}`}>
         {sections.length > 1 || section.id !== 'coin'
-          ? <h3 className="shop-section-title">{section.id === 'diamond' ? <Gem size={13} /> : section.id === 'rank' ? <Crown size={13} /> : <Coins size={13} />}{section.id === 'rank' ? 'Цол ахиж авна · хөдөлгөөнт' : CURRENCY_HEADING[section.id]}</h3>
+          ? <h3 className="shop-section-title">{section.id === 'diamond' ? <Gem size={13} /> : section.id === 'rank' ? <Crown size={13} /> : <Coins size={13} />}{section.id === 'rank' ? t('Цол ахиж авна · хөдөлгөөнт', 'Won by ranking up · animated') : CURRENCY_HEADING[section.id]}</h3>
           : null}
-        {section.id === 'rank' && <p className="shop-section-note">Рэйтинг тоглолтод тухайн цолд анх хүрэхэд автоматаар таных болно.</p>}
+        {section.id === 'rank' && <p className="shop-section-note">{t(`Рэйтинг тоглолтод тухайн цолд анх хүрэхэд автоматаар таных болно.`, `Yours automatically the first time you reach that rank in ranked matches.`)}</p>}
         <div className={`shop-grid kind-${tab}`}>{section.list.map(card)}</div>
       </section>)}
-      <p className="admin-note shop-foot"><Coins size={11} /> Зоосыг тоглож олно: ялбал +30 (рэйтинг +50), ялагдвал +10 (+15), өдөрт тоглолтоос 500 хүртэл, өдрийн бонус +100, цол ахихад шагнал. <Crown size={11} /> Хөдөлгөөнт хүрээг цол ахиж авна. <Gem size={11} /> Алмазыг цэнэглэж авна (тун удахгүй).</p>
+      <p className="admin-note shop-foot"><Coins size={11} />{t(` Зоосыг тоглож олно: ялбал +30 (рэйтинг +50), ялагдвал +10 (+15), өдөрт тоглолтоос 500 хүртэл, өдрийн бонус +100, цол ахихад шагнал. `, ` Earn coins by playing: +30 for a win (+50 ranked), +10 for a loss (+15), up to 500 a day from matches, a +100 daily bonus, and prizes for ranking up. `)}<Crown size={11} />{t(` Хөдөлгөөнт хүрээг цол ахиж авна. `, ` Animated frames are won by ranking up. `)}<Gem size={11} />{t(` Алмазыг цэнэглэж авна (тун удахгүй).`, ` Diamonds come from top-ups (coming soon).`)}</p>
     </div>
     {topUp && <TopUpModal onClose={() => setTopUp(false)} />}
     {preview && <div className="game-modal-backdrop" onClick={() => setPreview(null)}>
       <section className="game-modal shop-preview" role="dialog" aria-modal="true" aria-label={preview.name} onClick={(event) => event.stopPropagation()}>
-        {preview.kind === 'frame' && <Avatar name={me?.display_name ?? 'Би'} color={me?.avatar_key ?? 'rose'} url={me?.avatar_url} frame={preview.key} className="shop-avatar is-preview" />}
+        {preview.kind === 'frame' && <Avatar name={me?.display_name ?? t('Би', 'Me')} color={me?.avatar_key ?? 'rose'} url={me?.avatar_url} frame={preview.key} className="shop-avatar is-preview" />}
         {preview.kind === 'gift' && <div className="gift-preview"><div className="gift-burst" aria-hidden="true">{Array.from({ length: 12 }, (_, index) => <i key={index} style={{ ['--i' as string]: index }} />)}</div><div className="gift-big">{preview.icon}</div></div>}
         {preview.kind === 'title' && <TitlePlaque titleKey={preview.key} name={preview.name} size="hero" />}
         {preview.kind === 'nameplate' && <PlatePreview plateKey={preview.key} me={me} large />}
         {preview.kind === 'border' && <PlatePreview plateKey={me?.nameplate_key ?? null} borderKey={preview.key} me={me} large />}
         <h2>{preview.name}</h2><p>{preview.description}</p>
-        <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setPreview(null)}>ХААХ</button></div>
+        <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setPreview(null)}>{t(`ХААХ`, `CLOSE`)}</button></div>
       </section>
     </div>}
   </div>;

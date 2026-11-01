@@ -9,6 +9,7 @@ import type { NotifyFn } from './multiplayer';
 import { playSfx } from './sfx';
 
 import { t } from './lang';
+import { translateMessage } from './i18n';
 export type RankRow = {
   game_type: RankGame; points: number; peak_points: number; matches: number; wins: number; losses: number; current_streak: number; best_streak: number;
 };
@@ -107,7 +108,7 @@ export function RanksScreen({ userId, onBack, onPlay, notify, initialGame = 'maf
     setBusy(true);
     const { error } = await supabase.rpc('equip_item', { p_kind: 'title', p_key: key });
     setBusy(false);
-    if (error) { notify(error.message, 'error'); return; }
+    if (error) { notify(translateMessage(error.message), 'error'); return; }
     playSfx('buy');
     notify(key ? t('Цолоо зүүлээ!', 'Title equipped!') : t('Цолоо тайллаа.', 'Title removed.'), 'success');
     setWearing(key);
