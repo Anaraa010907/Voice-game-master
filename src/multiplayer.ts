@@ -3,6 +3,7 @@ import { regionalFunction, supabase } from './supabaseClient';
 import { translateMessage } from './i18n';
 import type { PrivateGameView, PublicGameView } from './gameEngine';
 
+import { t } from './lang.ts';
 /** How a toast looks: errors red, confirmations green, everything else neutral. */
 export type NoticeTone = 'info' | 'success' | 'error';
 export type NotifyFn = (text: string, tone?: NoticeTone) => void;
@@ -16,10 +17,10 @@ export type RoomSeat = { user_id: string; seat: number; display_name: string; co
  * session attached. Returns the data or throws the server's (translated) error message.
  */
 export async function invokeFunction<T>(name: 'game' | 'livekit-voice', body: Record<string, unknown>): Promise<T> {
-  if (!supabase) throw new Error('Сервер тохируулагдаагүй байна. .env.local файлыг шалгана уу.');
+  if (!supabase) throw new Error(t('Сервер тохируулагдаагүй байна. .env.local файлыг шалгана уу.', 'The server is not set up. Check the .env.local file.'));
   const { data, error } = await supabase.functions.invoke(regionalFunction(name), { body });
   if (error) {
-    let message = 'Сервертэй холбогдож чадсангүй. Дахин оролдоно уу.';
+    let message = t('Сервертэй холбогдож чадсангүй. Дахин оролдоно уу.', 'Could not reach the server. Please try again.');
     const response = (error as { context?: Response }).context;
     if (response && typeof response.json === 'function') {
       try {
@@ -56,7 +57,7 @@ export function useRoom(roomCode: string | null) {
     const failure = roomResult.error ?? seatResult.error;
     if (failure) {
       // Keep the last good state; surface the problem instead of spinning on "connecting" forever.
-      setError('Өрөөний мэдээллийг уншиж чадсангүй. Сервер шинэчлэгдээгүй байж магадгүй.');
+      setError(t('Өрөөний мэдээллийг уншиж чадсангүй. Сервер шинэчлэгдээгүй байж магадгүй.', 'Could not read the room. The server may not be updated yet.'));
       setLoaded(true);
       return;
     }

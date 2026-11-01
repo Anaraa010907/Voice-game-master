@@ -5,6 +5,7 @@ import { i18n } from './i18n';
 import { supabase, supabaseConfigured } from './supabaseClient';
 import { invokeFunction } from './multiplayer';
 import { voicePhaseAllowsSpeaking, type VoicePhase } from '../supabase/functions/_shared/voicePolicy';
+import { t } from './lang';
 export type { VoicePhase } from '../supabase/functions/_shared/voicePolicy';
 
 type VoiceConnection = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
@@ -384,7 +385,7 @@ function VoiceControls({ location, userId, phase, alive, isHost }: {
   const localParticipant = voice.participants.find((participant) => participant.identity === userId);
   const micDisabled = !canTalkInPhase || voice.connection === 'connecting' || !hasService;
 
-  return <section className={`voice-dock voice-dock-${location} ${expanded ? 'is-expanded' : ''}`} aria-label="Дуу хоолойн удирдлага">
+  return <section className={`voice-dock voice-dock-${location} ${expanded ? 'is-expanded' : ''}`} aria-label={t('Дуу хоолойн удирдлага', 'Voice controls')}>
     <div className="voice-dock-summary">
       <div className="voice-dock-status">
         <span className={`voice-status-light status-${voice.connection}`} />
@@ -403,8 +404,8 @@ function VoiceControls({ location, userId, phase, alive, isHost }: {
         {voice.speakerOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
       </button>
       <button type="button" className="voice-summary-button voice-expand-button" onClick={() => setExpanded((value) => !value)}
-        aria-expanded={expanded} aria-controls="voice-dock-details" aria-label={expanded ? 'Дууны удирдлага хураах' : 'Дууны удирдлага дэлгэрүүлэх'}
-        title={expanded ? 'Хураах' : 'Дэлгэрүүлэх'}>
+        aria-expanded={expanded} aria-controls="voice-dock-details" aria-label={expanded ? t('Дууны удирдлага хураах', 'Collapse voice controls') : t('Дууны удирдлага дэлгэрүүлэх', 'Expand voice controls')}
+        title={expanded ? t('Хураах', 'Collapse') : t('Дэлгэрүүлэх', 'Expand')}>
         <ChevronDown size={16} />
       </button>
     </div>

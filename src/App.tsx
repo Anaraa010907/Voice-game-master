@@ -182,7 +182,7 @@ export default function App() {
       if (roomCode && roomCode !== code) { try { await callGame('leave', { roomCode }); } catch { /* already gone */ } }
       await joinRoom(code, '');
     } catch (cause) {
-      notify(cause instanceof Error ? cause.message : 'Өрөөнд нэгдэж чадсангүй.', 'error');
+      notify(cause instanceof Error ? cause.message : t('Өрөөнд нэгдэж чадсангүй.', 'Could not join the room.'), 'error');
     }
   };
 
@@ -218,7 +218,7 @@ export default function App() {
 
   const requireAccount = (next: Screen) => {
     if (userId) return setScreen(next);
-    notify('Онлайн тоглохын тулд эхлээд нэвтэрнэ үү.');
+    notify(t('Онлайн тоглохын тулд эхлээд нэвтэрнэ үү.', 'Sign in first to play online.'));
     openAuth('sign-in');
   };
 
@@ -261,13 +261,13 @@ export default function App() {
       const { data, error } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', userId).select('*').single();
       if (error) {
         if (url) await removeProfilePhoto(userId, url);
-        return 'Профайл зургийг хадгалж чадсангүй.';
+        return t('Профайл зургийг хадгалж чадсангүй.', 'Could not save the profile picture.');
       }
       setProfile(data as PublicProfile);
       if (previous && previous !== url) await removeProfilePhoto(userId, previous);
       return '';
     } catch (cause) {
-      return cause instanceof Error ? cause.message : 'Профайл зургийг хадгалж чадсангүй.';
+      return cause instanceof Error ? cause.message : t('Профайл зургийг хадгалж чадсангүй.', 'Could not save the profile picture.');
     }
   };
 
@@ -276,7 +276,7 @@ export default function App() {
     if (!supabase || !userId) return translateMessage('Sign in again before editing your profile.');
     const previous = profile?.avatar_url ?? null;
     const { data, error } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', userId).select('*').single();
-    if (error) return 'Профайл зургийг хадгалж чадсангүй.';
+    if (error) return t('Профайл зургийг хадгалж чадсангүй.', 'Could not save the profile picture.');
     setProfile(data as PublicProfile);
     if (previous && previous !== url) await removeProfilePhoto(userId, previous);
     return '';
@@ -292,7 +292,7 @@ export default function App() {
 
   return (
     <main className="viewport">
-      <section className={`game-frame screen-${screen}`} aria-label="MAFIA: SHADOWS тоглоом">
+      <section className={`game-frame screen-${screen}`} aria-label={t('MAFIA: SHADOWS тоглоом', 'MAFIA: SHADOWS game')}>
         <div className="grain" aria-hidden="true" />
         {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} onFeedback={() => requireAccount('feedback')} onShop={() => requireAccount('shop')} onPass={() => requireAccount('pass')} onRanks={() => requireAccount('ranks')} onFriends={() => requireAccount('friends')} friendBadge={friendsState.badge} signedIn={Boolean(userId)} staffRole={staffRole} onAuth={openAuth} fullscreen={fullscreen} />}
         {screen === 'hub' && <GameHub onBack={goBack} onChoose={(type) => { setGameType(type); setWantRanked(false); setScreen('browse'); }} onJoinCode={() => setScreen('join-room')} />}
@@ -329,7 +329,7 @@ export default function App() {
           && <BannedOverlay ban={ban!} onSignOut={() => openAuth('sign-out')} onFeedback={() => setScreen('feedback')} />}
         {screen === 'settings' && <Settings onBack={goBack} onProfile={() => setScreen('profile')} onAuth={() => openAuth(userId ? 'sign-out' : 'sign-in')} signedIn={Boolean(userId)} />}
         {userId && profile && needsName(profile.display_name) && !namePromptDismissed && screen !== 'auth' && screen !== 'profile'
-          && <NameSetup current={profile.display_name} onSave={(name) => saveProfile(name, profile.avatar_key)} onLater={() => setNamePromptDismissed(true)} onDone={() => notify('Нэр хадгалагдлаа.', 'success')} />}
+          && <NameSetup current={profile.display_name} onSave={(name) => saveProfile(name, profile.avatar_key)} onLater={() => setNamePromptDismissed(true)} onDone={() => notify(t('Нэр хадгалагдлаа.', 'Name saved.'), 'success')} />}
         {notice && <div className={`toast is-${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}>{notice.tone === 'error' ? <CircleAlert size={14} /> : notice.tone === 'success' ? <Check size={14} /> : <Info size={14} />}{notice.text}</div>}
       </section>
       <div className="rotate-overlay" aria-live="polite">
@@ -390,29 +390,29 @@ function CreateRoom({ gameType, startRanked, onBack, onCreate }: { gameType: Gam
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!name.trim()) return setError('Өрөөний нэрийг оруулаад үүсгэнэ үү.');
-    if (!ranked && !isPublic && password && password.length < 4) return setError('Өрөөний нууц үг хамгийн багадаа 4 тэмдэгт байна.');
+    if (!name.trim()) return setError(t('Өрөөний нэрийг оруулаад үүсгэнэ үү.', 'Enter a room name to create the room.'));
+    if (!ranked && !isPublic && password && password.length < 4) return setError(t('Өрөөний нууц үг хамгийн багадаа 4 тэмдэгт байна.', 'The room password needs at least 4 characters.'));
     setError('');
     setBusy(true);
     try {
       const open = ranked || isPublic;
       await onCreate({ name: name.trim(), maxPlayers, isPublic: open, password: open ? '' : password, gameType, ranked, ...(gameType === 'monopoly' ? { settings: { rounds: ranked ? null : rounds } } : {}) });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Өрөө үүсгэж чадсангүй.');
+      setError(cause instanceof Error ? cause.message : t('Өрөө үүсгэж чадсангүй.', 'Could not create the room.'));
     } finally {
       setBusy(false);
     }
   };
 
-  return <div className="inner-screen setup-screen"><TopBar title="ӨРӨӨ ҮҮСГЭХ" subtitle="ӨРӨӨНИЙ ТӨХИРГӨӨ" onBack={onBack} /><div className="setup-content"><div className="setup-heading"><div className="eyebrow left-eye">ТӨХИРГӨӨ СОНГОХ</div><h1>Өөрийнхөө <i>өрөөг</i> бүтээ.</h1><p><b className="setup-game-name">{game.title}</b> · Өрөөний кодыг найзууддаа илгээгээрэй. Дор хаяж {game.minPlayers} хүн нэгдвэл тоглоом эхэлнэ.</p></div><form className="room-form" onSubmit={submit}>
-    <label className="form-field room-name-field"><span>{i18n.app.roomName.toUpperCase()}</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder="Өрөөний нэрээ оруулна уу" /></label>
-    <label className="form-field"><span>{i18n.app.maxPlayers.toUpperCase()}</span><select value={maxPlayers} onChange={(event) => setMaxPlayers(Number(event.target.value))}>{game.sizes.map((count) => <option key={count} value={count}>{count} тоглогч</option>)}</select></label>
-    {gameType === 'monopoly' && <label className="form-field"><span>ТОГЛОХ ХУГАЦАА</span><select disabled={ranked} value={ranked || rounds === null ? 'all' : rounds} onChange={(event) => setRounds(event.target.value === 'all' ? null : Number(event.target.value))}>{ROUND_OPTIONS.map((option) => <option key={String(option)} value={option === null ? 'all' : option}>{option === null ? 'Бусад нь дампууртал' : roundsLabel(option)}</option>)}</select></label>}
-    <div className={`private-setting ranked-setting ${ranked ? 'is-on' : ''}`}><span><b><Swords size={13} /> Рэйтинг тоглолт</b><small>{ranked ? (gameType === 'monopoly' ? 'Цол, оноо хожино · бусад нь дампууртал тоглоно' : 'Цол, оноо хожино · стандарт дүрэм, тогтмол цаг') : 'Энгийн тоглолт: оноо, цол өөрчлөгдөхгүй'}</small></span><button type="button" role="switch" aria-checked={ranked} aria-label="Рэйтинг тоглолт" className={`toggle ${ranked ? 'toggle-on' : ''}`} onClick={() => setRanked((value) => !value)}><i /></button></div>
-    <div className={`private-setting ${ranked ? 'is-disabled' : ''}`}><span><b>Нийтэд нээлттэй</b><small>{ranked ? 'Рэйтинг өрөө үргэлж нийтэд нээлттэй' : isPublic ? 'Өрөөний жагсаалтад харагдана, хэн ч нэгдэнэ' : 'Зөвхөн кодоор нэгдэнэ, нууц үг тавьж болно'}</small></span><button type="button" role="switch" aria-checked={ranked || isPublic} disabled={ranked} className={`toggle ${ranked || isPublic ? 'toggle-on' : ''}`} onClick={() => setIsPublic((value) => !value)}><i /></button></div>
-    {!ranked && !isPublic && <label className="form-field password-field"><span>ӨРӨӨНИЙ НУУЦ ҮГ <small>СОНГОЛТТОЙ</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} maxLength={32} placeholder="Нууц үггүй орж болно" autoComplete="new-password" /></label>}
+  return <div className="inner-screen setup-screen"><TopBar title={t('ӨРӨӨ ҮҮСГЭХ', 'CREATE ROOM')} subtitle={t('ӨРӨӨНИЙ ТӨХИРГӨӨ', 'ROOM SETTINGS')} onBack={onBack} /><div className="setup-content"><div className="setup-heading"><div className="eyebrow left-eye">{t(`ТӨХИРГӨӨ СОНГОХ`, `CHOOSE YOUR SETTINGS`)}</div><h1>{t(`Өөрийнхөө `, `Build your `)}<i>{t(`өрөөг`, `own room`)}</i>{t(` бүтээ.`, `.`)}</h1><p><b className="setup-game-name">{game.title}</b>{t(` · Өрөөний кодыг найзууддаа илгээгээрэй. Дор хаяж ${game.minPlayers} хүн нэгдвэл тоглоом эхэлнэ.`, ` · Send the room code to your friends. The game starts once at least ${game.minPlayers} players join.`)}</p></div><form className="room-form" onSubmit={submit}>
+    <label className="form-field room-name-field"><span>{i18n.app.roomName.toUpperCase()}</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder={t('Өрөөний нэрээ оруулна уу', 'Enter a room name')} /></label>
+    <label className="form-field"><span>{i18n.app.maxPlayers.toUpperCase()}</span><select value={maxPlayers} onChange={(event) => setMaxPlayers(Number(event.target.value))}>{game.sizes.map((count) => <option key={count} value={count}>{t(`${count} тоглогч`, `${count} players`)}</option>)}</select></label>
+    {gameType === 'monopoly' && <label className="form-field"><span>{t(`ТОГЛОХ ХУГАЦАА`, `GAME LENGTH`)}</span><select disabled={ranked} value={ranked || rounds === null ? 'all' : rounds} onChange={(event) => setRounds(event.target.value === 'all' ? null : Number(event.target.value))}>{ROUND_OPTIONS.map((option) => <option key={String(option)} value={option === null ? 'all' : option}>{option === null ? t('Бусад нь дампууртал', 'Until the others go bankrupt') : roundsLabel(option)}</option>)}</select></label>}
+    <div className={`private-setting ranked-setting ${ranked ? 'is-on' : ''}`}><span><b><Swords size={13} />{t(` Рэйтинг тоглолт`, ` Ranked match`)}</b><small>{ranked ? (gameType === 'monopoly' ? t('Цол, оноо хожино · бусад нь дампууртал тоглоно', 'Win rank points · play until the others go bankrupt') : t('Цол, оноо хожино · стандарт дүрэм, тогтмол цаг', 'Win rank points · standard rules, fixed timers')) : t('Энгийн тоглолт: оноо, цол өөрчлөгдөхгүй', 'Casual match: no change to points or rank')}</small></span><button type="button" role="switch" aria-checked={ranked} aria-label={t('Рэйтинг тоглолт', 'Ranked match')} className={`toggle ${ranked ? 'toggle-on' : ''}`} onClick={() => setRanked((value) => !value)}><i /></button></div>
+    <div className={`private-setting ${ranked ? 'is-disabled' : ''}`}><span><b>{t(`Нийтэд нээлттэй`, `Public room`)}</b><small>{ranked ? t('Рэйтинг өрөө үргэлж нийтэд нээлттэй', 'Ranked rooms are always public') : isPublic ? t('Өрөөний жагсаалтад харагдана, хэн ч нэгдэнэ', 'Listed in the room list; anyone can join') : t('Зөвхөн кодоор нэгдэнэ, нууц үг тавьж болно', 'Join by code only; you can set a password')}</small></span><button type="button" role="switch" aria-checked={ranked || isPublic} disabled={ranked} className={`toggle ${ranked || isPublic ? 'toggle-on' : ''}`} onClick={() => setIsPublic((value) => !value)}><i /></button></div>
+    {!ranked && !isPublic && <label className="form-field password-field"><span>{t(`ӨРӨӨНИЙ НУУЦ ҮГ `, `ROOM PASSWORD `)}<small>{t(`СОНГОЛТТОЙ`, `OPTIONAL`)}</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} maxLength={32} placeholder={t('Нууц үггүй орж болно', 'Leave empty for no password')} autoComplete="new-password" /></label>}
     {error && <p className="form-error" role="alert">{error}</p>}
-    <div className="form-actions"><button type="button" className="secondary-button" onClick={onBack}><ArrowLeft size={15} /> {i18n.common.back.toUpperCase()}</button><button type="submit" className="primary-button" disabled={busy}><Users size={15} /> {busy ? 'ҮҮСГЭЖ БАЙНА…' : i18n.app.createRoom.toUpperCase()} <ChevronRight size={16} /></button></div>
+    <div className="form-actions"><button type="button" className="secondary-button" onClick={onBack}><ArrowLeft size={15} /> {i18n.common.back.toUpperCase()}</button><button type="submit" className="primary-button" disabled={busy}><Users size={15} /> {busy ? t('ҮҮСГЭЖ БАЙНА…', 'CREATING…') : i18n.app.createRoom.toUpperCase()} <ChevronRight size={16} /></button></div>
   </form></div></div>;
 }
 
@@ -428,35 +428,35 @@ function JoinRoom({ onBack, onJoin }: { onBack: () => void; onJoin: (code: strin
     try {
       await onJoin(code, password);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Өрөөнд нэгдэж чадсангүй.');
+      setError(cause instanceof Error ? cause.message : t('Өрөөнд нэгдэж чадсангүй.', 'Could not join the room.'));
     } finally {
       setBusy(false);
     }
   };
-  return <div className="inner-screen setup-screen"><TopBar title="ӨРӨӨНД НЭГДЭХ" subtitle="ШИРЭЭНД НЭГДЭХ" onBack={onBack} /><div className="join-content"><div className="setup-heading"><div className="eyebrow left-eye">ХОТ ХҮЛЭЭЖ БАЙНА</div><h1>Код <i>мэдэх үү?</i></h1><p>Найзынхаа илгээсэн өрөөний кодыг оруулна уу.</p></div><form className="join-form" onSubmit={submit}>
+  return <div className="inner-screen setup-screen"><TopBar title={t('ӨРӨӨНД НЭГДЭХ', 'JOIN ROOM')} subtitle={t('ШИРЭЭНД НЭГДЭХ', 'JOIN A TABLE')} onBack={onBack} /><div className="join-content"><div className="setup-heading"><div className="eyebrow left-eye">{t(`ХОТ ХҮЛЭЭЖ БАЙНА`, `THE CITY IS WAITING`)}</div><h1>{t(`Код `, `Got a `)}<i>{t(`мэдэх үү?`, `code?`)}</i></h1><p>{t(`Найзынхаа илгээсэн өрөөний кодыг оруулна уу.`, `Enter the room code your friend sent you.`)}</p></div><form className="join-form" onSubmit={submit}>
     <label className="form-field"><span>{i18n.app.roomCode.toUpperCase()}</span><input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} maxLength={11} placeholder="NIGHT-7XQ2" autoComplete="off" autoCapitalize="characters" /></label>
-    <label className="form-field"><span>ӨРӨӨНИЙ НУУЦ ҮГ <small>ШААРДЛАГАТАЙ БОЛ</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Нууц үг оруулна уу" autoComplete="off" /></label>
+    <label className="form-field"><span>{t(`ӨРӨӨНИЙ НУУЦ ҮГ `, `ROOM PASSWORD `)}<small>{t(`ШААРДЛАГАТАЙ БОЛ`, `IF REQUIRED`)}</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={t('Нууц үг оруулна уу', 'Enter the password')} autoComplete="off" /></label>
     {error && <p className="form-error" role="alert">{error}</p>}
-    <div className="form-actions"><button type="button" className="secondary-button" onClick={onBack}><ArrowLeft size={15} /> {i18n.common.back.toUpperCase()}</button><button type="submit" className="primary-button" disabled={busy}><Radio size={15} /> {busy ? 'НЭГДЭЖ БАЙНА…' : i18n.app.joinRoom.toUpperCase()} <ChevronRight size={16} /></button></div>
+    <div className="form-actions"><button type="button" className="secondary-button" onClick={onBack}><ArrowLeft size={15} /> {i18n.common.back.toUpperCase()}</button><button type="submit" className="primary-button" disabled={busy}><Radio size={15} /> {busy ? t('НЭГДЭЖ БАЙНА…', 'JOINING…') : i18n.app.joinRoom.toUpperCase()} <ChevronRight size={16} /></button></div>
   </form></div></div>;
 }
 
 /** Choose a game type: two large cards (board game / voice game) with illustrations. */
 function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoose: (type: GameType) => void; onJoinCode: () => void }) {
   const [guideOpen, setGuideOpen] = useState(false);
-  return <div className="inner-screen hub-screen"><TopBar title="ТОГЛООМ СОНГОНО УУ" subtitle="ТОГЛОХ" onBack={onBack} trailing={<button className="text-button hub-code-button" onClick={onJoinCode}><Radio size={14} /> КОДООР НЭГДЭХ</button>} />
+  return <div className="inner-screen hub-screen"><TopBar title={t('ТОГЛООМ СОНГОНО УУ', 'CHOOSE A GAME')} subtitle={t('ТОГЛОХ', 'PLAY')} onBack={onBack} trailing={<button className="text-button hub-code-button" onClick={onJoinCode}><Radio size={14} />{t(` КОДООР НЭГДЭХ`, ` JOIN BY CODE`)}</button>} />
     <div className="hub-cards">
       <article className="hub-card hub-card-board" style={{ '--hub-bg': "url('/assets/hub/board-bg.jpg')" } as CSSProperties}>
         <h2>BOARD GAME</h2>
-        <button type="button" className="hub-guide" onClick={() => setGuideOpen(true)}><BookOpen size={13} /> ХЭРХЭН ТОГЛОХ</button>
-        <button type="button" className="hub-play" onClick={() => onChoose('monopoly')}>ТОГЛОХ <ChevronRight size={18} /></button>
-        <p className="hub-card-meta"><b>{GAMES.monopoly.title}</b>{GAMES.monopoly.players} · Монгол газрууд, гэр бааз</p>
+        <button type="button" className="hub-guide" onClick={() => setGuideOpen(true)}><BookOpen size={13} />{t(` ХЭРХЭН ТОГЛОХ`, ` HOW TO PLAY`)}</button>
+        <button type="button" className="hub-play" onClick={() => onChoose('monopoly')}>{t(`ТОГЛОХ `, `PLAY `)}<ChevronRight size={18} /></button>
+        <p className="hub-card-meta"><b>{GAMES.monopoly.title}</b>{t(`${GAMES.monopoly.players} · Монгол газрууд, гэр бааз`, `${GAMES.monopoly.players} · Mongolian places, ger camps`)}</p>
       </article>
 
       <article className="hub-card hub-card-voice" style={{ '--hub-bg': "url('/assets/hub/voice-bg.jpg')" } as CSSProperties}>
         <h2>VOICE GAME</h2>
-        <button type="button" className="hub-play" onClick={() => onChoose('mafia')}>ТОГЛОХ <ChevronRight size={18} /></button>
-        <p className="hub-card-meta"><b>{GAMES.mafia.title}</b>{GAMES.mafia.players} · Дуут чат, нууц дүр</p>
+        <button type="button" className="hub-play" onClick={() => onChoose('mafia')}>{t(`ТОГЛОХ `, `PLAY `)}<ChevronRight size={18} /></button>
+        <p className="hub-card-meta"><b>{GAMES.mafia.title}</b>{t(`${GAMES.mafia.players} · Дуут чат, нууц дүр`, `${GAMES.mafia.players} · Voice chat, secret roles`)}</p>
       </article>
     </div>
     {guideOpen && <MonopolyGuide onClose={() => setGuideOpen(false)} />}
@@ -477,7 +477,7 @@ function RoomBrowser({ gameType, rankedFirst, onBack, onCreate, onJoinCode, onEn
       setRooms(rankedFirst ? [...list].sort((left, right) => Number(Boolean(right.ranked)) - Number(Boolean(left.ranked))) : list);
       setError('');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Өрөөнүүдийг ачаалж чадсангүй.');
+      setError(cause instanceof Error ? cause.message : t('Өрөөнүүдийг ачаалж чадсангүй.', 'Could not load the rooms.'));
     }
   }, [gameType, rankedFirst]);
 
@@ -493,7 +493,7 @@ function RoomBrowser({ gameType, rankedFirst, onBack, onCreate, onJoinCode, onEn
       const result = await callGame<{ roomCode: string }>('join', { roomCode: code });
       onEnter(result.roomCode);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Өрөөнд нэгдэж чадсангүй.');
+      setError(cause instanceof Error ? cause.message : t('Өрөөнд нэгдэж чадсангүй.', 'Could not join the room.'));
       void load();
     } finally {
       setBusy('');
@@ -505,31 +505,31 @@ function RoomBrowser({ gameType, rankedFirst, onBack, onCreate, onJoinCode, onEn
     try {
       const result = await callGame<{ roomCode: string | null }>('quick', { gameType, ranked: rankedFirst });
       if (result.roomCode) onEnter(result.roomCode);
-      else setError('Одоогоор нээлттэй өрөө алга. Өөрөө өрөө үүсгээд бусдыг хүлээгээрэй.');
+      else setError(t('Одоогоор нээлттэй өрөө алга. Өөрөө өрөө үүсгээд бусдыг хүлээгээрэй.', 'No open rooms right now. Create one and wait for others to join.'));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Өрөө олдсонгүй.');
+      setError(cause instanceof Error ? cause.message : t('Өрөө олдсонгүй.', 'Room not found.'));
     } finally {
       setBusy('');
     }
   };
 
-  return <div className="inner-screen browse-screen"><TopBar title={game.title.toUpperCase()} subtitle="НЭЭЛТТЭЙ ӨРӨӨНҮҮД" onBack={onBack} trailing={<button className="icon-button" onClick={() => { void load(); }} aria-label="Шинэчлэх" title="Шинэчлэх"><RefreshCw size={15} /></button>} />
+  return <div className="inner-screen browse-screen"><TopBar title={game.title.toUpperCase()} subtitle={t('НЭЭЛТТЭЙ ӨРӨӨНҮҮД', 'OPEN ROOMS')} onBack={onBack} trailing={<button className="icon-button" onClick={() => { void load(); }} aria-label={t('Шинэчлэх', 'Refresh')} title={t('Шинэчлэх', 'Refresh')}><RefreshCw size={15} /></button>} />
     <div className="browse-content">
       <section className="browse-list" aria-live="polite">
-        {rooms === null && !error && <div className="browse-empty">Өрөөнүүдийг хайж байна…</div>}
-        {rooms !== null && rooms.length === 0 && <div className="browse-empty"><Users size={20} /><b>Нээлттэй өрөө алга</b><span>Өөрөө өрөө үүсгээд кодоо найзууддаа илгээгээрэй.</span></div>}
+        {rooms === null && !error && <div className="browse-empty">{t(`Өрөөнүүдийг хайж байна…`, `Looking for rooms…`)}</div>}
+        {rooms !== null && rooms.length === 0 && <div className="browse-empty"><Users size={20} /><b>{t(`Нээлттэй өрөө алга`, `No open rooms`)}</b><span>{t(`Өөрөө өрөө үүсгээд кодоо найзууддаа илгээгээрэй.`, `Create a room and send its code to your friends.`)}</span></div>}
         {rooms?.map((room) => <div className={`browse-room ${room.ranked ? 'is-ranked' : ''}`} key={room.roomCode}>
-          <div className="browse-room-copy"><b>{room.ranked && <span className="ranked-badge"><Swords size={10} /> РЭЙТИНГ</span>}{room.name}</b><span>Эзэн: {room.hostName} · {room.roomCode}</span></div>
+          <div className="browse-room-copy"><b>{room.ranked && <span className="ranked-badge"><Swords size={10} />{t(` РЭЙТИНГ`, ` RANKED`)}</span>}{room.name}</b><span>{t(`Эзэн: ${room.hostName} · ${room.roomCode}`, `Host: ${room.hostName} · ${room.roomCode}`)}</span></div>
           <div className="browse-room-count"><div className="browse-seats" aria-hidden="true">{Array.from({ length: room.maxPlayers }, (_, index) => <i key={index} className={index < room.players ? 'taken' : ''} />)}</div><span>{room.players}/{room.maxPlayers}</span></div>
-          <button className="primary-button browse-join" disabled={Boolean(busy)} onClick={() => room.joined ? onEnter(room.roomCode) : join(room.roomCode)}>{room.joined ? 'БУЦАХ' : busy === room.roomCode ? '…' : 'НЭГДЭХ'} <ChevronRight size={14} /></button>
+          <button className="primary-button browse-join" disabled={Boolean(busy)} onClick={() => room.joined ? onEnter(room.roomCode) : join(room.roomCode)}>{room.joined ? t('БУЦАХ', 'BACK') : busy === room.roomCode ? '…' : t('НЭГДЭХ', 'JOIN')} <ChevronRight size={14} /></button>
         </div>)}
       </section>
       <aside className="browse-actions">
-        <button className="primary-button browse-quick" disabled={Boolean(busy)} onClick={quick}><Zap size={16} /> {busy === 'quick' ? 'ХАЙЖ БАЙНА…' : 'ХУРДАН НЭГДЭХ'}</button>
+        <button className="primary-button browse-quick" disabled={Boolean(busy)} onClick={quick}><Zap size={16} /> {busy === 'quick' ? t('ХАЙЖ БАЙНА…', 'SEARCHING…') : t('ХУРДАН НЭГДЭХ', 'QUICK JOIN')}</button>
         <button className="secondary-button" onClick={onCreate}><Users size={15} /> {i18n.app.createRoom.toUpperCase()}</button>
-        <button className="secondary-button" onClick={onJoinCode}><Radio size={15} /> КОДООР НЭГДЭХ</button>
+        <button className="secondary-button" onClick={onJoinCode}><Radio size={15} />{t(` КОДООР НЭГДЭХ`, ` JOIN BY CODE`)}</button>
         {error && <p className="form-error" role="alert">{error}</p>}
-        <p className="browse-note">{game.title}: дор хаяж {game.minPlayers} хүн хэрэгтэй. Хурдан нэгдэх нь хамгийн дүүрэх дөхсөн өрөөнд оруулна.</p>
+        <p className="browse-note">{t(`${game.title}: дор хаяж ${game.minPlayers} хүн хэрэгтэй. Хурдан нэгдэх нь хамгийн дүүрэх дөхсөн өрөөнд оруулна.`, `${game.title}: needs at least ${game.minPlayers} players. Quick join puts you in the room closest to full.`)}</p>
       </aside>
     </div>
   </div>;
@@ -560,7 +560,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
   useEffect(() => {
     // The room was closed, or this player is no longer seated (left on another device).
     if (loaded && (missing || (room && !mine))) {
-      onNotice(missing ? 'Өрөө хаагдсан байна.' : 'Та энэ өрөөнд байхгүй байна.');
+      onNotice(missing ? t('Өрөө хаагдсан байна.', 'The room has closed.') : t('Та энэ өрөөнд байхгүй байна.', 'You are not in this room.'));
       onLeft();
     }
   }, [loaded, missing, room, mine, onLeft, onNotice]);
@@ -572,7 +572,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
       await reload();
       return true;
     } catch (cause) {
-      onNotice(cause instanceof Error ? cause.message : 'Алдаа гарлаа.', 'error');
+      onNotice(cause instanceof Error ? cause.message : t('Алдаа гарлаа.', 'Something went wrong.'), 'error');
       return false;
     } finally {
       setBusy(false);
@@ -584,7 +584,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
     onLeft();
   };
 
-  if (!room || !mine) return <div className="inner-screen"><TopBar title="ӨРӨӨ" subtitle={error ? 'АЛДАА' : 'АЧААЛЖ БАЙНА'} onBack={leave} /><div className="room-loading">{error ?? 'Өрөөнд холбогдож байна…'}</div></div>;
+  if (!room || !mine) return <div className="inner-screen"><TopBar title={t('ӨРӨӨ', 'ROOM')} subtitle={error ? t('АЛДАА', 'ERROR') : t('АЧААЛЖ БАЙНА', 'LOADING')} onBack={leave} /><div className="room-loading">{error ?? t('Өрөөнд холбогдож байна…', 'Connecting to the room…')}</div></div>;
 
   if (room.status !== 'lobby' && room.game_type === 'monopoly') {
     return <><MonopolyScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} onProfile={openProfile} />{overlays}</>;
@@ -602,35 +602,35 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
   const minimum = GAMES[room.game_type ?? 'mafia'].minPlayers;
   const canStart = seats.length >= minimum && waitingFor.length === 0;
   const hint = seats.length < minimum
-    ? `Дор хаяж ${minimum} тоглогч хэрэгтэй · одоо ${seats.length}`
-    : waitingFor.length ? `Хүлээж байна: ${waitingFor.map((seat) => seat.display_name).join(', ')}` : 'Бүгд бэлэн!';
+    ? t(`Дор хаяж ${minimum} тоглогч хэрэгтэй · одоо ${seats.length}`, `Needs at least ${minimum} players · now ${seats.length}`)
+    : waitingFor.length ? t(`Хүлээж байна: ${waitingFor.map((seat) => seat.display_name).join(', ')}`, `Waiting for: ${waitingFor.map((seat) => seat.display_name).join(', ')}`) : t('Бүгд бэлэн!', 'Everyone is ready!');
 
   return (
     <VoiceChatProvider roomCode={roomCode} userId={userId} phase="lobby" alive isHost={isHost}>
       <div className="inner-screen lobby-screen">
-        <TopBar title={room.name.toUpperCase()} subtitle={`${GAMES[room.game_type ?? 'mafia'].title.toUpperCase()} · ЛОББИ`} onBack={leave} />
+        <TopBar title={room.name.toUpperCase()} subtitle={t(`${GAMES[room.game_type ?? 'mafia'].title.toUpperCase()} · ЛОББИ`, `${GAMES[room.game_type ?? 'mafia'].title.toUpperCase()} · LOBBY`)} onBack={leave} />
         <div className={`lobby-content capacity-${room.max_players}`}>
           <div className="lobby-heading">
-            <div><div className="eyebrow left-eye">ХОТ СЭРЭХЭЭСЭЭ ӨМНӨ</div><h1>Бүлгээ <i>цуглуулаарай.</i></h1></div>
-            <div className="room-code"><span>{i18n.app.roomCode.toUpperCase()}</span><strong>{roomCode}</strong><button aria-label="Өрөөний код хуулах" title="Өрөөний код хуулах" onClick={onCopy}>{copied ? <Check size={16} /> : <Clipboard size={16} />}</button></div>
+            <div><div className="eyebrow left-eye">{t(`ХОТ СЭРЭХЭЭСЭЭ ӨМНӨ`, `BEFORE THE CITY WAKES`)}</div><h1>{t(`Бүлгээ `, `Gather your `)}<i>{t(`цуглуулаарай.`, `crew.`)}</i></h1></div>
+            <div className="room-code"><span>{i18n.app.roomCode.toUpperCase()}</span><strong>{roomCode}</strong><button aria-label={t('Өрөөний код хуулах', 'Copy room code')} title={t('Өрөөний код хуулах', 'Copy room code')} onClick={onCopy}>{copied ? <Check size={16} /> : <Clipboard size={16} />}</button></div>
           </div>
-          <div className="lobby-toolbar"><span><Users size={14} /> ТОГЛОГЧИД <b>{String(seats.length).padStart(2, '0')}</b> <span className="muted">/ {room.max_players}</span></span><span className="room-visibility">{room.ranked && <span className="ranked-badge"><Swords size={10} /> РЭЙТИНГ</span>}{room.is_private ? 'ХУВИЙН · ЗӨВХӨН КОДООР' : 'НИЙТЭД НЭЭЛТТЭЙ'}</span></div>
+          <div className="lobby-toolbar"><span><Users size={14} />{t(` ТОГЛОГЧИД `, ` PLAYERS `)}<b>{String(seats.length).padStart(2, '0')}</b> <span className="muted">/ {room.max_players}</span></span><span className="room-visibility">{room.ranked && <span className="ranked-badge"><Swords size={10} />{t(` РЭЙТИНГ`, ` RANKED`)}</span>}{room.is_private ? t('ХУВИЙН · ЗӨВХӨН КОДООР', 'PRIVATE · CODE ONLY') : t('НИЙТЭД НЭЭЛТТЭЙ', 'PUBLIC')}</span></div>
           <div className="player-grid">
             {seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={seat.user_id === userId}
               onRemoveBot={isHost && seat.is_bot ? () => run('bot-remove', { seat: seat.seat }) : undefined} busy={busy} onProfile={() => setProfileSeat(seat)} />)}
             {Array.from({ length: emptySlots }, (_, index) => isHost && botsAllowed
-              ? <button type="button" className="invite-slot add-bot-slot" key={`slot-${index}`} disabled={busy} onClick={() => run('bot-add')}><Bot size={20} /><small>БОТ НЭМЭХ</small></button>
-              : <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>СУЛ СУУДАЛ</small></div>)}
+              ? <button type="button" className="invite-slot add-bot-slot" key={`slot-${index}`} disabled={busy} onClick={() => run('bot-add')}><Bot size={20} /><small>{t(`БОТ НЭМЭХ`, `ADD BOT`)}</small></button>
+              : <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>{t(`СУЛ СУУДАЛ`, `EMPTY SEAT`)}</small></div>)}
           </div>
           {(room.game_type ?? 'mafia') === 'mafia'
             ? <MafiaRulesCard settings={room.settings} players={seats.length} isHost={isHost && !room.ranked} busy={busy} ranked={room.ranked === true} onEdit={() => setRulesOpen(true)} />
             : <BoardRulesCard settings={room.settings} isHost={isHost && !room.ranked} busy={busy} ranked={room.ranked === true} onEdit={() => setRulesOpen(true)} onGuide={() => setGuideOpen(true)} />}
           <div className="lobby-bottom">
-            <div className="lobby-hint"><LockKeyhole size={14} /><span>{isHost ? 'ТА ӨРӨӨНИЙ ЭЗЭН' : 'ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА'} <b>•</b> {hint}</span></div>
+            <div className="lobby-hint"><LockKeyhole size={14} /><span>{isHost ? t('ТА ӨРӨӨНИЙ ЭЗЭН', 'YOU ARE THE HOST') : t('ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА', 'WAITING FOR THE HOST TO START')} <b>•</b> {hint}</span></div>
             <div className="lobby-actions">
-              <button className="secondary-button invite-friends-button" onClick={() => setInviteOpen(true)}><UserPlus size={15} /> НАЙЗ УРИХ</button>
-              {!isHost && <button className={`secondary-button ready-button ${mine.ready ? 'is-ready' : ''}`} disabled={busy} onClick={() => run('ready', { ready: !mine.ready })}>{mine.ready ? <Check size={15} /> : <Shield size={15} />}{mine.ready ? 'БЭЛЭН' : 'БИ БЭЛЭН'}</button>}
-              <button className="text-button" onClick={leave}><ArrowLeft size={15} /> {isHost ? 'ӨРӨӨГ ХААХ' : i18n.common.leave.toUpperCase()}</button>
+              <button className="secondary-button invite-friends-button" onClick={() => setInviteOpen(true)}><UserPlus size={15} />{t(` НАЙЗ УРИХ`, ` INVITE FRIENDS`)}</button>
+              {!isHost && <button className={`secondary-button ready-button ${mine.ready ? 'is-ready' : ''}`} disabled={busy} onClick={() => run('ready', { ready: !mine.ready })}>{mine.ready ? <Check size={15} /> : <Shield size={15} />}{mine.ready ? t('БЭЛЭН', 'READY') : t('БИ БЭЛЭН', 'I’M READY')}</button>}
+              <button className="text-button" onClick={leave}><ArrowLeft size={15} /> {isHost ? t('ӨРӨӨГ ХААХ', 'CLOSE ROOM') : i18n.common.leave.toUpperCase()}</button>
               {isHost && <button className="primary-button start-button" disabled={busy || !canStart} onClick={() => run('start')}><Moon size={15} /> {i18n.app.startGame.toUpperCase()} <ChevronRight size={16} /></button>}
             </div>
           </div>
@@ -658,19 +658,19 @@ function AdminWatch({ roomCode, userId, notify, fullscreen, onExit }: { roomCode
     let active = true;
     const load = () => callGame<{ roles: Record<number, RoleName> | null }>('admin-watch', { roomCode })
       .then((result) => { if (active) setRoles(result.roles); })
-      .catch((cause: unknown) => { if (active) notify(cause instanceof Error ? cause.message : 'Дүрүүдийг уншиж чадсангүй.', 'error'); });
+      .catch((cause: unknown) => { if (active) notify(cause instanceof Error ? cause.message : t('Дүрүүдийг уншиж чадсангүй.', 'Could not read the roles.'), 'error'); });
     void load();
     // A rematch deals new roles.
     const timer = window.setInterval(() => { void load(); }, 20000);
     return () => { active = false; window.clearInterval(timer); };
   }, [playingMafia, roomCode, notify]);
 
-  const banner = <div className="watch-banner" role="status"><ShieldCheck size={13} /> АДМИН АЖИГЛАЖ БАЙНА · {roomCode}<button type="button" onClick={onExit}><X size={13} /> ГАРАХ</button></div>;
-  if (!loaded) return <div className="inner-screen"><TopBar title="ӨРӨӨ" subtitle="АЖИГЛАХ" onBack={onExit} /><div className="room-loading">Өрөөнд холбогдож байна…</div></div>;
-  if (missing || !room) return <div className="inner-screen"><TopBar title="ӨРӨӨ" subtitle="АЖИГЛАХ" onBack={onExit} /><div className="room-loading">Өрөө хаагдсан байна.</div></div>;
+  const banner = <div className="watch-banner" role="status"><ShieldCheck size={13} />{t(` АДМИН АЖИГЛАЖ БАЙНА · ${roomCode}`, ` ADMIN WATCHING · ${roomCode}`)}<button type="button" onClick={onExit}><X size={13} />{t(` ГАРАХ`, ` LEAVE`)}</button></div>;
+  if (!loaded) return <div className="inner-screen"><TopBar title={t('ӨРӨӨ', 'ROOM')} subtitle={t('АЖИГЛАХ', 'WATCH')} onBack={onExit} /><div className="room-loading">{t(`Өрөөнд холбогдож байна…`, `Connecting to the room…`)}</div></div>;
+  if (missing || !room) return <div className="inner-screen"><TopBar title={t('ӨРӨӨ', 'ROOM')} subtitle={t('АЖИГЛАХ', 'WATCH')} onBack={onExit} /><div className="room-loading">{t(`Өрөө хаагдсан байна.`, `The room has closed.`)}</div></div>;
   if (room.status === 'lobby') {
-    return <div className="inner-screen lobby-screen watch-lobby"><TopBar title={room.name.toUpperCase()} subtitle={`${GAMES[room.game_type ?? 'mafia'].title.toUpperCase()} · ЛОББИ`} onBack={onExit} />
-      <div className="watch-lobby-body"><p className="admin-note">Тоглоом хараахан эхлээгүй байна. Эхэлмэгц энд шууд харагдана.</p>
+    return <div className="inner-screen lobby-screen watch-lobby"><TopBar title={room.name.toUpperCase()} subtitle={t(`${GAMES[room.game_type ?? 'mafia'].title.toUpperCase()} · ЛОББИ`, `${GAMES[room.game_type ?? 'mafia'].title.toUpperCase()} · LOBBY`)} onBack={onExit} />
+      <div className="watch-lobby-body"><p className="admin-note">{t(`Тоглоом хараахан эхлээгүй байна. Эхэлмэгц энд шууд харагдана.`, `The game hasn’t started yet. It will show here as soon as it does.`)}</p>
         <div className="player-grid">{seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={false} onProfile={() => undefined} />)}</div></div>
       {banner}</div>;
   }
@@ -683,12 +683,12 @@ function AdminWatch({ roomCode, userId, notify, fullscreen, onExit }: { roomCode
 function SeatCard({ seat, isHost, isMe, onRemoveBot, busy, onProfile }: { seat: RoomSeat; isHost: boolean; isMe: boolean; onRemoveBot?: () => void; busy?: boolean; onProfile: () => void }) {
   const plate = nameplate(seat.nameplate_key);
   return <div className={`player-card compact-card is-tappable ${seat.ready || isHost ? 'player-ready' : ''} ${seat.is_bot ? 'is-bot' : ''} ${plate.className} ${rowBorderClass(seat.border_key)}`} style={plate.style} role="button" tabIndex={0}
-    onClick={onProfile} onKeyDown={(event) => { if (event.key === 'Enter') onProfile(); }} aria-label={`${seat.display_name} — профайл`}>
+    onClick={onProfile} onKeyDown={(event) => { if (event.key === 'Enter') onProfile(); }} aria-label={t(`${seat.display_name} — профайл`, `${seat.display_name} — profile`)}>
     <RowBorder borderKey={seat.border_key} />
-    <Avatar name={seat.is_bot ? seat.display_name.replace(/ \(бот\)$/, '') : seat.display_name} color={seat.color} url={seat.avatar_url} frame={seat.frame_key}>{isHost && <i title="Өрөөний эзэн"><Crown size={11} /></i>}{seat.is_bot ? <i className="bot-badge" title="Бот"><Bot size={11} /></i> : <VoiceAvatarIndicator name={seat.display_name} identity={seat.user_id} />}</Avatar>
-    <div className="player-name">{seat.display_name}{isMe && <small>ЧИ</small>}</div>
-    <div className={`player-status ${seat.ready || isHost ? 'online' : ''}`}>{isHost ? 'ЭЗЭН' : seat.is_bot ? 'БОТ' : seat.ready ? 'БЭЛЭН' : 'ХҮЛЭЭЖ БАЙНА'}</div>
-    {onRemoveBot && <button type="button" className="remove-bot-button" disabled={busy} onClick={(event) => { event.stopPropagation(); onRemoveBot(); }} aria-label={`${seat.display_name} хасах`} title="Ботыг хасах"><X size={13} /></button>}
+    <Avatar name={seat.is_bot ? seat.display_name.replace(/ \(бот\)$/, '') : seat.display_name} color={seat.color} url={seat.avatar_url} frame={seat.frame_key}>{isHost && <i title={t('Өрөөний эзэн', 'Room host')}><Crown size={11} /></i>}{seat.is_bot ? <i className="bot-badge" title={t('Бот', 'Bot')}><Bot size={11} /></i> : <VoiceAvatarIndicator name={seat.display_name} identity={seat.user_id} />}</Avatar>
+    <div className="player-name">{seat.display_name}{isMe && <small>{t(`ЧИ`, `YOU`)}</small>}</div>
+    <div className={`player-status ${seat.ready || isHost ? 'online' : ''}`}>{isHost ? t('ЭЗЭН', 'HOST') : seat.is_bot ? t('БОТ', 'BOT') : seat.ready ? t('БЭЛЭН', 'READY') : t('ХҮЛЭЭЖ БАЙНА', 'WAITING')}</div>
+    {onRemoveBot && <button type="button" className="remove-bot-button" disabled={busy} onClick={(event) => { event.stopPropagation(); onRemoveBot(); }} aria-label={t(`${seat.display_name} хасах`, `Remove ${seat.display_name}`)} title={t('Ботыг хасах', 'Remove bot')}><X size={13} /></button>}
   </div>;
 }
 
@@ -703,8 +703,8 @@ function NameSetup({ current, onSave, onLater, onDone }: { current: string; onSa
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const clean = name.trim();
-    if (clean.length < 2 || clean.length > 24) { setError('Нэр 2–24 тэмдэгт байна.'); return; }
-    if (needsName(clean)) { setError('Өөр нэр сонгоно уу.'); return; }
+    if (clean.length < 2 || clean.length > 24) { setError(t('Нэр 2–24 тэмдэгт байна.', 'The name must be 2–24 characters.')); return; }
+    if (needsName(clean)) { setError(t('Өөр нэр сонгоно уу.', 'Please choose another name.')); return; }
     setSaving(true);
     const failure = await onSave(clean);
     setSaving(false);
@@ -712,16 +712,16 @@ function NameSetup({ current, onSave, onLater, onDone }: { current: string; onSa
   };
   return <div className="game-modal-backdrop name-setup-backdrop"><form className="game-modal name-setup" onSubmit={(event) => void submit(event)} aria-labelledby="name-setup-title">
     <div className="modal-symbol"><UserRound size={18} /></div>
-    <h2 id="name-setup-title">Таныг хэн гэж дуудах вэ?</h2>
-    <p>Бусад тоглогчид ширээн дээр энэ нэрийг харна. Дараа нь профайлаасаа сольж болно.</p>
-    <input className="name-setup-input" value={name} onChange={(event) => { setName(event.target.value); setError(''); }} placeholder="Жишээ нь: Бат" maxLength={24} autoFocus aria-label="Нэр" />
+    <h2 id="name-setup-title">{t(`Таныг хэн гэж дуудах вэ?`, `What should we call you?`)}</h2>
+    <p>{t(`Бусад тоглогчид ширээн дээр энэ нэрийг харна. Дараа нь профайлаасаа сольж болно.`, `Other players see this name at the table. You can change it later in your profile.`)}</p>
+    <input className="name-setup-input" value={name} onChange={(event) => { setName(event.target.value); setError(''); }} placeholder={t('Жишээ нь: Бат', 'For example: Bat')} maxLength={24} autoFocus aria-label={t('Нэр', 'Name')} />
     {error && <p className="form-error" role="alert">{error}</p>}
-    <div className="modal-actions"><button type="button" className="secondary-button" onClick={onLater}>ДАРАА</button><button type="submit" className="primary-button" disabled={saving}>{saving ? 'ХАДГАЛЖ БАЙНА…' : 'ХАДГАЛАХ'} <Check size={14} /></button></div>
+    <div className="modal-actions"><button type="button" className="secondary-button" onClick={onLater}>{t(`ДАРАА`, `LATER`)}</button><button type="submit" className="primary-button" disabled={saving}>{saving ? t('ХАДГАЛЖ БАЙНА…', 'SAVING…') : t('ХАДГАЛАХ', 'SAVE')} <Check size={14} /></button></div>
   </form></div>;
 }
 
 function TopBar({ title, subtitle, onBack, trailing }: { title: string; subtitle: string; onBack: () => void; trailing?: ReactNode }) {
-  return <header className="top-bar"><button className="icon-button back-button" onClick={onBack} aria-label="Цэс рүү буцах"><ArrowLeft size={17} /></button><div className="top-title"><span>{subtitle}</span><strong>{title}</strong></div><Brand compact /><div className="top-trailing">{trailing}</div></header>;
+  return <header className="top-bar"><button className="icon-button back-button" onClick={onBack} aria-label={t('Цэс рүү буцах', 'Back to menu')}><ArrowLeft size={17} /></button><div className="top-title"><span>{subtitle}</span><strong>{title}</strong></div><Brand compact /><div className="top-trailing">{trailing}</div></header>;
 }
 
 /** Role cards only; the artwork already carries each role's text. Tap a card to view it full screen. */
@@ -752,7 +752,7 @@ function RoleGallery({ onBack }: { onBack: () => void }) {
       <button type="button" className="card-viewer-nav is-prev" aria-label={t('Өмнөх карт', 'Previous card')} onClick={(event) => { event.stopPropagation(); step(-1); }}><ChevronRight size={22} /></button>
       <div className="card-viewer-card" onClick={(event) => event.stopPropagation()}><RoleCardArtwork role={open} /></div>
       <button type="button" className="card-viewer-nav is-next" aria-label={t('Дараагийн карт', 'Next card')} onClick={(event) => { event.stopPropagation(); step(1); }}><ChevronRight size={22} /></button>
-      <button type="button" className="card-viewer-close" aria-label="Хаах" onClick={() => setOpenIndex(null)}><X size={20} /></button>
+      <button type="button" className="card-viewer-close" aria-label={t('Хаах', 'Close')} onClick={() => setOpenIndex(null)}><X size={20} /></button>
     </div>}
   </div>;
 }

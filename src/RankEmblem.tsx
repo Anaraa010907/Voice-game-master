@@ -2,7 +2,8 @@ import { useId } from 'react';
 import type { CSSProperties } from 'react';
 import { MAX_RANK_LEVEL, RANK_METALS, RANK_NAMES, parseRankTitle, rankInfo, type RankGame, type RankMetal } from './rankRules';
 
-export const RANK_GAME_LABEL: Record<RankGame, string> = { mafia: 'Мафи', monopoly: 'Монополь' };
+import { t } from './lang';
+export const RANK_GAME_LABEL: Record<RankGame, string> = { mafia: t('Мафи', 'Mafia'), monopoly: t('Монополь', 'Monopoly') };
 
 /** Painted emblems replace the drawn ones where they exist (512px, same canvas for every rank). */
 const RANK_IMAGES: Partial<Record<RankGame, Partial<Record<number, string>>>> = {
@@ -124,11 +125,11 @@ export function RankChip({ game, points, onClick }: { game: RankGame; points: nu
   const info = rankInfo(game, points);
   const body = <>
     <RankEmblem game={game} level={info.level} className="rank-chip-emblem" />
-    <span className="rank-chip-copy"><small>{RANK_GAME_LABEL[game]}</small><b>{info.name}</b><i>{info.points} оноо</i></span>
+    <span className="rank-chip-copy"><small>{RANK_GAME_LABEL[game]}</small><b>{info.name}</b><i>{t(`${info.points} оноо`, `${info.points} points`)}</i></span>
     {info.next && <span className="rank-chip-bar" aria-hidden="true"><i style={{ width: `${info.progress}%` }} /></span>}
   </>;
   return onClick
-    ? <button type="button" className={`rank-chip metal-${info.metal}`} onClick={onClick} aria-label={`${RANK_GAME_LABEL[game]} рэйтинг: ${info.name}, ${info.points} оноо`}>{body}</button>
+    ? <button type="button" className={`rank-chip metal-${info.metal}`} onClick={onClick} aria-label={t(`${RANK_GAME_LABEL[game]} рэйтинг: ${info.name}, ${info.points} оноо`, `${RANK_GAME_LABEL[game]} ranking: ${info.name}, ${info.points} points`)}>{body}</button>
     : <span className={`rank-chip metal-${info.metal}`}>{body}</span>;
 }
 
@@ -160,7 +161,7 @@ export function ShowcaseTitle({ titleKey, onClick }: { titleKey: string; onClick
   const rank = parseRankTitle(titleKey);
   if (!rank) return null;
   const name = RANK_NAMES[rank.game][rank.level - 1];
-  return <button type="button" className="showcase-title" onClick={onClick} aria-label={`Цол: ${name}`} title={name}>
+  return <button type="button" className="showcase-title" onClick={onClick} aria-label={t(`Цол: ${name}`, `Title: ${name}`)} title={name}>
     <RankEmblem game={rank.game} level={rank.level} className="showcase-crest" />
     <span className="showcase-title-name">{name}</span>
   </button>;

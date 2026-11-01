@@ -8,6 +8,7 @@ import { supabase } from './supabaseClient';
 import type { NotifyFn } from './multiplayer';
 import { playSfx } from './sfx';
 
+import { t } from './lang';
 export type RankRow = {
   game_type: RankGame; points: number; peak_points: number; matches: number; wins: number; losses: number; current_streak: number; best_streak: number;
 };
@@ -40,15 +41,15 @@ const percent = (wins: number, matches: number) => (matches ? Math.round((wins /
 function RulesList({ game }: { game: RankGame }) {
   return <ul className="rank-rules">
     {game === 'mafia' ? <>
-      <li><b className="is-plus">+{RANK_POINTS.mafiaWin}</b> Ялалт</li>
-      <li><b className="is-plus">+{RANK_POINTS.mafiaAliveBonus}</b> Ялаад амьд үлдвэл</li>
-      <li><b className="is-minus">{RANK_POINTS.mafiaLoss}</b> Ялагдал</li>
+      <li><b className="is-plus">+{RANK_POINTS.mafiaWin}</b>{t(` Ялалт`, ` Win`)}</li>
+      <li><b className="is-plus">+{RANK_POINTS.mafiaAliveBonus}</b>{t(` Ялаад амьд үлдвэл`, ` Win and survive`)}</li>
+      <li><b className="is-minus">{RANK_POINTS.mafiaLoss}</b>{t(` Ялагдал`, ` Loss`)}</li>
     </> : <>
-      <li><b className="is-plus">+{RANK_POINTS.boardWin}</b> Ялагч</li>
-      <li><b className="is-minus">{RANK_POINTS.boardSurvived}</b> Дампуураагүй ч ялагдсан</li>
-      <li><b className="is-minus">{RANK_POINTS.boardBankrupt}</b> Дампуурсан</li>
+      <li><b className="is-plus">+{RANK_POINTS.boardWin}</b>{t(` Ялагч`, ` Winner`)}</li>
+      <li><b className="is-minus">{RANK_POINTS.boardSurvived}</b>{t(` Дампуураагүй ч ялагдсан`, ` Lost without going bankrupt`)}</li>
+      <li><b className="is-minus">{RANK_POINTS.boardBankrupt}</b>{t(` Дампуурсан`, ` Bankrupt`)}</li>
     </>}
-    <li><b className="is-minus">{RANK_POINTS.leave}</b> Тоглолтоос дундуур гарвал</li>
+    <li><b className="is-minus">{RANK_POINTS.leave}</b>{t(` Тоглолтоос дундуур гарвал`, ` Leaving a match early`)}</li>
   </ul>;
 }
 
@@ -108,7 +109,7 @@ export function RanksScreen({ userId, onBack, onPlay, notify, initialGame = 'maf
     setBusy(false);
     if (error) { notify(error.message, 'error'); return; }
     playSfx('buy');
-    notify(key ? 'Цолоо зүүлээ!' : 'Цолоо тайллаа.', 'success');
+    notify(key ? t('Цолоо зүүлээ!', 'Title equipped!') : t('Цолоо тайллаа.', 'Title removed.'), 'success');
     setWearing(key);
     void reload();
   };
@@ -126,37 +127,37 @@ export function RanksScreen({ userId, onBack, onPlay, notify, initialGame = 'maf
 
   return <div className="inner-screen panel-screen ranks-screen">
     <header className="top-bar panel-top-bar">
-      <button className="icon-button" onClick={onBack} aria-label="Буцах"><ArrowLeft size={17} /></button>
-      <div className="top-title"><span>ЦОЛ ХОЖИХ ТОГЛОЛТ</span><strong>РЭЙТИНГ</strong></div>
-      <div className="panel-top-trailing rank-game-tabs" role="tablist" aria-label="Тоглоом">
+      <button className="icon-button" onClick={onBack} aria-label={t('Буцах', 'Back')}><ArrowLeft size={17} /></button>
+      <div className="top-title"><span>{t(`ЦОЛ ХОЖИХ ТОГЛОЛТ`, `MATCHES THAT WIN TITLES`)}</span><strong>{t(`РЭЙТИНГ`, `RANKINGS`)}</strong></div>
+      <div className="panel-top-trailing rank-game-tabs" role="tablist" aria-label={t('Тоглоом', 'Game')}>
         {RANK_GAMES.map((key) => <button type="button" role="tab" key={key} aria-selected={game === key} className={game === key ? 'is-picked' : ''}
           onClick={() => setGame(key)}>{RANK_GAME_LABEL[key]}</button>)}
       </div>
     </header>
     <div className="panel-body ranks-body">
-      <section className={`rank-hero-card metal-${info.metal}`} aria-label={`${RANK_GAME_LABEL[game]} рэйтинг`}>
+      <section className={`rank-hero-card metal-${info.metal}`} aria-label={t(`${RANK_GAME_LABEL[game]} рэйтинг`, `${RANK_GAME_LABEL[game]} ranking`)}>
         <RankEmblem game={game} level={info.level} className="rank-hero-emblem" />
         <div className="rank-hero-text">
-          <small>{RANK_GAME_LABEL[game].toUpperCase()} · {info.level}-Р ШАТ</small>
+          <small>{t(`${RANK_GAME_LABEL[game].toUpperCase()} · ${info.level}-Р ШАТ`, `${RANK_GAME_LABEL[game].toUpperCase()} · LEVEL ${info.level}`)}</small>
           <h1>{info.name}</h1>
-          <b className="rank-hero-points">{info.points} <span>оноо</span></b>
+          <b className="rank-hero-points">{info.points} <span>{t(`оноо`, `points`)}</span></b>
         </div>
         <div className="rank-progress">
           <div className="rank-progress-bar"><i style={{ width: `${info.progress}%` }} /></div>
-          <span>{info.next ? <>Дараагийн цол <b>{info.next.name}</b> · {info.toNext} оноо дутуу</> : <><Crown size={12} /> Хамгийн дээд цолд хүрсэн!</>}</span>
+          <span>{info.next ? <>{t(`Дараагийн цол `, `Next title `)}<b>{info.next.name}</b>{t(` · ${info.toNext} оноо дутуу`, ` · ${info.toNext} points to go`)}</> : <><Crown size={12} />{t(` Хамгийн дээд цолд хүрсэн!`, ` You’ve reached the top title!`)}</>}</span>
         </div>
         <div className="rank-stats">
-          <span><b>{row.matches}</b>Тоглолт</span><span><b>{row.wins}</b>Ялалт</span>
-          <span><b>{percent(row.wins, row.matches)}%</b>Ялалтын хувь</span><span><b>{row.best_streak}</b>Шилдэг цуврал</span>
+          <span><b>{row.matches}</b>{t(`Тоглолт`, `Matches`)}</span><span><b>{row.wins}</b>{t(`Ялалт`, `Wins`)}</span>
+          <span><b>{percent(row.wins, row.matches)}%</b>{t(`Ялалтын хувь`, `Win rate`)}</span><span><b>{row.best_streak}</b>{t(`Шилдэг цуврал`, `Best streak`)}</span>
         </div>
-        <button type="button" className="primary-button rank-play" onClick={() => onPlay(game)}><Swords size={15} /> РЭЙТИНГ ТОГЛОХ <ChevronRight size={15} /></button>
+        <button type="button" className="primary-button rank-play" onClick={() => onPlay(game)}><Swords size={15} />{t(` РЭЙТИНГ ТОГЛОХ `, ` PLAY RANKED `)}<ChevronRight size={15} /></button>
       </section>
 
       <section className="rank-panel">
         <div className="admin-choice-row rank-views" role="tablist">
-          <button type="button" role="tab" aria-selected={view === 'ladder'} className={view === 'ladder' ? 'is-picked' : ''} onClick={() => setView('ladder')}><Crown size={13} /> Шат ба цол</button>
-          <button type="button" role="tab" aria-selected={view === 'top'} className={view === 'top' ? 'is-picked' : ''} onClick={() => setView('top')}><Trophy size={13} /> Шилдэг 20</button>
-          <button type="button" role="tab" aria-selected={view === 'history'} className={view === 'history' ? 'is-picked' : ''} onClick={() => setView('history')}><History size={13} /> Миний түүх</button>
+          <button type="button" role="tab" aria-selected={view === 'ladder'} className={view === 'ladder' ? 'is-picked' : ''} onClick={() => setView('ladder')}><Crown size={13} />{t(` Шат ба цол`, ` Levels and titles`)}</button>
+          <button type="button" role="tab" aria-selected={view === 'top'} className={view === 'top' ? 'is-picked' : ''} onClick={() => setView('top')}><Trophy size={13} />{t(` Шилдэг 20`, ` Top 20`)}</button>
+          <button type="button" role="tab" aria-selected={view === 'history'} className={view === 'history' ? 'is-picked' : ''} onClick={() => setView('history')}><History size={13} />{t(` Миний түүх`, ` My history`)}</button>
         </div>
 
         {view === 'ladder' && <div className="rank-ladder" ref={ladder}>
@@ -167,12 +168,12 @@ export function RanksScreen({ userId, onBack, onPlay, notify, initialGame = 'maf
             const worn = key !== null && wearing === key;
             return <div key={level} className={`rank-step ${reached ? 'is-reached' : has ? 'is-open' : 'is-locked'} ${info.level === level ? 'is-current' : ''}`}>
               <RankEmblem game={game} level={level} className="rank-step-emblem" />
-              <div className="rank-step-copy"><b>{RANK_NAMES[game][level - 1]}</b><small>{RANK_THRESHOLDS[level - 1]} оноо{info.level === level ? ' · ТА ЭНД' : ''}</small>{level >= 2 && <RewardLine reward={rewards.find((entry) => entry.game_type === game && entry.level === level)} items={items} earned={rankInfo(game, row.peak_points).level >= level} />}</div>
-              {key ? <TitlePlaque titleKey={key} name={RANK_NAMES[game][level - 1]} size="sm" /> : <span className="rank-step-none">Цолгүй</span>}
+              <div className="rank-step-copy"><b>{RANK_NAMES[game][level - 1]}</b><small>{t(`${RANK_THRESHOLDS[level - 1]} оноо`, `${RANK_THRESHOLDS[level - 1]} points`)}{info.level === level ? t(' · ТА ЭНД', ' · YOU ARE HERE') : ''}</small>{level >= 2 && <RewardLine reward={rewards.find((entry) => entry.game_type === game && entry.level === level)} items={items} earned={rankInfo(game, row.peak_points).level >= level} />}</div>
+              {key ? <TitlePlaque titleKey={key} name={RANK_NAMES[game][level - 1]} size="sm" /> : <span className="rank-step-none">{t(`Цолгүй`, `No title`)}</span>}
               {!key ? <span /> : has
                 ? worn
-                  ? <button type="button" className="secondary-button rank-step-action" disabled={busy} onClick={() => void wear(null)}><Check size={12} /> ЗҮҮСЭН</button>
-                  : <button type="button" className="secondary-button rank-step-action" disabled={busy} onClick={() => void wear(key)}>ЗҮҮХ</button>
+                  ? <button type="button" className="secondary-button rank-step-action" disabled={busy} onClick={() => void wear(null)}><Check size={12} />{t(` ЗҮҮСЭН`, ` EQUIPPED`)}</button>
+                  : <button type="button" className="secondary-button rank-step-action" disabled={busy} onClick={() => void wear(key)}>{t(`ЗҮҮХ`, `EQUIP`)}</button>
                 : <span className="rank-step-lock"><Lock size={12} /> {RANK_THRESHOLDS[level - 1]}</span>}
             </div>;
           })}
@@ -180,27 +181,27 @@ export function RanksScreen({ userId, onBack, onPlay, notify, initialGame = 'maf
         </div>}
 
         {view === 'top' && <div className="rank-board">
-          {leaders === null && <p className="rank-empty">Ачаалж байна…</p>}
-          {leaders?.length === 0 && <p className="rank-empty"><Trophy size={18} /> Одоогоор рэйтинг тоглосон хүн алга. Анхных нь болоорой!</p>}
+          {leaders === null && <p className="rank-empty">{t(`Ачаалж байна…`, `Loading…`)}</p>}
+          {leaders?.length === 0 && <p className="rank-empty"><Trophy size={18} />{t(` Одоогоор рэйтинг тоглосон хүн алга. Анхных нь болоорой!`, ` No one has played ranked yet. Be the first!`)}</p>}
           {leaders?.map((leader, index) => <div key={leader.id} className={`rank-leader ${leader.id === userId ? 'is-me' : ''} ${index < 3 ? `is-top${index + 1}` : ''}`}>
             <span className="rank-leader-place">{index + 1}</span>
             <Avatar name={leader.display_name} color={leader.avatar_key} url={leader.avatar_url} frame={leader.frame_key} className="rank-leader-avatar" />
             <span className="rank-leader-name"><b>{leader.display_name}</b><TitleBadge titleKey={leader.title_key} items={items} /></span>
             <RankEmblem game={game} level={leader.level} className="rank-leader-emblem" />
-            <span className="rank-leader-points"><b>{leader.points}</b><small>{leader.wins}/{leader.matches} ялалт</small></span>
+            <span className="rank-leader-points"><b>{leader.points}</b><small>{t(`${leader.wins}/${leader.matches} ялалт`, `${leader.wins}/${leader.matches} wins`)}</small></span>
           </div>)}
         </div>}
 
         {view === 'history' && <div className="rank-log">
-          {history === null && <p className="rank-empty">Ачаалж байна…</p>}
-          {history?.length === 0 && <p className="rank-empty"><Flame size={18} /> Рэйтинг тоглолт хараахан тоглоогүй байна.</p>}
+          {history === null && <p className="rank-empty">{t(`Ачаалж байна…`, `Loading…`)}</p>}
+          {history?.length === 0 && <p className="rank-empty"><Flame size={18} />{t(` Рэйтинг тоглолт хараахан тоглоогүй байна.`, ` You haven’t played a ranked match yet.`)}</p>}
           {history?.map((change) => {
             const up = Number(change.new_rank) > Number(change.previous_rank);
             const down = Number(change.new_rank) < Number(change.previous_rank);
             return <div key={change.id} className={`rank-change is-${change.outcome}`}>
-              <span className="rank-change-outcome">{change.outcome === 'win' ? 'ЯЛАЛТ' : 'ЯЛАГДАЛ'}</span>
+              <span className="rank-change-outcome">{change.outcome === 'win' ? t('ЯЛАЛТ', 'WIN') : t('ЯЛАГДАЛ', 'LOSS')}</span>
               <b className={change.rp_change >= 0 ? 'is-plus' : 'is-minus'}>{change.rp_change >= 0 ? '+' : ''}{change.rp_change}</b>
-              <span className="rank-change-total">{change.rank_points_after} оноо{up ? ` · ↑ ${RANK_NAMES[game][Number(change.new_rank) - 1]}` : down ? ` · ↓ ${RANK_NAMES[game][Number(change.new_rank) - 1]}` : ''}</span>
+              <span className="rank-change-total">{t(`${change.rank_points_after} оноо`, `${change.rank_points_after} points`)}{up ? ` · ↑ ${RANK_NAMES[game][Number(change.new_rank) - 1]}` : down ? ` · ↓ ${RANK_NAMES[game][Number(change.new_rank) - 1]}` : ''}</span>
               <small>{new Date(change.created_at).toLocaleDateString('mn-MN', { month: 'short', day: 'numeric' })}</small>
             </div>;
           })}
@@ -222,9 +223,9 @@ function RewardLine({ reward, items, earned }: { reward?: RankReward; items: Arr
         {prize.kind === 'frame'
           ? <Avatar name={prize.name} color="rose" frame={prize.key} className="rank-reward-frame" />
           : <span className={`rank-reward-border ${rowBorderClass(prize.key)}`}><RowBorder borderKey={prize.key} /></span>}
-        {prize.kind === 'frame' ? 'Хүрээ' : 'Нэрийн хүрээ'} «{prize.name}»
+        {prize.kind === 'frame' ? t('Хүрээ', 'Frame') : t('Нэрийн хүрээ', 'Name border')} «{prize.name}»
       </span>
-      : reward.item_key ? null : <span className="rank-reward-soon">· <Clock3 size={10} /> тун удахгүй</span>}
+      : reward.item_key ? null : <span className="rank-reward-soon">· <Clock3 size={10} />{t(` тун удахгүй`, ` coming soon`)}</span>}
   </span>;
 }
 
@@ -258,7 +259,7 @@ export function RankResultBanner({ roomCode, userId }: { roomCode: string; userI
     void look();
     return () => { active = false; };
   }, [roomCode, userId]);
-  const coinChip = coins !== null && coins > 0 ? <span className="result-coins"><Coins size={13} />+{coins.toLocaleString('en-US')} зоос</span> : null;
+  const coinChip = coins !== null && coins > 0 ? <span className="result-coins"><Coins size={13} />{t(`+${coins.toLocaleString('en-US')} зоос`, `+${coins.toLocaleString('en-US')} coins`)}</span> : null;
   if (!change) return coinChip ? <div className="rank-result is-coins" role="status">{coinChip}</div> : null;
   const game = change.game_type;
   const level = Number(change.new_rank) || 1;
@@ -266,9 +267,9 @@ export function RankResultBanner({ roomCode, userId }: { roomCode: string; userI
   return <div className={`rank-result ${promoted ? 'is-promoted' : ''} ${change.rp_change >= 0 ? 'is-plus' : 'is-minus'}`} role="status">
     <RankEmblem game={game} level={level} className="rank-result-emblem" />
     <span className="rank-result-copy">
-      <small>{promoted ? 'ШИНЭ ЦОЛ!' : 'РЭЙТИНГ'}</small>
-      <b>{promoted ? RANK_NAMES[game][level - 1] : `${change.rp_change >= 0 ? '+' : ''}${change.rp_change} оноо`}</b>
-      <i>{promoted ? `+${change.rp_change} оноо · ` : ''}{RANK_NAMES[game][level - 1]} · {change.rank_points_after} оноо</i>
+      <small>{promoted ? t('ШИНЭ ЦОЛ!', 'NEW TITLE!') : t('РЭЙТИНГ', 'RANKED')}</small>
+      <b>{promoted ? RANK_NAMES[game][level - 1] : t(`${change.rp_change >= 0 ? '+' : ''}${change.rp_change} оноо`, `${change.rp_change >= 0 ? '+' : ''}${change.rp_change} points`)}</b>
+      <i>{promoted ? t(`+${change.rp_change} оноо · `, `+${change.rp_change} points · `) : ''}{t(`${RANK_NAMES[game][level - 1]} · ${change.rank_points_after} оноо`, `${RANK_NAMES[game][level - 1]} · ${change.rank_points_after} points`)}</i>
     </span>
     {coinChip}
   </div>;

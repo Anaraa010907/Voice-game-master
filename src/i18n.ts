@@ -1,5 +1,6 @@
 import { en } from './i18n.en.ts';
 import { isEnglish } from './lang.ts';
+import { serverMessageInEnglish } from './serverText.ts';
 
 /** Mongolian texts (the default language); English is in i18n.en.ts with the same keys. */
 const mn = {
@@ -441,7 +442,7 @@ export const translateRoleDescription = (role: string) => i18n.game.roleDescript
 export const translateRank = (rank: string) => i18n.game.rankNames[rank as keyof typeof i18n.game.rankNames] ?? rank;
 export const translateMessage = (message: string): string => {
   // The game server writes its messages in English; only Mongolian needs them translated.
-  if (isEnglish) return message;
+  if (isEnglish) return serverMessageInEnglish(message);
   const map: Record<string, string> = {
     'Enter a room code in the format NIGHT-7X.': 'Өрөөний кодыг NIGHT-7X хэлбэрээр оруулна уу.',
     'No demo room has that code. Try NIGHT-7X or create a room in this tab.': 'Энэ кодтой туршилтын өрөө олдсонгүй. NIGHT-7X кодыг ашиглах эсвэл энэ таб дээр өрөө үүсгэнэ үү.',

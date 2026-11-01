@@ -32,3 +32,6 @@ export function setLang(next: Lang) {
   }
   window.location.reload();
 }
+
+/** English count with the right noun form: plural(1, 'night') → "1 night", plural(2, 'night') → "2 nights". */
+export const plural = (count: number, noun: string, many = `${noun}s`) => `${count} ${count === 1 ? noun : many}`;

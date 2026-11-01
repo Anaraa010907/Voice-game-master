@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from './supabaseClient';
 
+import { t } from './lang.ts';
 /** Short ready-made lines for players without a microphone. Shown over the sender's avatar. */
-export const QUICK_REPLIES = ['Би иргэн', 'Би биш!', 'Сэжигтэй', 'Санал нийлж байна', 'Үгүй', 'Түр хүлээ'] as const;
+export const QUICK_REPLIES = [t('Би иргэн', 'I’m a citizen'), t('Би биш!', 'Not me!'), t('Сэжигтэй', 'Suspicious'), t('Санал нийлж байна', 'I agree'), t('Үгүй', 'No'), t('Түр хүлээ', 'Wait a moment')] as const;
 const SHOW_MS = 4500;
 const COOLDOWN_MS = 1500;
 

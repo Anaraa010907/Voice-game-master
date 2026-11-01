@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
 
+import { t } from './lang';
 /**
  * A card that starts face down and is turned over by hand: drag it sideways and it follows the
  * finger in 3D; let go past half way and it lands face up (or back). A plain tap flips it too.
@@ -75,7 +76,7 @@ export default function FlipCard({ front, back, className = '', autoRevealMs, on
   const shine = (((angle % 360) + 360) % 360) / 360;
   return <div className={`flip-card ${className} ${dragging ? 'is-dragging' : ''} ${faceUp ? 'is-face-up' : 'is-face-down'}`}
     onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => { drag.current = null; settle(Math.round(angleRef.current / 180) * 180); }}
-    onClick={(event) => event.stopPropagation()} role="button" aria-label={faceUp ? 'Картыг буцааж эргүүлэх' : 'Картыг эргүүлж харах'}>
+    onClick={(event) => event.stopPropagation()} role="button" aria-label={faceUp ? t('Картыг буцааж эргүүлэх', 'Flip the card back') : t('Картыг эргүүлж харах', 'Flip the card to look')}>
     <div className="flip-card-inner" style={{ transform: `rotateX(${tilt}deg) rotateY(${angle}deg)`, ['--shine' as string]: shine } as CSSProperties}>
       <div className="flip-card-face flip-card-back">{back}</div>
       <div className="flip-card-face flip-card-front">{front}</div>
