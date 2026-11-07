@@ -5,7 +5,7 @@ import { i18n } from './i18n';
 import { isEnglish, t } from './lang';
 import type { NotifyFn, RoomInfo, RoomSeat } from './multiplayer';
 import { VoiceChatProvider } from './VoiceChat';
-import { DEMO_PHASES, type DemoPhase, type DemoRequest } from './whoAmIDemoRequest';
+import { DEMO_PHASES, DEMO_SEAT_COUNT, demoRequest, type DemoPhase, type DemoRequest } from './whoAmIDemoRequest';
 import { WhoAmITable } from './WhoAmI';
 import { WHO_AM_I_PACK } from './whoAmIContent';
 import {
@@ -22,6 +22,7 @@ import {
  *   ?demo=create                   create-room form for Who Am I
  *   ?demo=lobby[&seat=2]           lobby (seat 1 is the host)
  *   ?demo=game&phase=reveal|ask|answer|guess|results[&seat=3][&auto=1][&bar=0]
+ *   any of the above with &players=3..10 for another table size (6 by default)
  *
  * Only in dev builds, or in any build that has no Supabase keys (so never on the live app). App.tsx
  * imports this file lazily behind DEMO_ENABLED, so keyed builds do not ship it (whoAmIDemoRequest.ts).
@@ -29,20 +30,24 @@ import {
 
 const PHASES = DEMO_PHASES;
 
-const DEMO_NAMES = isEnglish ? ['Bat', 'Saraa', 'Temuulen', 'Nomin', 'Ganaa', 'Khulan'] : ['Бат', 'Сараа', 'Тэмүүлэн', 'Номин', 'Ганаа', 'Хулан'];
-const DEMO_COLORS = ['rose', 'violet', 'gold', 'teal', 'blue', 'plum'];
-const DEMO_SEATS: WhoAmISeat[] = DEMO_NAMES.map((name, index) => ({ id: index + 1, name, initials: name.slice(0, 2).toUpperCase(), color: DEMO_COLORS[index], host: index === 0 }));
+const DEMO_NAMES = isEnglish
+  ? ['Bat', 'Saraa', 'Temuulen', 'Nomin', 'Ganaa', 'Khulan', 'Enkhjin', 'Dorj', 'Oyunchimeg', 'Boldbaatar']
+  : ['Бат', 'Сараа', 'Тэмүүлэн', 'Номин', 'Ганаа', 'Хулан', 'Энхжин', 'Дорж', 'Оюунчимэг', 'Болдбаатар'];
+const DEMO_COLORS = ['rose', 'violet', 'gold', 'teal', 'blue', 'plum', 'rose', 'violet', 'gold', 'teal'];
+const ALL_DEMO_SEATS: WhoAmISeat[] = DEMO_NAMES.map((name, index) => ({ id: index + 1, name, initials: name.slice(0, 2).toUpperCase(), color: DEMO_COLORS[index], host: index === 0 }));
+/** The demo table: the first `players` seats (see whoAmIDemoRequest.ts). */
+const DEMO_SEATS = ALL_DEMO_SEATS.slice(0, demoRequest()?.players ?? DEMO_SEAT_COUNT);
 
 const step = (state: WhoAmIState, id: number, action: WhoAmIAction) => applyWhoAmIAction(state, id, action).state;
 const asker = (state: WhoAmIState) => activeWhoAmIPlayerId(state)!;
 function vote(state: WhoAmIState, votes: Array<'yes' | 'no' | 'unknown'>) {
   let next = step(state, asker(state), { type: 'asked' });
-  eligibleVoters(next).forEach((id, index) => { if (next.phase === 'answer' && votes[index]) next = step(next, id, { type: 'answer', vote: votes[index] }); });
+  eligibleVoters(next).forEach((id, index) => { if (next.phase === 'answer') next = step(next, id, { type: 'answer', vote: votes[index % votes.length] }); });
   return next;
 }
 function judge(state: WhoAmIState, verdicts: Array<'correct' | 'wrong'>, text: string | null = null) {
   let next = step(state, asker(state), { type: 'guess', text });
-  eligibleVoters(next).forEach((id, index) => { if (next.phase === 'guess' && verdicts[index]) next = step(next, id, { type: 'judge', verdict: verdicts[index] }); });
+  eligibleVoters(next).forEach((id, index) => { if (next.phase === 'guess') next = step(next, id, { type: 'judge', verdict: verdicts[index % verdicts.length] }); });
   return next;
 }
 
@@ -75,7 +80,7 @@ function scenario(phase: DemoPhase): WhoAmIState {
   state = vote(state, ['yes', 'no', 'no', 'no', 'yes']);
   state = vote(state, ['yes', 'yes', 'yes', 'unknown', 'yes']);
   state = judge(state, ['wrong', 'wrong', 'correct', 'wrong', 'wrong']);
-  state = step(state, state.order[5], { type: 'giveUp' });
+  state = step(state, state.order[state.order.length - 1], { type: 'giveUp' });
   let guard = 0;
   while (state.phase !== 'results' && guard < 200) { state = guard % 3 === 0 && state.phase === 'ask' ? vote(state, ['yes', 'no', 'yes', 'no', 'unknown']) : timeoutWhoAmI(state); guard += 1; }
   return state;
@@ -146,7 +151,7 @@ export function WhoAmIDemo({ request, notify, lobby: Lobby }: DemoProps) {
   const seats: RoomSeat[] = useMemo(() => DEMO_SEATS.map((seat) => ({ user_id: `demo-${seat.id}`, seat: seat.id, display_name: seat.name, color: seat.color, ready: seat.id === 1 || ready[`demo-${seat.id}`] === true })), [ready]);
 
   if (mode === 'lobby') {
-    const room: RoomInfo = { room_code: 'NIGHT-WHO1', name: isEnglish ? 'Guess Who I Am' : 'Хэн бэ би?', host_id: 'demo-1', max_players: 8, is_private: false, status: 'lobby', game_type: 'whoami', settings, language: isEnglish ? 'en' : 'mn' };
+    const room: RoomInfo = { room_code: 'NIGHT-WHO1', name: isEnglish ? 'Guess Who I Am' : 'Хэн бэ би?', host_id: 'demo-1', max_players: Math.max(8, DEMO_SEATS.length), is_private: false, status: 'lobby', game_type: 'whoami', settings, language: isEnglish ? 'en' : 'mn' };
     const onRun = async (action: string, body: Record<string, unknown> = {}) => {
       if (action === 'settings') setSettings(sanitizeWhoAmISettings(body.settings, WHO_AM_I_PACK));
       else if (action === 'ready') setReady((current) => ({ ...current, [`demo-${viewer}`]: body.ready === true }));
