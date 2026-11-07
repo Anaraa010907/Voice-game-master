@@ -38,11 +38,13 @@ Never run `db push` until the project ref and SQL review are confirmed. On a cle
 
 ### Migration review
 
-- `20261016_auth_profiles_ranks.sql` is required for Auth profiles and rankings. It creates profile, match, and rating tables; Auth triggers; and the match processor. **It exposes every profile column to anon and authenticated users until the new forward migration is applied.** Its match processor is service-role-only, but completion/validity flags are not independent proof of a valid result. This project has no trusted match-validation backend.
+- `20261016_auth_profiles_ranks.sql` is required for Auth profiles. It creates profile, match, and (since removed) rating tables; Auth triggers; and the match processor. **It exposes every profile column to anon and authenticated users until the new forward migration is applied.** Its match processor is service-role-only, but completion/validity flags are not independent proof of a valid result. This project has no trusted match-validation backend.
 - `20261017_voice_rooms.sql` is required by the voice function. It additively creates the room/member tables and grants access only to `service_role`; it does not provision rooms or membership.
 - `20261018_public_profile_security.sql` is a forward security repair. It revokes broad profile/table privileges, gives users read access to their own full profile, exposes only the intended leaderboard columns via a view, keeps profile updates limited to `display_name` and `avatar_key`, and backfills Auth users that predate the profile trigger.
 
-The migrations do not drop tables or reset data. `CREATE TABLE IF NOT EXISTS` does not verify an existing table's shape, so compare the target schema first. Apply the first and third migrations together before app launch to avoid leaving the broad profile-read policy active.
+- `20261117_remove_monopoly_and_rank.sql` removes the Monopoly board game and the rank system. **It is destructive:** it deletes every Monopoly room (seats, state, views and voice rooms with it), restricts `game_rooms.game_type` to `mafia`, drops `game_rooms.ranked`, `profiles.rank_name`/`rank_points`, the rank columns of `match_records`, the `player_ranks`, `rating_changes` and `rank_rewards` tables, the rank titles (`title-mafia-2..9`, `title-mono-2..9`, unequipped and removed from their owners) and the functions `rank_level`, `rank_for_points`, `rank_leaderboard`, `record_game_result` and `process_verified_competitive_match`. Former rank prizes (animated frames and borders) become `source = 'legacy'`: owners keep and can wear them, nobody can buy, gift, be offered or win them any more. It adds `record_match_result(match_id, user_id, room_code, outcome, left)` (service-role only, idempotent per match and player). Deploy the `game` Edge Function in the same release, since it now calls `record_match_result`, and ship the app update with it (older apps read `game_rooms.ranked`).
+
+Apart from `20261117_remove_monopoly_and_rank.sql`, the migrations do not drop tables or reset data. `CREATE TABLE IF NOT EXISTS` does not verify an existing table's shape, so compare the target schema first. Apply the first and third migrations together before app launch to avoid leaving the broad profile-read policy active.
 
 ## LiveKit voice setup
 
@@ -76,7 +78,7 @@ There are no simulated players. Every seat is a signed-in person.
 - At least 4 players are needed; everyone except the host must press Ready.
 - **Public rooms** appear in the room list (Play → open rooms) with live seat counts; **Quick join** picks the lobby closest to starting. Private rooms are joined by code only and may have a password.
 - **Eliminated players** become spectators: they see every role and can talk in a separate *ghost* voice room (`<ROOM>-GHOST`). `livekit-voice` only issues ghost tokens to members marked not alive during a game, so living players cannot hear it even with a modified client. Ghosts still hear the main table. Returning to the lobby clears the ghost room.
-- There is no competitive rank. Finished games still add wins and losses to profile statistics; leaving a live game counts as a loss.
+- There is no competitive rank. The only standing is the **win count**: every finished game adds a win or a loss to the profile (`wins`, `losses`, `total_matches`, `win_rate`, win streaks) through `record_match_result`, once per match and player. It also pays **10 coins for taking part, 30 for a win** (at most 500 coins a day from games) and **Battle Pass XP** while a season runs (`award_pass_xp`: 50 for taking part, +50 for a win, +100 for the first game of the day). Leaving a live game early counts as a loss and pays no coins and no XP.
 
 Deploy from a Codespace terminal:
 

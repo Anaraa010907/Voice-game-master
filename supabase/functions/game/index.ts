@@ -1,11 +1,10 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import {
-  MIN_PLAYERS, allNightActionsSubmitted, allReady, allVerdictsSubmitted, allVotesSubmitted, createInitialGame, finishDay, markReady, markRevealReady,
+  MIN_PLAYERS, allNightActionsSubmitted, allReady, allVerdictsSubmitted, allVotesSubmitted, createInitialGame, finishDay, markRevealReady,
   openDiscussion, privateView, publicView, recordVerdict, recordVote, removePlayer, resolveNight, resolveTrial, resolveVoting, sanitizeMafiaSettings,
   startNight, startVoting, submitNightAction, type GameEngineState, type MafiaSettings, type Verdict, type VoteChoice,
 } from '../_shared/gameEngine.ts';
 import { mafiaBotsAct, nextBotName } from '../_shared/bots.ts';
-import { RANK_POINTS, mafiaRankDelta } from '../_shared/ranks.ts';
 import { isAllowedOrigin } from '../_shared/voiceRequest.ts';
 import type { VoicePhase } from '../_shared/voicePolicy.ts';
 
@@ -16,14 +15,14 @@ import type { VoicePhase } from '../_shared/voicePolicy.ts';
  */
 
 type GameType = 'mafia';
-type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type: GameType; settings?: Partial<MafiaSettings> | null; ranked?: boolean };
+type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type: GameType; settings?: Partial<MafiaSettings> | null };
 /** The stored engine also carries the match id used to record win/loss statistics exactly once. */
 type StoredGame = GameEngineState & { matchId?: string };
 const GAME_TYPES: GameType[] = ['mafia'];
 const ROOM_SIZES: Record<GameType, number[]> = { mafia: [6, 8, 10, 12] };
 const MIN_SEATS: Record<GameType, number> = { mafia: MIN_PLAYERS };
 const LISTED_LOBBY_HOURS = 6;
-/** Which games let the host fill seats with bots (never in ranked rooms). Mafia is played by people only for now. */
+/** Which games let the host fill seats with bots. Mafia is played by people only for now. */
 const BOTS_ALLOWED: Record<GameType, boolean> = { mafia: false };
 type Seat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null; is_bot?: boolean };
 type Body = Record<string, unknown>;
@@ -96,9 +95,9 @@ function code(body: Body) {
   return value;
 }
 
-/** Validated room rules. Ranked rooms play fixed rules: the standard roles and timers. */
-function roomSettings(_type: GameType, input: unknown, ranked = false) {
-  return ranked ? sanitizeMafiaSettings({ mode: 'classic', discussion: 'normal' }) : sanitizeMafiaSettings(input);
+/** Validated room rules. */
+function roomSettings(_type: GameType, input: unknown) {
+  return sanitizeMafiaSettings(input);
 }
 
 function deadlineFor(state: StoredGame): string | null {
@@ -201,9 +200,7 @@ class GameServer {
     const maxPlayers = Number(body.maxPlayers);
     if (!ROOM_SIZES[type].includes(maxPlayers)) throw new GameError(400, 'Тоглогчийн тоо буруу байна.');
     // Public rooms appear in the room list; private rooms are joined by code only (optionally with a password).
-    // Ranked rooms are always public: points count only at open tables with real people.
-    const ranked = body.ranked === true;
-    const isPrivate = ranked ? false : body.isPublic === true ? false : body.isPrivate !== false;
+    const isPrivate = body.isPublic === true ? false : body.isPrivate !== false;
     const password = isPrivate ? text(body, 'password', 32, false) : '';
     if (password && password.length < 4) throw new GameError(400, 'Өрөөний нууц үг хамгийн багадаа 4 тэмдэгт байна.');
     const me = await this.profile();
@@ -211,7 +208,7 @@ class GameServer {
 
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const roomCodeValue = roomCode();
-      const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate, game_type: type, settings: roomSettings(type, body.settings, ranked), ranked, language: roomLanguage(body.language) });
+      const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate, game_type: type, settings: roomSettings(type, body.settings), language: roomLanguage(body.language) });
       if (error?.code === '23505') continue;
       if (error) throw error;
       const seat: Seat = { user_id: this.userId, seat: 1, display_name: me.name, color: me.color, ready: true, avatar_url: me.url };
@@ -301,7 +298,7 @@ class GameServer {
       // Leaving a live game counts as a loss, recorded first so the final tally cannot turn it into a win.
       const { data: stored } = await this.admin.from('game_states').select('engine').eq('room_code', roomCodeValue).maybeSingle();
       const game = stored?.engine as StoredGame | null;
-      if (game && !isFinished(game)) await this.recordOutcome(room, this.userId, 'loss', game.matchId, RANK_POINTS.leave);
+      if (game && !isFinished(game)) await this.recordOutcome(room, this.userId, 'loss', game.matchId, true);
       // If the leaver was the last one the phase was waiting on, the game moves on right away.
       await this.mutate(roomCodeValue, (state) => progress(removePlayer(state, mine.seat)));
     }
@@ -334,7 +331,7 @@ class GameServer {
     const seats = await this.seats(roomCodeValue);
     const minimum = MIN_SEATS[room.game_type ?? 'mafia'];
     if (seats.length < minimum) throw new GameError(409, `Тоглоом эхлүүлэхэд дор хаяж ${minimum} тоглогч хэрэгтэй.`);
-    if ((room.ranked || !BOTS_ALLOWED[room.game_type ?? 'mafia']) && seats.some((seat) => seat.is_bot)) throw new GameError(409, 'Тоглоомд бот оролцохгүй. Ботуудыг хасна уу.');
+    if (!BOTS_ALLOWED[room.game_type ?? 'mafia'] && seats.some((seat) => seat.is_bot)) throw new GameError(409, 'Тоглоомд бот оролцохгүй. Ботуудыг хасна уу.');
     const notReady = seats.filter((seat) => seat.user_id !== room.host_id && !seat.ready);
     if (notReady.length) throw new GameError(409, `Бэлэн болоогүй: ${notReady.map((seat) => seat.display_name).join(', ')}`);
 
@@ -347,7 +344,7 @@ class GameServer {
       host: seat.user_id === room.host_id,
       bot: seat.is_bot === true,
     }));
-    const engine: StoredGame = { ...createInitialGame(people, undefined, secureRandom, roomSettings('mafia', room.settings, room.ranked) as MafiaSettings), matchId: crypto.randomUUID() };
+    const engine: StoredGame = { ...createInitialGame(people, undefined, secureRandom, roomSettings('mafia', room.settings) as MafiaSettings), matchId: crypto.randomUUID() };
     await this.admin.from('game_private').delete().eq('room_code', roomCodeValue);
     const { error } = await this.admin.from('game_states').update({ engine, version: 1, updated_at: new Date().toISOString() }).eq('room_code', roomCodeValue);
     if (error) throw error;
@@ -425,14 +422,13 @@ class GameServer {
   }
 
   /**
-   * Adds the win or loss to the player's statistics and, in a ranked room, moves their rank for this
-   * game by `delta` points (see _shared/ranks.ts). Idempotent per match and player.
+   * Adds the win or loss to the player's statistics and pays the game's coins and Battle Pass XP
+   * (more for a win; nothing for leaving early). Idempotent per match and player.
    */
-  async recordOutcome(room: Room, userId: string, outcome: 'win' | 'loss', matchId: string | undefined, delta: number) {
+  async recordOutcome(room: Room, userId: string, outcome: 'win' | 'loss', matchId: string | undefined, leftEarly = false) {
     if (!matchId) return;
-    const { error } = await this.admin.rpc('record_game_result', {
-      p_match_id: matchId, p_user_id: userId, p_game_type: room.game_type ?? 'mafia', p_room_code: room.room_code,
-      p_outcome: outcome, p_ranked: room.ranked === true, p_delta: delta,
+    const { error } = await this.admin.rpc('record_match_result', {
+      p_match_id: matchId, p_user_id: userId, p_room_code: room.room_code, p_outcome: outcome, p_left: leftEarly,
     });
     if (error) console.error('result update failed', error);
   }
@@ -445,8 +441,7 @@ class GameServer {
       if (!secret || seat.is_bot) continue;
       // The Jester only ever wins alone; town and Mafia win as teams.
       const won = state.winner === 'Jester' ? secret.role === 'Jester' : secret.team !== 'wildcard' && (state.winner === 'Mafia') === (secret.team === 'mafia');
-      const alive = state.publicPlayers.find((player) => player.id === seat.seat)?.alive ?? false;
-      await this.recordOutcome(room, seat.user_id, won ? 'win' : 'loss', state.matchId, mafiaRankDelta(won, alive));
+      await this.recordOutcome(room, seat.user_id, won ? 'win' : 'loss', state.matchId);
     }
   }
 
@@ -455,11 +450,11 @@ class GameServer {
     const type = gameType(body.gameType);
     const since = new Date(Date.now() - LISTED_LOBBY_HOURS * 3600 * 1000).toISOString();
     const { data: rooms, error } = await this.admin.from('game_rooms')
-      .select('room_code,name,host_id,max_players,updated_at,ranked')
+      .select('room_code,name,host_id,max_players,updated_at')
       .eq('status', 'lobby').eq('is_private', false).eq('game_type', type).eq('language', roomLanguage(body.language)).gte('updated_at', since)
       .order('updated_at', { ascending: false }).limit(50);
     if (error) throw error;
-    type ListedRow = { room_code: string; name: string; host_id: string; max_players: number; ranked?: boolean };
+    type ListedRow = { room_code: string; name: string; host_id: string; max_players: number };
     type SeatedRow = { room_code: string; user_id: string; display_name: string };
     const roomRows = (rooms ?? []) as ListedRow[];
     const codes = roomRows.map((room) => room.room_code);
@@ -474,7 +469,6 @@ class GameServer {
         name: room.name,
         players: seated.length,
         maxPlayers: room.max_players,
-        ranked: room.ranked === true,
         hostName: seated.find((player) => player.user_id === room.host_id)?.display_name ?? '—',
         joined: seated.some((player) => player.user_id === this.userId),
       };
@@ -486,9 +480,7 @@ class GameServer {
   /** Joins the public lobby closest to starting. */
   async quick(body: Body = {}) {
     const { rooms } = await this.list(body);
-    // From the ranking screen a player looks for a ranked table first.
-    const open = rooms.filter((room) => room.players < room.maxPlayers && !room.joined);
-    const pick = (body.ranked === true ? open.find((room) => room.ranked) : undefined) ?? open[0];
+    const pick = rooms.find((room) => room.players < room.maxPlayers && !room.joined);
     if (!pick) return { roomCode: null };
     return this.join({ roomCode: pick.roomCode });
   }
@@ -523,27 +515,12 @@ class GameServer {
     return { ok: true };
   }
 
-  /** A player is done with the current waiting step; once everyone is, the game moves on. */
-  async done(body: Body) {
-    const roomCodeValue = code(body);
-    const { mine } = await this.requireSeat(roomCodeValue);
-    let failure = '';
-    await this.mutate(roomCodeValue, (state) => {
-      const result = markReady(state, mine.seat);
-      failure = result.error ?? '';
-      return result.error ? state : progress(result.state);
-    });
-    if (failure) throw new GameError(409, failure);
-    return { ok: true };
-  }
-
   /** Host-only, in the lobby: the room rules (mode, roles, reveal, ballots, discussion). */
   async settings(body: Body) {
     const roomCodeValue = code(body);
     const room = await this.room(roomCodeValue);
     if (room.host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн дүрэм өөрчилнө.');
     if (room.status !== 'lobby') throw new GameError(409, 'Тоглоом эхэлсэн үед дүрэм өөрчлөх боломжгүй.');
-    if (room.ranked) throw new GameError(409, 'Рэйтинг тоглолтын дүрэм тогтмол, өөрчлөх боломжгүй.');
     const settings = roomSettings(room.game_type ?? 'mafia', body.settings);
     await this.touchRoom(roomCodeValue, { settings });
     return { settings };
@@ -586,8 +563,7 @@ class GameServer {
     if (room.status !== 'playing') return { ok: true };
     const { data: pub } = await this.admin.from('game_public').select('deadline').eq('room_code', roomCodeValue).maybeSingle();
     const expired = pub?.deadline ? Date.parse(pub.deadline) <= Date.now() + 500 : false;
-    // In a ranked game the clock alone moves the game on: the host cannot cut a phase short.
-    const hostSkip = body.skip === true && room.host_id === this.userId && room.ranked !== true;
+    const hostSkip = body.skip === true && room.host_id === this.userId;
     await this.mutate(roomCodeValue, (state) => {
       const skippable = state.phase === 'Role Reveal' || state.phase === 'Morning' || state.phase === 'Discussion' || (state.phase === 'Voting' && state.votesRevealed);
       if (!expired && !(hostSkip && skippable)) return state;
@@ -603,7 +579,6 @@ class GameServer {
     if (room.host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн бот нэмнэ.');
     if (!BOTS_ALLOWED[room.game_type ?? 'mafia']) throw new GameError(409, 'Энэ тоглоомд бот нэмэх боломжгүй.');
     if (room.status !== 'lobby') throw new GameError(409, 'Тоглоом эхэлсэн үед бот нэмэх боломжгүй.');
-    if (room.ranked) throw new GameError(409, 'Рэйтинг өрөөнд бот нэмэх боломжгүй.');
     const seats = await this.seats(roomCodeValue);
     if (seats.length >= room.max_players) throw new GameError(409, 'Өрөө дүүрсэн байна.');
     const taken = new Set(seats.map((seat) => seat.seat));
@@ -809,7 +784,6 @@ Deno.serve(async (request) => {
       vote: (value) => server.vote(value),
       verdict: (value) => server.verdict(value),
       'reveal-ready': (value) => server.revealReady(value),
-      done: (value) => server.done(value),
       settings: (value) => server.settings(value),
       tick: (value) => server.tick(value),
       rematch: (value) => server.rematch(value),
