@@ -24,7 +24,7 @@ const FRAME_IMAGES: Record<string, string> = {
 /*
  * Three tiers of looks:
  *   - plain (still, matte): sold for coins;
- *   - animated rings and borders: won by reaching ranks;
+ *   - animated rings and borders: legacy rewards (once won by ranking up; kept by their owners, no longer sold);
  *   - painted art: sold for diamonds (later also the season pass and limited offers).
  */
 
@@ -77,7 +77,7 @@ const RING_ART: Record<string, string> = {
   'frame-ulzii': '/assets/frames/plain/ulzii.svg',
   'frame-season1': '/assets/frames/plain/season1.svg',
 };
-/** Animated rings won by rank (frame-gold … frame-royal were sold before ranks gave them). */
+/** Animated rings: legacy rewards, worn by the players who already own them. */
 const ANIMATED_FRAMES = ['frame-gold', 'frame-neon', 'frame-ice', 'frame-fire', 'frame-blood', 'frame-royal', 'frame-smoke', 'frame-coins', 'frame-tycoon'];
 /** Every avatar frame the app can draw (see the frame-* styles in theme.css). */
 export const FRAME_KEYS = [...PLAIN_FRAMES, ...ANIMATED_FRAMES, ...Object.keys(FRAME_IMAGES)];

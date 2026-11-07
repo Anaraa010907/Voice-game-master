@@ -37,11 +37,11 @@ export function rulesSummary(raw: unknown) {
 }
 
 /** The lobby card: which roles this table will get, and (for the host) the button to change the rules. */
-export function MafiaRulesCard({ settings, players, isHost, busy, ranked = false, onEdit }: { settings: unknown; players: number; isHost: boolean; busy: boolean; ranked?: boolean; onEdit: () => void }) {
+export function MafiaRulesCard({ settings, players, isHost, busy, onEdit }: { settings: unknown; players: number; isHost: boolean; busy: boolean; onEdit: () => void }) {
   const rules = sanitizeMafiaSettings(settings);
   return <section className="lobby-rules" aria-label={t('Тоглоомын дүрэм', 'Game rules')}>
     <header>
-      <span><ScrollText size={13} />{t(` ДҮРЭМ · `, ` RULES · `)}<b>{ranked ? t('РЭЙТИНГ · СТАНДАРТ', 'RANKED · STANDARD') : MODE_LABEL[rules.mode].toUpperCase()}</b></span>
+      <span><ScrollText size={13} />{t(` ДҮРЭМ · `, ` RULES · `)}<b>{MODE_LABEL[rules.mode].toUpperCase()}</b></span>
       {isHost && <button type="button" className="lobby-rules-edit" disabled={busy} onClick={onEdit}><SlidersHorizontal size={13} />{t(` ӨӨРЧЛӨХ`, ` CHANGE`)}</button>}
     </header>
     <RoleChips players={players} settings={rules} />
@@ -50,8 +50,8 @@ export function MafiaRulesCard({ settings, players, isHost, busy, ranked = false
 }
 
 /** Host-only editor: mode, optional roles, reveal, anonymous ballots and discussion length. */
-export function MafiaRulesEditor({ initial, players, busy, ranked = false, onSave, onClose }: {
-  initial: unknown; players: number; busy: boolean; ranked?: boolean; onSave: (settings: MafiaSettings) => void; onClose: () => void;
+export function MafiaRulesEditor({ initial, players, busy, onSave, onClose }: {
+  initial: unknown; players: number; busy: boolean; onSave: (settings: MafiaSettings) => void; onClose: () => void;
 }) {
   const [draft, setDraft] = useState(() => sanitizeMafiaSettings(initial));
   const change = (patch: Partial<MafiaSettings>) => setDraft((current) => sanitizeMafiaSettings({ ...current, ...patch }));
@@ -64,8 +64,7 @@ export function MafiaRulesEditor({ initial, players, busy, ranked = false, onSav
         <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>{t(`БОЛИХ`, `CANCEL`)}</button><button type="button" className="primary-button" disabled={busy} onClick={() => onSave(draft)}><Check size={14} />{t(` ХАДГАЛАХ`, ` SAVE`)}</button></div>
       </header>
       <div className="rules-modes" role="radiogroup" aria-label={t('Горим', 'Mode')}>
-        {ranked && <p className="rules-ranked-note">{t(`Рэйтинг тоглолт стандарт дүрмээр явагдана. Зөвхөн хэлэлцүүлгийн хугацааг өөрчилж болно.`, `Ranked matches use the standard rules. Only the discussion time can be changed.`)}</p>}
-        {(ranked ? ['classic'] as GameMode[] : ['classic', 'hard', 'custom'] as GameMode[]).map((mode) => <button type="button" role="radio" aria-checked={draft.mode === mode} key={mode}
+        {(['classic', 'hard', 'custom'] as GameMode[]).map((mode) => <button type="button" role="radio" aria-checked={draft.mode === mode} key={mode}
           className={draft.mode === mode ? 'is-picked' : ''} onClick={() => change({ mode })}><b>{MODE_LABEL[mode]}</b><small>{MODE_HINT[mode]}</small></button>)}
       </div>
       <div className={`rules-switches ${custom ? '' : 'is-locked'}`}>

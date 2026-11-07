@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, Bot, Check, Clock3, Coins, Crown, Flag, Flame, Gem, Gift, Landmark, Lock, Plus, Send, ShoppingBag, Sparkles, UserPlus, VenetianMask, X } from 'lucide-react';
+import { ArrowLeft, Bot, Check, Clock3, Coins, Crown, Flag, Flame, Gem, Gift, Lock, Plus, Send, ShoppingBag, Sparkles, UserPlus, X } from 'lucide-react';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
-import RankEmblem, { RankChip } from './RankEmblem';
-import { RANK_GAMES, RANK_METALS, RANK_NAMES, parseRankTitle, type RankGame } from './rankRules';
 import { supabase } from './supabaseClient';
 import type { NotifyFn, RoomSeat } from './multiplayer';
 import { playSfx } from './sfx';
@@ -14,8 +12,11 @@ import { translateMessage } from './i18n';
 export type ShopKind = 'gift' | 'frame' | 'title' | 'nameplate' | 'border';
 /** Coins are earned by playing; diamonds are bought with real money. */
 export type Currency = 'coin' | 'diamond';
-/** Where a look comes from: bought in the shop, won by reaching a rank, or (later) the season pass / a limited offer. */
-export type ItemSource = 'shop' | 'rank' | 'pass' | 'limited';
+/**
+ * Where a look comes from: bought in the shop, the season pass, a limited offer, or 'legacy' (a former
+ * rank prize: kept and worn by those who own it, no longer sold or won).
+ */
+export type ItemSource = 'shop' | 'legacy' | 'pass' | 'limited';
 export type ShopItem = { key: string; kind: ShopKind; name: string; description: string; icon: string; price: number; sort: number; currency: Currency; source?: ItemSource };
 /** Only shop items can be bought or given. */
 export const forSale = (item: ShopItem) => (item.source ?? 'shop') === 'shop';
@@ -112,27 +113,17 @@ export function TopUpModal({ onClose }: { onClose: () => void }) {
 /** A player's shop title, in gold. */
 const ICON_SIZE = { sm: 11, lg: 14, hero: 17 } as const;
 
-/**
- * A title as an ornate plaque: emblem, name in metal letters, and a gleam that runs across it.
- * Titles are won in ranked play; the plaque takes the metal of the rank that unlocked it
- * (see .title-metal-* in theme.css) and the game's emblem, a crown for the top ranks.
- */
+/** A title as an ornate plaque: emblem, name in metal letters, and a gleam that runs across it (see .title-tier-* in theme.css). */
 export function TitlePlaque({ titleKey, name, size = 'sm' }: { titleKey: string; name: string; size?: 'sm' | 'lg' | 'hero' }) {
-  const rank = parseRankTitle(titleKey);
-  const Icon = !rank ? Sparkles : rank.level >= 8 ? Crown : rank.game === 'mafia' ? VenetianMask : Landmark;
-  const tone = rank ? `title-metal-${RANK_METALS[rank.level - 1]}` : `title-tier-${titleKey.replace(/^title-/, '')}`;
-  return <span className={`title-badge is-${size} ${tone} ${rank ? 'has-crest' : ''}`} title={name}>
-    {rank
-      ? <RankEmblem game={rank.game} level={rank.level} className="tb-crest" />
-      : <i className="tb-emblem" aria-hidden="true"><Icon size={ICON_SIZE[size]} /></i>}
+  return <span className={`title-badge is-${size} title-tier-${titleKey.replace(/^title-/, '')}`} title={name}>
+    <i className="tb-emblem" aria-hidden="true"><Sparkles size={ICON_SIZE[size]} /></i>
     <span className="tb-name">{name}</span>
   </span>;
 }
 
 export function TitleBadge({ titleKey, items, size = 'sm' }: { titleKey?: string | null; items: ShopItem[]; size?: 'sm' | 'lg' | 'hero' }) {
   if (!titleKey) return null;
-  const rank = parseRankTitle(titleKey);
-  const name = rank ? RANK_NAMES[rank.game][rank.level - 1] : items.find((item) => item.key === titleKey)?.name;
+  const name = items.find((item) => item.key === titleKey)?.name;
   return name ? <TitlePlaque titleKey={titleKey} name={name} size={size} /> : null;
 }
 
@@ -217,9 +208,8 @@ export function GiftPicker({ targetName, allowCosmetics, busy, note, onBack, onS
 
 type Card = {
   id: string; display_name: string; avatar_url: string | null; avatar_key: string; frame_key: string | null; title_key: string | null; nameplate_key?: string | null; border_key?: string | null;
-  rank_name: string; rank_points: number; total_matches: number; wins: number; win_rate: number; best_win_streak: number;
+  total_matches: number; wins: number; win_rate: number; best_win_streak: number;
   created_at: string; gift_total: number; gifts: { gift_key: string; count: number }[];
-  ranks?: { game_type: RankGame; points: number; wins: number; matches: number }[];
 };
 
 const REPORT_REASONS = [t('Доромжилсон, хараасан', 'Insults or swearing'), t('Хуурсан, луйвардсан', 'Cheating or scamming'), t('Тоглоомыг зориуд эвдсэн', 'Ruining the game on purpose'), t('Зохисгүй нэр, зураг', 'Inappropriate name or picture'), t('Бусад', 'Other')];
@@ -311,8 +301,7 @@ export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, not
         <div className="pcard-name">
           <h2>{name}{isMe && <small>{t(`ЧИ`, `YOU`)}</small>}</h2>
           <TitleBadge titleKey={card?.title_key} items={items} size="lg" />
-          {card && <div className="pcard-ranks">{RANK_GAMES.map((game) => <RankChip key={game} game={game} points={card.ranks?.find((entry) => entry.game_type === game)?.points ?? 0} />)}</div>}
-          {isBot && <span className="pcard-rank">{t(`Бот тоглогч · дасгалын ширээнд`, `Bot player · practice table`)}</span>}
+          {isBot && <span className="pcard-bot-note">{t(`Бот тоглогч · дасгалын ширээнд`, `Bot player · practice table`)}</span>}
         </div>
       </div>
       {loadError && <p className="pcard-note">{loadError}</p>}
@@ -374,8 +363,6 @@ type Me = { coins: number; diamonds: number; frame_key: string | null; title_key
 type ShopTab = ShopKind | 'offers';
 const TABS: { key: ShopTab; label: string }[] = [{ key: 'offers', label: t('Онцлох', 'Featured') }, { key: 'frame', label: t('Аватар хүрээ', 'Avatar frame') }, { key: 'nameplate', label: t('Нэрийн хавтан', 'Nameplate') }, { key: 'border', label: t('Нэрийн хүрээ', 'Name border') }, { key: 'gift', label: t('Бэлэг', 'Gift') }];
 const CURRENCY_HEADING: Record<Currency, string> = { coin: t('Зоосоор · энгийн, хөдөлгөөнгүй', 'For coins · plain, still'), diamond: t('Алмазаар · зурган гоёл', 'For diamonds · painted looks') };
-const GAME_SHORT: Record<RankGame, string> = { mafia: t('Мафи', 'Mafia') };
-type RankPrize = { game_type: RankGame; level: number; item_key: string | null };
 
 /** A look sold for a while at its own price (a weekly discount, or one an admin set). */
 export type ShopOffer = { id: string; item_key: string; price: number; currency: Currency; starts_at: string; ends_at: string; auto: boolean };
@@ -413,14 +400,8 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
   const [busy, setBusy] = useState<string | null>(null);
   const [preview, setPreview] = useState<ShopItem | null>(null);
   const [topUp, setTopUp] = useState(false);
-  const [prizes, setPrizes] = useState<RankPrize[]>([]);
   const free = useFreeShopping();
   const { offers, reload: reloadOffers, now } = useShopOffers();
-  useEffect(() => {
-    if (!supabase) return;
-    void Promise.resolve(supabase.from('rank_rewards').select('game_type,level,item_key').not('item_key', 'is', null))
-      .then(({ data }) => setPrizes((data as RankPrize[] | null) ?? [])).catch(() => undefined);
-  }, []);
 
   const load = useCallback(async () => {
     if (!supabase) return;
@@ -450,14 +431,13 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
   const bonusReady = !me?.bonus_claimed_at || Date.now() - new Date(me.bonus_claimed_at).getTime() > 20 * 3600_000;
   const wallet: Wallet | null = me ? { coins: me.coins, diamonds: me.diamonds } : null;
   const shown = tab === 'offers' ? [] : items.filter((item) => item.kind === tab);
-  // Plain looks for coins, painted ones for diamonds, each purse its own section; animated ones are rank prizes.
-  const prizeOf = (key: string) => prizes.find((prize) => prize.item_key === key) ?? null;
+  // Plain looks for coins, painted ones for diamonds, each purse its own section. Legacy looks (former
+  // rank prizes) are no longer sold: they show only to the players who own them, so they can wear them.
   const offerOf = (key: string) => offers.find((offer) => offer.item_key === key) ?? null;
-  const rankList = shown.filter((item) => item.source === 'rank')
-    .sort((left, right) => (prizeOf(left.key)?.game_type ?? '').localeCompare(prizeOf(right.key)?.game_type ?? '') || (prizeOf(left.key)?.level ?? 99) - (prizeOf(right.key)?.level ?? 99));
-  const sections: Array<{ id: Currency | 'rank'; list: ShopItem[] }> = [
+  const legacyList = shown.filter((item) => item.source === 'legacy' && (owned.includes(item.key) || free));
+  const sections: Array<{ id: Currency | 'legacy'; list: ShopItem[] }> = [
     { id: 'coin' as const, list: shown.filter((item) => forSale(item) && (item.currency ?? 'coin') === 'coin') },
-    { id: 'rank' as const, list: rankList },
+    { id: 'legacy' as const, list: legacyList },
     { id: 'diamond' as const, list: shown.filter((item) => forSale(item) && item.currency === 'diamond') },
   ].filter((section) => section.list.length);
   const equippedFor = (kind: ShopKind) => kind === 'frame' ? me?.frame_key : kind === 'title' ? me?.title_key : kind === 'nameplate' ? me?.nameplate_key : kind === 'border' ? me?.border_key : null;
@@ -471,11 +451,10 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
     {item.kind === 'border' && <PlatePreview plateKey={me?.nameplate_key ?? null} borderKey={item.key} me={me} />}
   </button>;
 
-  /** Wear / take off / buy (at the offer's price while one runs) / locked rank prize. */
+  /** Wear / take off / buy (at the offer's price while one runs) / not for sale. */
   const action = (item: ShopItem, offer: ShopOffer | null) => {
-    const prize = item.source === 'rank' ? prizeOf(item.key) : null;
     // Admins may wear anything; everyone else wears what they own.
-    const has = owned.includes(item.key) || (free && item.source === 'rank');
+    const has = owned.includes(item.key) || (free && item.source === 'legacy');
     const equipped = equippedFor(item.kind) === item.key;
     if (item.kind === 'gift') return <span className="shop-price"><Price item={item} free={free} /></span>;
     if (equipped) return <button type="button" className="secondary-button" disabled={busy !== null} onClick={() => void call(item.key, 'equip_item', { p_kind: item.kind, p_key: null }, t('Тайллаа.', 'Removed.'))}><Check size={13} />{t(` ЗҮҮСЭН`, ` EQUIPPED`)}</button>;
@@ -485,7 +464,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
       return <button type="button" className={`primary-button buy-${offer.currency}`} disabled={busy !== null || !canAfford(deal, wallet, free)}
         onClick={() => void call(item.key, 'buy_offer', { p_offer: offer.id }, t(`${item.name} таных боллоо!`, `${item.name} is yours!`))}>{free ? <><ShoppingBag size={13} />{t(`ҮНЭГҮЙ АВАХ`, `GET FOR FREE`)}</> : <Price item={deal} />}</button>;
     }
-    if (!forSale(item)) return <span className="shop-rank-lock"><Lock size={12} />{prize ? <>{GAME_SHORT[prize.game_type]} · {RANK_NAMES[prize.game_type][prize.level - 1]}</> : item.source === 'rank' ? t('Цол ахиж авна', 'Won by ranking up') : t('Одоогоор худалдаагүй', 'Not for sale right now')}</span>;
+    if (!forSale(item)) return <span className="shop-lock"><Lock size={12} />{t('Одоогоор худалдаагүй', 'Not for sale right now')}</span>;
     return <button type="button" className={`primary-button buy-${item.currency ?? 'coin'}`} disabled={busy !== null || !canAfford(item, wallet, free)} onClick={() => void call(item.key, 'buy_item', { p_key: item.key }, t(`${item.name} таных боллоо!`, `${item.name} is yours!`))}>{free ? <><ShoppingBag size={13} />{t(`ҮНЭГҮЙ АВАХ`, `GET FOR FREE`)}</> : <Price item={item} />}</button>;
   };
 
@@ -543,12 +522,12 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
       </section>}
       {sections.map((section) => <section key={section.id} className={`shop-section is-${section.id}`}>
         {sections.length > 1 || section.id !== 'coin'
-          ? <h3 className="shop-section-title">{section.id === 'diamond' ? <Gem size={13} /> : section.id === 'rank' ? <Crown size={13} /> : <Coins size={13} />}{section.id === 'rank' ? t('Цол ахиж авна · хөдөлгөөнт', 'Won by ranking up · animated') : CURRENCY_HEADING[section.id]}</h3>
+          ? <h3 className="shop-section-title">{section.id === 'diamond' ? <Gem size={13} /> : section.id === 'legacy' ? <Crown size={13} /> : <Coins size={13} />}{section.id === 'legacy' ? t('Таны хуучин шагнал · хөдөлгөөнт', 'Your legacy rewards · animated') : CURRENCY_HEADING[section.id]}</h3>
           : null}
-        {section.id === 'rank' && <p className="shop-section-note">{t(`Рэйтинг тоглолтод тухайн цолд анх хүрэхэд автоматаар таных болно.`, `Yours automatically the first time you reach that rank in ranked matches.`)}</p>}
+        {section.id === 'legacy' && <p className="shop-section-note">{t(`Өмнө нь цол ахиж авсан гоёл. Таных хэвээр, зүүж болно. Дахин худалдаалагдахгүй.`, `Looks you won earlier by ranking up. They stay yours to wear; they are no longer sold.`)}</p>}
         <div className={`shop-grid kind-${tab}`}>{section.list.map(card)}</div>
       </section>)}
-      <p className="admin-note shop-foot"><Coins size={11} />{t(` Зоосыг тоглож олно: ялбал +30 (рэйтинг +50), ялагдвал +10 (+15), өдөрт тоглолтоос 500 хүртэл, өдрийн бонус +100, цол ахихад шагнал. `, ` Earn coins by playing: +30 for a win (+50 ranked), +10 for a loss (+15), up to 500 a day from matches, a +100 daily bonus, and prizes for ranking up. `)}<Crown size={11} />{t(` Хөдөлгөөнт хүрээг цол ахиж авна. `, ` Animated frames are won by ranking up. `)}<Gem size={11} />{t(` Алмазыг цэнэглэж авна (тун удахгүй).`, ` Diamonds come from top-ups (coming soon).`)}</p>
+      <p className="admin-note shop-foot"><Coins size={11} />{t(` Зоосыг тоглож олно: тоглолт бүрт +10, ялбал +30, өдөрт тоглолтоос 500 хүртэл, өдрийн бонус +100. Тоглолтын дундуур гарвал зоос өгөхгүй. `, ` Earn coins by playing: +10 for every match, +30 for a win, up to 500 a day from matches, and a +100 daily bonus. Leaving a match early pays nothing. `)}<Gem size={11} />{t(` Алмазыг цэнэглэж авна (тун удахгүй).`, ` Diamonds come from top-ups (coming soon).`)}</p>
     </div>
     {topUp && <TopUpModal onClose={() => setTopUp(false)} />}
     {preview && <div className="game-modal-backdrop" onClick={() => setPreview(null)}>

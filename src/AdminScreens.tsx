@@ -541,7 +541,7 @@ const KIND_LABEL: Record<string, string> = { frame: t('Хүрээ', 'Frame'), na
 
 /**
  * Limited offers: the weekly discount runs by itself (two painted looks, 20% off, Monday to Monday);
- * here an admin adds any look (not a rank prize) at a price for a few days, or ends one early.
+ * here an admin adds any look (not a legacy reward) at a price for a few days, or ends one early.
  */
 function OffersTab({ notify }: { notify: NotifyFn }) {
   const items = useShopItems();
@@ -559,7 +559,7 @@ function OffersTab({ notify }: { notify: NotifyFn }) {
   }, [notify]);
   useEffect(() => { void load(); }, [load]);
 
-  const choices = items.filter((item) => ['frame', 'nameplate', 'border'].includes(item.kind) && item.source !== 'rank');
+  const choices = items.filter((item) => ['frame', 'nameplate', 'border'].includes(item.kind) && item.source !== 'legacy');
   const picked = choices.find((item) => item.key === itemKey) ?? null;
   const pick = (key: string) => {
     setItemKey(key);
