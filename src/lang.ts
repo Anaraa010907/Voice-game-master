@@ -39,3 +39,15 @@ export const plural = (count: number, noun: string, many = `${noun}s`) => `${cou
 /** Rooms belong to one language pool so strangers in a voice room can talk. */
 export const ROOM_LANGS: Array<{ code: Lang; label: string }> = [{ code: 'mn', label: 'Монгол' }, { code: 'en', label: 'English' }];
 export const roomLangName = (code?: string | null) => (code === 'en' ? t('Англи', 'English') : t('Монгол', 'Mongolian'));
+
+/**
+ * A month and year, e.g. "2026 оны 3-р сар" / "Mar 2026". Mongolian is written out by hand: many
+ * browsers have no mn-MN month names and fall back to English.
+ */
+export function formatJoinDate(value: string, english = isEnglish) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return english ? 'Unknown date' : 'Тодорхойгүй огноо';
+  return english
+    ? new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(date)
+    : `${date.getFullYear()} оны ${date.getMonth() + 1}-р сар`;
+}

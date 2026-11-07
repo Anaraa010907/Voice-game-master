@@ -7,7 +7,7 @@ import { PORTRAITS } from './portraits';
 import { supabaseConfigured, type PublicProfile } from './supabaseClient';
 import { i18n } from './i18n';
 
-import { t } from './lang';
+import { formatJoinDate, t } from './lang';
 export const avatarOptions = [
   { key: 'rose', label: t('Сарнай ягаан', 'Rose pink') },
   { key: 'violet', label: t('Нил ягаан', 'Violet') },
@@ -133,8 +133,5 @@ function Stat({ value, label }: { value: string | number; label: string }) {
   return <div className="account-stat"><b>{value}</b><span>{label}</span></div>;
 }
 
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? t('Тодорхойгүй огноо', 'Unknown date') : new Intl.DateTimeFormat('mn-MN', { month: 'short', year: 'numeric' }).format(date);
-}
+const formatDate = (value: string) => formatJoinDate(value);
 

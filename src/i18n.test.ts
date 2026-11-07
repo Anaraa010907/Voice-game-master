@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { i18n, translateMessage, translatePhase, translateRole } from './i18n.ts';
+import { formatJoinDate } from './lang.ts';
 
 assert.equal(i18n.app.title, 'MAFIA: SHADOWS', 'The game title must remain unchanged.');
 assert.equal(translatePhase('Role Reveal'), 'Дүр тодруулах');
@@ -34,3 +35,7 @@ for (const message of [
 assert.equal(i18n.whoAmI.yes, 'ТИЙМ');
 assert.equal(i18n.whoAmI.lastAnswer('Бат', 'Тийм', 3, 1), 'Бат: Тийм (3–1)');
 console.log('i18n regression checks passed');
+
+assert.equal(formatJoinDate('2026-03-15T12:00:00Z', false), '2026 оны 3-р сар', 'Mongolian join dates are written out, not left to mn-MN Intl.');
+assert.equal(formatJoinDate('2026-03-15T12:00:00Z', true), 'Mar 2026');
+assert.equal(formatJoinDate('nope', false), 'Тодорхойгүй огноо');
