@@ -651,11 +651,16 @@ class GameServer {
     const room = await this.room(roomCodeValue);
     await this.requireSeat(roomCodeValue);
     if (room.status !== 'playing') return { ok: true };
-    const { data: pub } = await this.admin.from('game_public').select('deadline').eq('room_code', roomCodeValue).maybeSingle();
+    const { data: pub } = await this.admin.from('game_public').select('deadline,view').eq('room_code', roomCodeValue).maybeSingle();
     const expired = pub?.deadline ? Date.parse(pub.deadline) <= Date.now() + 500 : false;
     const hostSkip = body.skip === true && room.host_id === this.userId;
     await this.mutate(roomCodeValue, (state) => {
-      if (isWhoAmI(state)) return expired ? whoAmIProgress(timeoutWhoAmI(state) as WhoAmIGame) : whoAmIProgress(state);
+      if (isWhoAmI(state)) {
+        // Every client ticks when the clock hits zero. The expired deadline belongs to the stage published with it,
+        // so a stage that opened since (another tick won, or this is a retry on newer state) keeps its own timer.
+        const sameStage = pub?.view ? whoAmIStageKey(pub.view as WhoAmIState) === whoAmIStageKey(state) : false;
+        return expired && sameStage ? whoAmIProgress(timeoutWhoAmI(state) as WhoAmIGame) : whoAmIProgress(state);
+      }
       const skippable = state.phase === 'Role Reveal' || state.phase === 'Morning' || state.phase === 'Discussion' || (state.phase === 'Voting' && state.votesRevealed);
       if (!expired && !(hostSkip && skippable)) return state;
       return progress(advance(state));
@@ -668,9 +673,14 @@ class GameServer {
     const roomCodeValue = code(body);
     const { mine } = await this.requireSeat(roomCodeValue);
     const action = whoAmIActionOf(body);
+    // The room's current host may skip, including one who took over after the first host left mid-game
+    // (the engine's own host flag is only set at the start).
+    const hostSkip = action.type === 'hostSkip';
+    if (hostSkip && (await this.room(roomCodeValue)).host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн алгасна.');
     let failure = '';
     await this.mutate(roomCodeValue, (state) => {
       if (!isWhoAmI(state)) throw new GameError(409, 'Энэ үйлдэл энэ тоглоомд хамаарахгүй.');
+      if (hostSkip) return state.phase === 'results' ? state : whoAmIProgress(timeoutWhoAmI(state) as WhoAmIGame);
       const result = applyWhoAmIAction(state, mine.seat, action);
       failure = result.error ?? '';
       return result.error ? state : whoAmIProgress({ ...result.state, matchId: state.matchId });
