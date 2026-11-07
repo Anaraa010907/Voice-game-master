@@ -412,7 +412,7 @@ function CreateRoom({ gameType, startLanguage, onBack, onCreate }: { gameType: G
     <label className="form-field"><span>{i18n.app.maxPlayers.toUpperCase()}</span><select value={maxPlayers} onChange={(event) => setMaxPlayers(Number(event.target.value))}>{game.sizes.map((count) => <option key={count} value={count}>{t(`${count} тоглогч`, `${count} players`)}</option>)}</select></label>
     {gameType === 'whoami' && <label className="form-field"><span>{i18n.whoAmI.rounds.toUpperCase()}</span><select value={rounds} onChange={(event) => setRounds(Number(event.target.value))}>{WHOAMI_ROUND_CHOICES.map((count) => <option key={count} value={count}>{i18n.whoAmI.roundsCount(count)}</option>)}</select></label>}
     <label className="form-field"><span>{t(`ЯРИХ ХЭЛ`, `ROOM LANGUAGE`)}</span><select value={language} onChange={(event) => setLanguage(event.target.value as Lang)}>{ROOM_LANGS.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}</select></label>
-    <div className="private-setting"><span><b>{t(`Нийтэд нээлттэй`, `Public room`)}</b><small>{isPublic ? t('Өрөөний жагсаалтад харагдана, хэн ч нэгдэнэ', 'Listed in the room list; anyone can join') : t('Зөвхөн кодоор нэгдэнэ, нууц үг тавьж болно', 'Join by code only; you can set a password')}</small></span><button type="button" role="switch" aria-checked={isPublic} className={`toggle ${isPublic ? 'toggle-on' : ''}`} onClick={() => setIsPublic((value) => !value)}><i /></button></div>
+    <div className="private-setting"><span><b>{t(`Нийтэд нээлттэй`, `Public room`)}</b><small>{isPublic ? t('Өрөөний жагсаалтад харагдана, хэн ч нэгдэнэ', 'Listed in the room list; anyone can join') : t('Зөвхөн кодоор нэгдэнэ, нууц үг тавьж болно', 'Join by code only; you can set a password')}</small></span><button type="button" role="switch" aria-checked={isPublic} aria-label={t('Нийтэд нээлттэй өрөө', 'Public room')} className={`toggle ${isPublic ? 'toggle-on' : ''}`} onClick={() => setIsPublic((value) => !value)}><i /></button></div>
     {!isPublic && <label className="form-field password-field"><span>{t(`ӨРӨӨНИЙ НУУЦ ҮГ `, `ROOM PASSWORD `)}<small>{t(`СОНГОЛТТОЙ`, `OPTIONAL`)}</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} maxLength={32} placeholder={t('Нууц үггүй орж болно', 'Leave empty for no password')} autoComplete="new-password" /></label>}
     {error && <p className="form-error" role="alert">{error}</p>}
     <div className="form-actions"><button type="button" className="secondary-button" onClick={onBack}><ArrowLeft size={15} /> {i18n.common.back.toUpperCase()}</button><button type="submit" className="primary-button" disabled={busy}><Users size={15} /> {busy ? t('ҮҮСГЭЖ БАЙНА…', 'CREATING…') : i18n.app.createRoom.toUpperCase()} <ChevronRight size={16} /></button></div>
@@ -449,17 +449,54 @@ function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoos
   return <div className="inner-screen hub-screen"><TopBar title={t('ТОГЛООМ СОНГОНО УУ', 'CHOOSE A GAME')} subtitle={t('ТОГЛОХ', 'PLAY')} onBack={onBack} trailing={<button className="text-button hub-code-button" onClick={onJoinCode}><Radio size={14} />{t(` КОДООР НЭГДЭХ`, ` JOIN BY CODE`)}</button>} />
     <div className="hub-cards">
       <article className="hub-card hub-card-voice" style={{ '--hub-bg': "url('/assets/hub/voice-bg.jpg')" } as CSSProperties}>
-        <h2>VOICE GAME</h2>
+        <h2><span>{i18n.app.hubVoiceTitle}</span></h2>
         <button type="button" className="hub-play" onClick={() => onChoose('mafia')}>{t(`ТОГЛОХ `, `PLAY `)}<ChevronRight size={18} /></button>
         <p className="hub-card-meta"><b>{GAMES.mafia.title}</b>{t(`${GAMES.mafia.players} · Дуут чат, нууц дүр`, `${GAMES.mafia.players} · Voice chat, secret roles`)}</p>
       </article>
       <article className="hub-card hub-card-whoami">
-        <div className="hub-whoami-art" aria-hidden="true"><span>?</span><i /><i /><i /></div>
-        <h2>{GAMES.whoami.title.toUpperCase()}</h2>
+        <WhoAmIHubArt />
+        <h2><span>{GAMES.whoami.title.toUpperCase()}</span></h2>
         <button type="button" className="hub-play" onClick={() => onChoose('whoami')}>{t(`ТОГЛОХ `, `PLAY `)}<ChevronRight size={18} /></button>
         <p className="hub-card-meta"><b>{GAMES.whoami.title}</b>{`${GAMES.whoami.players} · ${i18n.whoAmI.hubMeta}`}</p>
       </article>
     </div>
+  </div>;
+}
+
+/**
+ * Who Am I card art, drawn in SVG (original, no photos): a backlit faceless silhouette on a card with a
+ * gold "?" over its head, and three face-down cards drifting around it.
+ */
+function WhoAmIHubArt() {
+  const smallCard = (x: number, y: number, angle: number, key: string) => <g key={key} transform={`translate(${x} ${y}) rotate(${angle})`} className="hub-whoami-float">
+    <rect x="-17" y="-24" width="34" height="48" rx="5" fill="url(#wa-card-back)" stroke="#d2b073" strokeOpacity=".55" />
+    <rect x="-13" y="-20" width="26" height="40" rx="3" fill="none" stroke="#d2b073" strokeOpacity=".22" />
+    <text x="0" y="8" textAnchor="middle" fontSize="22" fontWeight="700" fill="#d2b073" fillOpacity=".7" fontFamily="Georgia, serif">?</text>
+  </g>;
+  return <div className="hub-whoami-art" aria-hidden="true">
+    <svg viewBox="0 0 240 170" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <radialGradient id="wa-glow" cx="50%" cy="46%" r="50%"><stop offset="0" stopColor="#f3c979" stopOpacity=".55" /><stop offset=".45" stopColor="#a47ad0" stopOpacity=".22" /><stop offset="1" stopColor="#120f1c" stopOpacity="0" /></radialGradient>
+        <linearGradient id="wa-card" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#3a2f4c" /><stop offset="1" stopColor="#15121f" /></linearGradient>
+        <linearGradient id="wa-card-back" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#2c2439" /><stop offset="1" stopColor="#14121c" /></linearGradient>
+        <linearGradient id="wa-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fbe7b5" /><stop offset="1" stopColor="#c6923f" /></linearGradient>
+        <clipPath id="wa-card-clip"><rect x="88" y="34" width="64" height="92" rx="8" /></clipPath>
+      </defs>
+      <ellipse cx="120" cy="82" rx="118" ry="80" fill="url(#wa-glow)" />
+      {smallCard(48, 104, -16, 'a')}
+      {smallCard(194, 58, 14, 'b')}
+      {smallCard(196, 122, 24, 'c')}
+      <g className="hub-whoami-main">
+        <rect x="88" y="34" width="64" height="92" rx="8" fill="url(#wa-card)" stroke="url(#wa-gold)" strokeWidth="1.5" />
+        <g clipPath="url(#wa-card-clip)">
+          <rect x="88" y="34" width="64" height="92" fill="url(#wa-glow)" opacity=".7" />
+          <circle cx="120" cy="84" r="13" fill="#0b0a10" />
+          <path d="M92 128 C94 108 106 99 120 99 C134 99 146 108 148 128 Z" fill="#0b0a10" />
+        </g>
+        <rect x="92" y="38" width="56" height="84" rx="5" fill="none" stroke="#d2b073" strokeOpacity=".25" />
+      </g>
+      <text x="120" y="30" textAnchor="middle" fontSize="34" fontWeight="700" fill="url(#wa-gold)" fontFamily="'Playfair Display', Georgia, serif" className="hub-whoami-mark">?</text>
+    </svg>
   </div>;
 }
 
@@ -652,7 +689,7 @@ export function LobbyView({ room, seats, roomCode, userId, copied, busy, onCopy,
             ? <WhoAmIRulesCard settings={room.settings} isHost={isHost} busy={busy} onEdit={() => setRulesOpen(true)} />
             : <MafiaRulesCard settings={room.settings} players={seats.length} isHost={isHost} busy={busy} onEdit={() => setRulesOpen(true)} />}
           <div className="lobby-bottom">
-            <div className="lobby-hint"><LockKeyhole size={14} /><span>{isHost ? t('ТА ӨРӨӨНИЙ ЭЗЭН', 'YOU ARE THE HOST') : t('ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА', 'WAITING FOR THE HOST TO START')} <b>•</b> {hint}</span></div>
+            <div className="lobby-hint"><LockKeyhole size={14} /><span><span className="lobby-hint-role">{isHost ? t('ТА ӨРӨӨНИЙ ЭЗЭН', 'YOU ARE THE HOST') : t('ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА', 'WAITING FOR THE HOST TO START')} <b>•</b> </span>{hint}</span></div>
             <div className="lobby-actions">
               <button className="secondary-button invite-friends-button" onClick={onInvite}><UserPlus size={15} />{t(` НАЙЗ УРИХ`, ` INVITE FRIENDS`)}</button>
               {!isHost && mine && <button className={`secondary-button ready-button ${mine.ready ? 'is-ready' : ''}`} disabled={busy} onClick={() => { void onRun('ready', { ready: !mine.ready }); }}>{mine.ready ? <Check size={15} /> : <Shield size={15} />}{mine.ready ? t('БЭЛЭН', 'READY') : t('БИ БЭЛЭН', 'I’M READY')}</button>}
@@ -705,7 +742,7 @@ function SeatCard({ seat, isHost, isMe, onRemoveBot, busy, onProfile }: { seat: 
   return <div className={`player-card compact-card is-tappable ${seat.ready || isHost ? 'player-ready' : ''} ${seat.is_bot ? 'is-bot' : ''} ${plate.className} ${rowBorderClass(seat.border_key)}`} style={plate.style} role="button" tabIndex={0}
     onClick={onProfile} onKeyDown={(event) => { if (event.key === 'Enter') onProfile(); }} aria-label={t(`${seat.display_name} — профайл`, `${seat.display_name} — profile`)}>
     <RowBorder borderKey={seat.border_key} />
-    <Avatar name={seat.is_bot ? seat.display_name.replace(/ \(бот\)$/, '') : seat.display_name} color={seat.color} url={seat.avatar_url} frame={seat.frame_key}>{isHost && <i title={t('Өрөөний эзэн', 'Room host')}><Crown size={11} /></i>}{seat.is_bot ? <i className="bot-badge" title={t('Бот', 'Bot')}><Bot size={11} /></i> : <VoiceAvatarIndicator name={seat.display_name} identity={seat.user_id} />}</Avatar>
+    <Avatar name={seat.is_bot ? seat.display_name.replace(/ \(бот\)$/, '') : seat.display_name} color={seat.color} url={seat.avatar_url} frame={seat.frame_key}>{isHost && <i className="host-badge" title={t('Өрөөний эзэн', 'Room host')}><Crown size={9} /></i>}{seat.is_bot ? <i className="bot-badge" title={t('Бот', 'Bot')}><Bot size={11} /></i> : <VoiceAvatarIndicator name={seat.display_name} identity={seat.user_id} />}</Avatar>
     <div className="player-name">{seat.display_name}{isMe && <small>{t(`ЧИ`, `YOU`)}</small>}</div>
     <div className={`player-status ${seat.ready || isHost ? 'online' : ''}`}>{isHost ? t('ЭЗЭН', 'HOST') : seat.is_bot ? t('БОТ', 'BOT') : seat.ready ? t('БЭЛЭН', 'READY') : t('ХҮЛЭЭЖ БАЙНА', 'WAITING')}</div>
     {onRemoveBot && <button type="button" className="remove-bot-button" disabled={busy} onClick={(event) => { event.stopPropagation(); onRemoveBot(); }} aria-label={t(`${seat.display_name} хасах`, `Remove ${seat.display_name}`)} title={t('Ботыг хасах', 'Remove bot')}><X size={13} /></button>}

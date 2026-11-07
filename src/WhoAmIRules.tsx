@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, ScrollText, SlidersHorizontal } from 'lucide-react';
 import { i18n } from './i18n';
+import { ScrollCue } from './ScrollCue';
 import { isEnglish } from './lang';
 import { WHO_AM_I_PACK } from './whoAmIContent';
 import { WHOAMI_ROUND_CHOICES, sanitizeWhoAmISettings, type WhoAmISettings } from './whoAmIEngine';
@@ -26,10 +27,15 @@ export function WhoAmIRulesCard({ settings, isHost, busy, onEdit }: { settings: 
       <span><ScrollText size={13} /> {w().title.toUpperCase()} · <b>{w().roundsCount(rules.rounds).toUpperCase()}</b></span>
       {isHost && <button type="button" className="lobby-rules-edit" disabled={busy} onClick={onEdit}><SlidersHorizontal size={13} /> {w().edit}</button>}
     </header>
-    <div className="rules-roles">{(rules.categories.length ? rules.categories : WHO_AM_I_PACK.filter((entry) => !rules.kidsSafe || entry.kidsSafe).map((entry) => entry.id))
-      .map((id) => <span key={id} className="team-town">{categoryName(id)}</span>)}</div>
-    <p>{w().rulesLine}</p>
-    <p>{w().scoringLine}</p>
+    <ScrollCue className="whoami-rules-body" label={w().moreRules}>
+      {/* Every category (the default) is one chip, so the card stays short; a picked set lists its names. */}
+      <div className="rules-roles">{rules.categories.length
+        ? rules.categories.map((id) => <span key={id} className="team-town">{categoryName(id)}</span>)
+        : <span className="team-town">{w().allCategoriesCount(WHO_AM_I_PACK.filter((entry) => !rules.kidsSafe || entry.kidsSafe).length)}</span>}
+        {rules.kidsSafe && <span className="team-town">{w().kidsSafe}</span>}</div>
+      <p>{w().rulesLine}</p>{' '}
+      <p className="whoami-rules-scoring">{w().scoringLine}</p>
+    </ScrollCue>
   </section>;
 }
 

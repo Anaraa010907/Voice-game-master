@@ -6,6 +6,7 @@ import { serverMessageInEnglish } from './serverText.ts';
 const mn = {
   app: {
     title: 'MAFIA: SHADOWS',
+    hubVoiceTitle: 'ДУУТ ТОГЛООМ',
     subtitle: 'Гудамжны цуурай',
     localPrototype: 'Орон нутгийн прототип',
     cityOfSecrets: 'Нууцын хот',
@@ -358,6 +359,9 @@ const mn = {
   whoAmI: {
     title: 'Би хэн бэ',
     hubMeta: 'Духан дээрх нууц дүрээ асуултаар тааж ол',
+    morePlayers: (count: number) => `Доор ${count} тоглогч`,
+    host: 'Өрөөний эзэн',
+    moreRules: () => 'Цааш нь',
     phase: { reveal: 'Дүр харах', ask: 'Асуулт', answer: 'Хариулт', guess: 'Таамаг', results: 'Үр дүн' },
     round: 'ТОЙРОГ',
     roundOf: (round: number, max: number) => `${round}/${max}`,
@@ -379,7 +383,7 @@ const mn = {
     giveUp: 'БУУЖ ӨГӨХ',
     isAsking: (name: string) => `${name} асууж байна…`,
     listenHint: 'Асуултыг сонсоод хариулахад бэлдээрэй.',
-    answerPrompt: (name: string) => `${name}-ийн асуултад хариулна уу`,
+    answerPrompt: (name: string) => `${name}-ийн асуултад хариулна\u00a0уу`,
     yes: 'ТИЙМ',
     no: 'ҮГҮЙ',
     unknown: 'МЭДЭХГҮЙ',
@@ -431,6 +435,7 @@ const mn = {
     roundsCount: (count: number) => `${count} тойрог`,
     categories: 'Ангилал',
     allCategories: 'Бүгд',
+    allCategoriesCount: (count: number) => `Бүх ${count} ангилал`,
     kidsSafe: 'Хүүхдэд тохиромжтой',
     edit: 'ЗАСАХ',
     save: 'ХАДГАЛАХ',

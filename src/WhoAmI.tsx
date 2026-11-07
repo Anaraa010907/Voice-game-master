@@ -5,6 +5,7 @@ import { i18n } from './i18n';
 import { isEnglish } from './lang';
 import { MatchRewardBanner } from './MatchReward';
 import { callGame, useCountdown, useGame, type NotifyFn, type RoomSeat } from './multiplayer';
+import { ScrollCue } from './ScrollCue';
 import { playSfx } from './sfx';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { WHO_AM_I_PACK } from './whoAmIContent';
@@ -87,15 +88,15 @@ export function WhoAmITable({ game, me, roomName, isHost, busy, secondsLeft, onA
   if (game.phase === 'reveal') {
     const people = game.players.filter((player) => !player.bot && player.status !== 'left');
     const readyCount = people.filter((player) => player.ready).length;
-    panel = <section className="whoami-reveal">
+    panel = <section className={`whoami-reveal ${game.players.length > 6 ? 'is-crowded' : ''}`}>
       <div className="whoami-reveal-head">
         <span className="whoami-kicker">{w().revealKicker}</span>
         <h1>{w().revealTitle}</h1>
         <p>{w().revealHint}</p>
       </div>
-      <div className={`whoami-reveal-grid count-${game.players.length}`}>
+      <ScrollCue className={`whoami-reveal-grid count-${game.players.length}`} wrapClassName="whoami-reveal-scroll" label={w().morePlayers} focusKey={me.viewerId}>
         {game.players.map((player) => <IdentityCard key={player.id} player={player} identity={identityOf(player)} isMe={player.id === me.viewerId} onProfile={onProfile} />)}
-      </div>
+      </ScrollCue>
       <div className="whoami-reveal-actions">
         {self?.ready
           ? <span className="whoami-wait"><Check size={14} /> {w().readyCount(readyCount, people.length, secondsLeft)}</span>
@@ -170,7 +171,7 @@ export function WhoAmITable({ game, me, roomName, isHost, busy, secondsLeft, onA
 
   return <div className={`whoami-game phase-${game.phase}`}>
     <header className="whoami-top">
-      <div className="whoami-round"><span>{w().round}</span><strong>{game.phase === 'reveal' ? '–' : w().roundOf(game.round, game.maxRounds)}</strong></div>
+      <div className="whoami-round"><span>{w().round}</span><strong>{w().roundOf(Math.max(1, game.round), game.maxRounds)}</strong></div>
       <div className="whoami-phase">{w().phase[game.phase]}</div>
       <div className="whoami-timer"><Clock3 size={14} /><strong>{formatTime(secondsLeft)}</strong></div>
       <div className="whoami-top-actions">
@@ -181,13 +182,15 @@ export function WhoAmITable({ game, me, roomName, isHost, busy, secondsLeft, onA
     </header>
     {banner}
     <div className="whoami-body">
-      {panel}
-      {game.phase !== 'reveal' && <aside className="whoami-players" aria-label={i18n.game.table}>
+      {game.phase === 'reveal' ? panel : <div className="whoami-main">
+        {panel}
+        {lastLine && <div className="whoami-last" role="status" key={game.step}>{lastLine}</div>}
+      </div>}
+      {game.phase !== 'reveal' && <ScrollCue as="aside" className="whoami-players" wrapClassName="whoami-players-scroll" ariaLabel={i18n.game.table} label={w().morePlayers} focusKey={game.activeId}>
         {game.players.map((player) => <PlayerRow key={player.id} player={player} identity={identityOf(player)} isMe={player.id === me.viewerId} isActive={player.id === game.activeId}
           voted={game.votedIds.includes(player.id)} onProfile={onProfile} />)}
-      </aside>}
+      </ScrollCue>}
     </div>
-    {lastLine && game.phase !== 'reveal' && <div className="whoami-last" role="status" key={game.step}>{lastLine}</div>}
     {giveUpOpen && <Confirm title={w().giveUpTitle} body={w().giveUpBody} confirm={w().giveUp} onCancel={() => setGiveUpOpen(false)} onConfirm={() => { setGiveUpOpen(false); onAction({ type: 'giveUp' }); }} />}
     {leaveOpen && <Confirm title={w().leaveTitle} body={w().leaveBody} confirm={w().leave} onCancel={() => setLeaveOpen(false)} onConfirm={onLeave} />}
   </div>;
@@ -208,9 +211,9 @@ function Confirm({ title, body, confirm, onCancel, onConfirm }: { title: string;
 /** A player with the identity everyone else sees. Their own card shows only "?" and the category. */
 function IdentityCard({ player, identity, isMe, large = false, onProfile }: { player: WhoAmIPublicPlayer; identity: WhoAmIIdentity | null; isMe: boolean; large?: boolean; onProfile?: (seat: number) => void }) {
   const category = categoryLabel(player.categoryId, player.categoryName);
-  return <button type="button" className={`whoami-card ${large ? 'is-large' : ''} ${isMe ? 'is-me' : ''} status-${player.status}`} onClick={() => onProfile?.(player.id)}>
+  return <button type="button" className={`whoami-card ${large ? 'is-large' : ''} ${isMe ? 'is-me' : ''} status-${player.status}`} onClick={() => onProfile?.(player.id)} data-cue-focus={(isMe && !large) || undefined}>
     <span className="whoami-card-who">
-      <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}>{player.host && <i><Crown size={10} /></i>}<VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
+      <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}>{player.host && <i className="host-badge" title={w().host}><Crown size={9} /></i>}<VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
       <b>{player.name}{isMe && <small>{w().you}</small>}</b>
     </span>
     <span className="whoami-card-identity">{identity ? identityName(identity) : <><i className="whoami-mystery">?</i><em>{w().hidden}</em></>}</span>
@@ -220,11 +223,13 @@ function IdentityCard({ player, identity, isMe, large = false, onProfile }: { pl
 }
 
 function PlayerRow({ player, identity, isMe, isActive, voted, onProfile }: { player: WhoAmIPublicPlayer; identity: WhoAmIIdentity | null; isMe: boolean; isActive: boolean; voted: boolean; onProfile?: (seat: number) => void }) {
-  return <button type="button" className={`whoami-player ${isActive ? 'is-active' : ''} ${isMe ? 'is-me' : ''} status-${player.status}`} onClick={() => onProfile?.(player.id)}>
-    <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}><VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
+  const category = categoryLabel(player.categoryId, player.categoryName);
+  // A known identity gets the whole second line (the category is in the tooltip); a hidden one shows its category.
+  return <button type="button" className={`whoami-player ${isActive ? 'is-active' : ''} ${isMe ? 'is-me' : ''} status-${player.status}`} onClick={() => onProfile?.(player.id)} title={category} data-cue-focus={isActive || undefined}>
+    <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}>{player.host && <i className="host-badge" title={w().host}><Crown size={9} /></i>}<VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
     <span className="whoami-player-copy">
       <b>{player.name}{isMe && <small>{w().you}</small>}</b>
-      <span>{identity ? identityName(identity) : '?'} · {categoryLabel(player.categoryId, player.categoryName)}</span>
+      {identity ? <span className="whoami-player-identity">{identityName(identity)}</span> : <span className="whoami-player-identity is-hidden">? · {category}</span>}
     </span>
     {voted && <Check className="whoami-voted" size={13} aria-label="✓" />}
     <span className="whoami-player-score"><b>{player.points}</b><small>{player.status === 'playing' ? '' : w().status[player.status]}</small></span>
@@ -243,17 +248,17 @@ function WhoAmIResults({ game, me, roomName, isHost, onReplay, onMenu, extra, ba
       <p>{iWon ? w().youWon : w().youLost}</p>
       {extra}
     </div>
-    <ol className="whoami-ranking">
+    <ScrollCue as="ol" className="whoami-ranking" wrapClassName="whoami-ranking-scroll" label={w().morePlayers}>
       {ranking.map((player, index) => <li key={player.id} className={`${game.winners.includes(player.id) ? 'is-winner' : ''} ${player.id === me.viewerId ? 'is-me' : ''}`}>
         <span className="whoami-rank">{index + 1}</span>
         <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}><VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
         <span className="whoami-ranking-copy">
-          <b>{player.name}{player.id === me.viewerId && <small>{w().you}</small>}</b>
-          <span>{player.identity ? identityName(player.identity) : '?'} · {w().questionsUsed(player.questions)}</span>
+          <b>{player.name}{player.id === me.viewerId && <small>{w().you}</small>}{player.status !== 'playing' && <i className={`whoami-status is-${player.status}`}>{w().status[player.status]}</i>}</b>
+          <span><span className="whoami-ranking-identity">{player.identity ? identityName(player.identity) : '?'}</span> <small className="whoami-ranking-questions">· {w().questionsUsed(player.questions)}</small></span>
         </span>
-        <span className="whoami-ranking-score"><b>{w().points(player.points)}</b><small>{player.status !== 'playing' && <i className={`whoami-status is-${player.status}`}>{w().status[player.status]}</i>}{w().breakdown(player.solveScore, player.votesCast)}</small></span>
+        <span className="whoami-ranking-score"><b>{w().points(player.points)}</b><small>{w().breakdown(player.solveScore, player.votesCast)}</small></span>
       </li>)}
-    </ol>
+    </ScrollCue>
     <div className="whoami-results-actions">
       <button type="button" className="secondary-button" onClick={onMenu}><ArrowLeft size={14} /> {w().mainMenu}</button>
       {isHost ? <button type="button" className="primary-button" onClick={onReplay}>{w().playAgain} <ChevronRight size={15} /></button> : <span className="whoami-wait">{w().waitingHost}</span>}

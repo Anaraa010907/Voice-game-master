@@ -115,7 +115,16 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(190px, 30%);
   gap: 10px;
-  padding: 10px max(12px, 2.5%) 34px;
+  padding: 10px max(12px, 2.5%) 10px;
+}
+
+/* Stage plus the last-result pill under it (in the flow, so it never covers the panels). */
+.whoami-main {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 6px;
 }
 
 .phase-reveal .whoami-body {
@@ -390,6 +399,7 @@
 
 .whoami-prompt {
   margin: 0;
+  text-wrap: balance;
   font-family: 'Barlow Condensed', sans-serif;
   font-size: 19px;
   text-align: center;
@@ -517,18 +527,20 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
   overflow-y: auto;
   scrollbar-width: thin;
+  overscroll-behavior: contain;
 }
 
 .whoami-player {
+  position: relative;
   flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-height: 44px;
-  padding: 4px 8px;
+  padding: 3px 8px;
   border: 1px solid #ffffff17;
   border-radius: 10px;
   background: #14161d;
@@ -557,13 +569,25 @@
   gap: 1px;
 }
 
-.whoami-player-copy > span {
-  overflow: hidden;
-  color: #b9b0a5;
-  font-size: 11px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+.whoami-player-copy > b {
+  font-size: 15px;
+  line-height: 1.1;
 }
+
+/* The full identity, on up to two lines; never cut with "…". */
+.whoami-player-identity {
+  color: #e8d3a2;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.whoami-player-identity.is-hidden {
+  color: #b9b0a5;
+  font-weight: 400;
+}
+
 
 .whoami-voted { flex: none; color: var(--wa-yes); }
 
@@ -586,27 +610,22 @@
 }
 
 .whoami-last {
-  position: absolute;
-  left: 50%;
-  bottom: 6px;
-  z-index: 3;
-  max-width: calc(100% - 24px);
-  transform: translateX(-50%);
-  padding: 4px 14px;
-  overflow: hidden;
+  justify-self: center;
+  max-width: 100%;
+  padding: 3px 14px;
   border: 1px solid var(--wa-line);
   border-radius: 999px;
   background: #101219ee;
   color: #efe5d0;
   font-size: 12px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  line-height: 1.35;
+  text-align: center;
   animation: whoami-pop .35s ease-out both;
 }
 
 @keyframes whoami-pop {
-  from { opacity: 0; transform: translate(-50%, 6px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ---------- Results ---------- */
@@ -695,11 +714,24 @@
 }
 
 .whoami-ranking-copy > span {
-  overflow: hidden;
   color: #d9cfbd;
   font-size: 12px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+/* The full identity name, wrapping if it must; the question count follows in small muted type. */
+.whoami-ranking-identity {
+  color: #f1dfb4;
+  font-weight: 600;
+}
+
+.whoami-ranking-copy small.whoami-ranking-questions {
+  color: #a39b95;
+  font-family: inherit;
+  font-size: 10.5px;
+  letter-spacing: 0;
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .whoami-ranking-score {
@@ -731,7 +763,34 @@
 
 /* ---------- Lobby rules card ---------- */
 
-.whoami-rules p { margin: 2px 0 0; }
+/* The header (with ЗАСАХ) stays put; the body scrolls with a cue if it ever runs long. */
+.viewport .game-frame .lobby-screen .lobby-rules.whoami-rules {
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: visible;
+}
+
+.whoami-rules-body {
+  display: block;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.viewport .game-frame .whoami-rules .rules-roles {
+  display: inline-flex;
+  margin: 0 6px 2px 0;
+  vertical-align: middle;
+}
+
+/* The category chip and the first rules line share a line. */
+.viewport .game-frame .whoami-rules .whoami-rules-body > p {
+  display: inline;
+  margin: 0;
+  color: #9d9389;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.whoami-rules .scroll-cue-more { bottom: 0; min-height: 18px; font-size: 9px; }
 .whoami-rules-note { margin: 10px 0 0; color: #a9a2a0; font-size: 11px; line-height: 1.5; }
 
 /* ---------- Demo toolbar (server-free preview only) ---------- */
@@ -787,7 +846,6 @@
   .whoami-body { gap: 8px; padding-top: 8px; }
   .whoami-spotlight, .whoami-actions { padding: 8px 10px; gap: 6px; }
   .whoami-vote { min-height: 56px; }
-  .whoami-reveal-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
   .whoami-card { padding: 7px 6px; }
 }
 
@@ -843,20 +901,37 @@
   font-style: normal;
 }
 
-/* Reveal: every card on screen at once (up to 10), the Ready button always visible. */
-.whoami-reveal-grid {
-  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
-  grid-auto-rows: auto;
+/* Reveal: every card on screen at once (up to 10) and filling the space, the Ready button always visible. */
+.whoami-reveal-scroll {
+  flex: 1 1 auto;
 }
 
+.whoami-reveal-grid {
+  height: 100%;
+  grid-template-columns: repeat(var(--wa-cols, 3), minmax(0, 1fr));
+  grid-auto-rows: minmax(min-content, 1fr);
+  align-content: stretch;
+  gap: 6px;
+}
+
+.whoami-reveal-grid.count-4 { --wa-cols: 4; }
+.whoami-reveal-grid.count-5 { --wa-cols: 5; }
+.whoami-reveal-grid.count-6 { --wa-cols: 6; }
+.whoami-reveal-grid.count-7,
+.whoami-reveal-grid.count-8 { --wa-cols: 4; }
+.whoami-reveal-grid.count-9,
+.whoami-reveal-grid.count-10 { --wa-cols: 5; }
+
 .whoami-reveal .whoami-card {
-  padding: 7px 6px 6px;
+  justify-content: center;
+  padding: 6px 5px;
   gap: 2px;
 }
 
 .whoami-reveal .whoami-card-identity {
-  min-height: 26px;
-  font-size: clamp(17px, 4.6vh, 24px);
+  min-height: 0;
+  font-size: clamp(16px, 4.8vh, 26px);
+  text-wrap: balance;
 }
 
 .whoami-reveal .whoami-card-who .avatar {
@@ -865,11 +940,148 @@
   font-size: 10px;
 }
 
-.whoami-reveal .whoami-card-who b { font-size: 14px; }
-.whoami-reveal .whoami-card-category { font-size: 10px; }
+.whoami-reveal .whoami-card-who b { font-size: 14px; flex-wrap: wrap; justify-content: center; column-gap: 4px; row-gap: 0; overflow: visible; white-space: normal; line-height: 1.05; }
+.whoami-reveal .whoami-card-category { font-size: 10px; line-height: 1.2; }
 .whoami-reveal-head p { font-size: 11px; }
-.whoami-reveal-actions { padding-left: 120px; }
+.whoami-reveal-actions { justify-content: center; }
 
-@media (min-height: 501px) {
-  .whoami-reveal-actions { padding-left: 0; }
+/* One row of cards (up to 6): an ID-card layout (who on top, the identity large in the middle, the category at the bottom). */
+.whoami-reveal:not(.is-crowded) .whoami-card {
+  justify-content: space-between;
+  padding: 10px 6px 9px;
+}
+
+.whoami-reveal:not(.is-crowded) .whoami-card-identity {
+  flex: 1;
+  font-size: clamp(18px, 6.6vh, 32px);
+}
+
+.whoami-reveal:not(.is-crowded) .whoami-card-who .avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+
+.whoami-reveal:not(.is-crowded) .whoami-card-who b { font-size: 16px; }
+.whoami-reveal:not(.is-crowded) .whoami-card-category { padding: 2px 8px; border-radius: 999px; background: #ffffff0d; font-size: 10.5px; }
+
+/* Two rows of cards (7–10 players) on a short screen: no kicker or hint line, smaller type, so both rows fit. */
+@media (orientation: landscape) and (max-height: 420px) {
+  .whoami-reveal.is-crowded .whoami-kicker,
+  .whoami-reveal.is-crowded .whoami-reveal-head p { display: none; }
+}
+
+@media (orientation: landscape) and (max-height: 420px) {
+  .whoami-reveal { gap: 6px; }
+  .whoami-reveal-head h1 { font-size: clamp(20px, 6vh, 26px); }
+  .whoami-reveal :is(.count-7, .count-8, .count-9, .count-10) .whoami-card { padding: 4px 4px; gap: 1px; }
+  .whoami-reveal :is(.count-7, .count-8, .count-9, .count-10) .whoami-card-identity { font-size: clamp(14px, 4.4vh, 18px); line-height: 1; }
+  .whoami-reveal :is(.count-7, .count-8, .count-9, .count-10) .whoami-card-who .avatar { width: 20px; height: 20px; font-size: 9px; }
+  .whoami-reveal :is(.count-7, .count-8, .count-9, .count-10) .whoami-card-who b { font-size: 13px; }
+  .whoami-reveal :is(.count-7, .count-8, .count-9, .count-10) .whoami-card-category { font-size: 9px; }
+  .whoami-reveal-actions .whoami-big { min-height: 46px; }
+}
+
+@media (max-width: 640px) {
+  .whoami-reveal-grid { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); height: auto; }
+}
+
+/* Very short landscape lobby: the rules card needs the room more than the "waiting for" hint, which the seat cards already show. */
+@media (orientation: landscape) and (max-height: 360px) {
+  .viewport .game-frame .lobby-whoami .lobby-hint { display: none; }
+}
+
+/* Short landscape lobby: the hint keeps only the "waiting for" part, on one line. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .viewport .game-frame .lobby-whoami .lobby-hint-role { display: none; }
+}
+
+.whoami-rules .scroll-cue { min-height: 40px; }
+
+.viewport .game-frame .whoami-rules .whoami-rules-body > p.whoami-rules-scoring { display: block; margin-top: 2px; }
+.viewport .game-frame .whoami-rules .whoami-rules-body { line-height: 13px; }
+.viewport .game-frame .whoami-rules .whoami-rules-body > p { line-height: 13px; }
+.viewport .game-frame .lobby-screen .whoami-rules .rules-roles span { padding: 0 6px; line-height: 13px; }
+.viewport .game-frame .whoami-rules .rules-roles { margin-bottom: 0; vertical-align: top; }
+
+@media (orientation: landscape) and (max-height: 360px) {
+  .whoami-reveal:not(.is-crowded) .whoami-card { padding: 6px 5px; }
+  .whoami-reveal:not(.is-crowded) .whoami-card-identity { font-size: clamp(16px, 5.4vh, 22px); }
+}
+
+/* Results: the ranking scrolls (with a cue) between the heading and the buttons, which always stay on screen. */
+.whoami-results {
+  overflow: hidden;
+}
+
+.whoami-results-head,
+.whoami-results-actions {
+  flex: none;
+}
+
+.whoami-ranking-scroll {
+  flex: 0 1 auto;
+  width: min(760px, 100%);
+}
+
+.whoami-ranking {
+  width: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  align-content: start;
+  padding-bottom: 2px;
+}
+
+.whoami-ranking-copy b {
+  flex-wrap: wrap;
+  row-gap: 1px;
+  white-space: normal;
+  overflow: visible;
+}
+
+.whoami-ranking-copy b .whoami-status {
+  padding: 1px 5px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+@media (orientation: landscape) and (max-height: 420px) {
+  .whoami-results { gap: 6px; padding-top: 8px; padding-bottom: 8px; }
+  .whoami-results-head h1 { font-size: clamp(22px, 6.4vh, 30px); margin: 2px 0; }
+  .whoami-ranking li { min-height: 44px; padding: 4px 10px; }
+}
+
+/* Buttons sit right under these lists: the cue's hit area stays inside the list. */
+:is(.whoami-ranking-scroll, .whoami-reveal-scroll) .scroll-cue-more::after { bottom: -3px; }
+
+/* Centred panels never push their top out of reach when they run long. */
+.whoami-actions,
+.whoami-spotlight { justify-content: safe center; }
+
+@media (orientation: landscape) and (max-height: 420px) {
+  .whoami-guess-compare span { padding: 4px 6px; gap: 1px; }
+  .whoami-guess-compare b { font-size: clamp(15px, 4.8vh, 20px); line-height: 1.05; }
+  .whoami-prompt { font-size: 17px; line-height: 1.15; }
+}
+
+@media (orientation: landscape) and (max-height: 360px) {
+  .whoami-vote { min-height: 46px; }
+  .whoami-actions .whoami-meta { font-size: 10px; line-height: 1.3; }
+}
+
+/* Long identity words ("Мандухай") must fit a sixth of the width whole, never split mid-word. */
+.whoami-reveal .whoami-card-identity { overflow-wrap: break-word; }
+.whoami-reveal:not(.is-crowded) .whoami-card-identity { font-size: clamp(16px, min(6.6vh, 3.1vw), 32px); }
+
+@media (orientation: landscape) and (max-height: 360px) {
+  .whoami-reveal:not(.is-crowded) .whoami-card-identity { font-size: clamp(15px, min(5.4vh, 2.8vw), 22px); }
+}
+.whoami-reveal:not(.is-crowded) .whoami-card-identity { font-size: clamp(16px, min(6.6vh, 2.8vw), 32px); }
+.whoami-reveal .whoami-card-who b { row-gap: 2px; line-height: 1.15; }
+.whoami-reveal .whoami-card-who b small { line-height: 1; }
+
+@media (orientation: landscape) and (max-height: 360px) {
+  .whoami-reveal:not(.is-crowded) .whoami-card-identity { font-size: clamp(15px, min(5.4vh, 2.7vw), 22px); }
 }

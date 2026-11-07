@@ -271,7 +271,7 @@
   letter-spacing: .4px;
 }
 
-/* Who Am I has no painted artwork yet: a drawn "?" card fan instead. */
+/* Who Am I: drawn SVG art (a backlit silhouette card with a gold "?") instead of a painting. */
 .hub-card-whoami {
   background:
     linear-gradient(180deg, #0b0d13d9 0%, #0b0d1333 30%, #0b0d1326 55%, #0b0d13c0 76%, #0b0d13f5 100%),
@@ -282,35 +282,58 @@
 
 .hub-whoami-art {
   position: absolute !important;
-  inset: 16% 0 34%;
+  inset: 15% 4% 27%;
   z-index: 0 !important;
   display: grid;
   place-items: center;
   pointer-events: none;
 }
 
-.hub-whoami-art i {
+.hub-whoami-art svg {
   position: absolute;
-  width: clamp(54px, 14vh, 96px);
-  aspect-ratio: 5 / 7;
-  border: 1px solid #d2b07388;
-  border-radius: 10px;
-  background: linear-gradient(160deg, #2a2438, #15141f);
-  box-shadow: 0 10px 24px #0009;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100% !important;
+  overflow: visible;
+  filter: drop-shadow(0 10px 18px #000a);
 }
 
-.hub-whoami-art i:nth-of-type(1) { transform: translateX(-62%) rotate(-14deg); }
-.hub-whoami-art i:nth-of-type(2) { transform: translateX(62%) rotate(14deg); }
-.hub-whoami-art i:nth-of-type(3) { z-index: 1; border-color: #f1d79a; background: linear-gradient(160deg, #3b3150, #1b1828); }
+.hub-whoami-float { animation: hub-whoami-drift 6s ease-in-out infinite alternate; transform-box: fill-box; }
+.hub-whoami-float:nth-of-type(2) { animation-delay: -2s; }
+.hub-whoami-float:nth-of-type(3) { animation-delay: -4s; }
+.hub-whoami-mark { filter: drop-shadow(0 0 6px rgba(243, 201, 121, .55)); }
 
-.hub-whoami-art span {
-  position: relative;
-  z-index: 2;
-  font-family: 'Playfair Display', Georgia, serif;
-  font-size: clamp(40px, 11vh, 72px);
-  font-weight: 700;
-  color: #f6e2b0;
-  text-shadow: 0 4px 14px #000c;
+@keyframes hub-whoami-drift {
+  from { translate: 0 -2px; }
+  to { translate: 0 3px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-whoami-float { animation: none; }
+}
+
+/* The title is gold text on the plain card top; the painting starts below it, so they never overlap. */
+.hub-card h2 {
+  color: #f1d79a;
+  background: none;
+  filter: none;
+}
+
+.hub-card h2 > span {
+  color: transparent;
+  background: linear-gradient(180deg, #f6e2b0, #c79a52);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 2px 6px #000c);
+}
+
+.hub-card-voice {
+  --hub-title-room: calc(clamp(22px, 7vh, 40px) + 22px);
+  background:
+    linear-gradient(180deg, #0b0d13 0, #0b0d13 var(--hub-title-room), #0b0d1300 calc(var(--hub-title-room) + 18px), #0b0d1326 50%, #0b0d13b3 74%, #0b0d13f5 100%),
+    var(--hub-bg, none) center var(--hub-title-room) / cover no-repeat,
+    #0b0d13;
 }
 
 @media (orientation: landscape) and (max-height: 500px) {
@@ -798,4 +821,175 @@
 
 .name-setup .form-error {
   margin: 8px 0 0;
+}
+
+/* ================= Touch targets =================
+ * Small controls keep their look but get an invisible hit area of at least 44×44 px, centred on
+ * the control (a pseudo-element counts as part of the button for taps). Shared by Mafia and Who Am I.
+ */
+.back-button,
+.account-top-bar .icon-button,
+.room-code button,
+.lobby-rules-edit,
+button.toggle,
+.account-signout-link,
+.diamond-count.is-button,
+.voice-summary-button,
+.whoami-chip-button,
+.whoami-top .game-leave-button {
+  position: relative;
+}
+
+.back-button::after,
+.account-top-bar .icon-button::after,
+.room-code button::after,
+.lobby-rules-edit::after,
+button.toggle::after,
+.account-signout-link::after,
+.diamond-count.is-button::after,
+.voice-summary-button::after,
+.whoami-chip-button::after,
+.whoami-top .game-leave-button::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
+
+/* The voice buttons sit 44 px apart (centre to centre) so their hit areas never overlap. */
+.voice-dock-summary {
+  gap: 20px;
+}
+
+.voice-dock-status {
+  margin-right: -8px;
+}
+
+/* ================= Host crown: a small badge on the avatar's corner, clear of the initials ================= */
+
+.avatar i.host-badge {
+  top: -9px;
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  width: 14px;
+  height: 14px;
+  box-shadow: 0 0 0 1.5px #0c0e14;
+}
+
+.avatar i.host-badge svg {
+  width: 9px;
+  height: 9px;
+}
+
+/* ================= Scroll cue (ScrollCue.tsx) ================= */
+
+.scroll-cue {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.scroll-cue > :first-child {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.scroll-cue.has-more > :first-child {
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 34px), #0003 100%);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 34px), #0003 100%);
+}
+
+.scroll-cue-more {
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--wa-line, rgba(210, 176, 115, .45));
+  border-radius: 999px;
+  background: #101219f2;
+  box-shadow: 0 4px 12px #000a;
+  color: #f1d79a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .6px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  animation: scroll-cue-in .25s ease-out both;
+}
+
+.scroll-cue-more::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+@keyframes scroll-cue-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* The back arrow sits right under the voice strip, whose buttons own the space just above it, so
+   its hit area grows downward instead (44 px tall from 1 px above the button). */
+.back-button::after {
+  top: -1px;
+  transform: translateX(-50%);
+}
+
+.lobby-rules-edit {
+  z-index: 2;
+}
+
+/* Buttons a little under 44 px tall on the hub, create-room and lobby screens: a taller invisible hit area. */
+.hub-screen :is(.hub-play, .hub-code-button),
+.profile-body :is(.primary-button, .secondary-button, .text-button),
+.form-actions :is(.primary-button, .secondary-button),
+.lobby-screen .lobby-actions :is(.primary-button, .secondary-button, .text-button) {
+  position: relative;
+}
+
+.hub-screen :is(.hub-play, .hub-code-button)::after,
+.profile-body :is(.primary-button, .secondary-button, .text-button)::after,
+.form-actions :is(.primary-button, .secondary-button)::after,
+.lobby-screen .lobby-actions :is(.primary-button, .secondary-button, .text-button)::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: max(100%, 44px);
+  transform: translateY(-50%);
+}
+
+/* The pill's hit area grows downward (into the padding under the list), clear of the row above it. */
+.scroll-cue-more::after {
+  top: auto;
+  bottom: -14px;
+  transform: translateX(-50%);
+}
+
+/* Scrolled down: the top edge fades too, so it reads as "more above". */
+.scroll-cue.is-scrolled > :first-child {
+  -webkit-mask-image: linear-gradient(180deg, #0003 0, #000 18px);
+  mask-image: linear-gradient(180deg, #0003 0, #000 18px);
+}
+
+.scroll-cue.is-scrolled.has-more > :first-child {
+  -webkit-mask-image: linear-gradient(180deg, #0003 0, #000 18px, #000 calc(100% - 34px), #0003 100%);
+  mask-image: linear-gradient(180deg, #0003 0, #000 18px, #000 calc(100% - 34px), #0003 100%);
 }

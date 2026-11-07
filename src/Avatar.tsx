@@ -1,7 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react';
 
+/** Two letters, the same rule the game server uses for seats (its first two letters), so a player looks alike everywhere. */
 export function initialsOf(name: string) {
-  return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('') || '??';
+  return Array.from(name.replace(/\s+/g, '')).slice(0, 2).join('').toUpperCase() || '??';
 }
 
 /** Painted frames: a 512px image whose transparent hole is half its width, centred on the avatar. */

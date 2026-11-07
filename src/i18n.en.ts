@@ -4,6 +4,7 @@ import type { I18n } from './i18n.ts';
 export const en: I18n = {
   app: {
     title: 'MAFIA: SHADOWS',
+    hubVoiceTitle: 'VOICE GAME',
     subtitle: 'Echoes of the street',
     localPrototype: 'Local prototype',
     cityOfSecrets: 'City of secrets',
@@ -356,6 +357,9 @@ export const en: I18n = {
   whoAmI: {
     title: 'Who Am I',
     hubMeta: 'Guess the secret identity on your forehead',
+    morePlayers: (count: number) => `${count} more below`,
+    host: 'Room host',
+    moreRules: () => 'More',
     phase: { reveal: 'Reveal', ask: 'Question', answer: 'Answer', guess: 'Guess', results: 'Results' },
     round: 'ROUND',
     roundOf: (round: number, max: number) => `${round}/${max}`,
@@ -429,6 +433,7 @@ export const en: I18n = {
     roundsCount: (count: number) => `${count} ${count === 1 ? 'round' : 'rounds'}`,
     categories: 'Categories',
     allCategories: 'All',
+    allCategoriesCount: (count: number) => `All ${count} categories`,
     kidsSafe: 'Kid-friendly',
     edit: 'EDIT',
     save: 'SAVE',
