@@ -1,8 +1,8 @@
 import {
-  BASE_POINTS, MAX_QUESTIONS_PER_TURN, MIN_SOLVE_POINTS, PLACE_BONUS, POINTS_PER_QUESTION,
+  BASE_POINTS, MAX_QUESTIONS_PER_TURN, MIN_SOLVE_POINTS, PLACE_BONUS, POINTS_PER_QUESTION, POINTS_PER_VOTE,
   activeWhoAmIPlayerId, applyWhoAmIAction, createSeededRandom, createWhoAmIGame, eligibleVoters, guessMatches,
   identityPool, normalizeGuess, removeWhoAmIPlayer, sanitizeWhoAmISettings, setWhoAmIConnected, solvePoints,
-  timeoutWhoAmI, whoAmIBotStep, whoAmIBotToMove, whoAmIDeadlineSeconds, whoAmIPrivateView, whoAmIPublicView, whoAmIRanking,
+  timeoutWhoAmI, whoAmIBotStep, whoAmIBotToMove, whoAmIDeadlineSeconds, whoAmIPrivateView, whoAmIPublicView, whoAmIRanking, whoAmIStageKey,
 } from './whoAmIEngine.ts';
 import type { WhoAmIAction, WhoAmISeat, WhoAmIState } from './whoAmIEngine.ts';
 import { WHO_AM_I_PACK } from './whoAmIContent.ts';
@@ -119,7 +119,10 @@ const typed = judge(state, [], secretOther.name.toUpperCase().replace(/ө/gi, '�
 require(typed.players.find((p) => p.id === other)!.status === 'solved', 'A typed guess matching the name (case/ө-folded) solves at once.');
 require(guessMatches(secretOther, secretOther.nameEn ?? secretOther.name), 'The English name is accepted too.');
 const otherQuestions = state.players.find((p) => p.id === other)!.questions;
-require(typed.players.find((p) => p.id === other)!.points === solvePoints(otherQuestions, 1), 'Solver scores by the formula with the 1st-place bonus.');
+const typedSolver = typed.players.find((p) => p.id === other)!;
+const otherBefore = state.players.find((p) => p.id === other)!;
+require(typedSolver.solveScore === solvePoints(otherQuestions, 1) && typedSolver.points === otherBefore.points + typedSolver.solveScore, 'Solver scores by the formula with the 1st-place bonus, on top of their vote points.');
+require(typed.players.every((p) => p.id === other || p.votesCast === state.players.find((q) => q.id === p.id)!.votesCast), 'A typed guess that matches at once has no ballot and pays no voter.');
 require(typed.finishOrder[0] === other && active(typed) !== other, 'The solver is recorded and the turn moves on.');
 require(whoAmIPublicView(typed).players.find((p) => p.id === other)!.identity?.entryId === secretOther.entryId, 'A solved identity becomes public.');
 require(whoAmIPrivateView(typed, other).identities[other]?.entryId === secretOther.entryId, 'The solver now sees their own identity.');
@@ -132,6 +135,59 @@ require(active(wrong) !== other && wrong.players.find((p) => p.id === other)!.qu
 const voiced = judge(state, ['correct', 'correct', 'wrong']);
 require(voiced.players.find((p) => p.id === other)!.status === 'solved', 'A spoken guess confirmed by the majority solves.');
 require(rejects(act(state, other, { type: 'guess' }), other, { type: 'judge', verdict: 'correct' }), 'The guesser cannot judge their own guess.');
+
+// --- Vote points ---------------------------------------------------------------------------------
+{
+  let game = fresh(4, 31);
+  const asker = active(game);
+  const voters = eligibleVoters(act(game, asker, { type: 'asked' }));
+  game = answer(game, ['yes', 'no', 'unknown']);
+  require(voters.every((id) => game.players.find((p) => p.id === id)!.votesCast === 1 && game.players.find((p) => p.id === id)!.points === POINTS_PER_VOTE),
+    'Every answer (Тийм, Үгүй and Мэдэхгүй alike) earns its voter 1 point.');
+  require(game.players.find((p) => p.id === asker)!.points === 0, 'The asker earns nothing for their own question.');
+
+  // Changing a vote before the ballot closes still pays once.
+  let changed = act(game, asker, { type: 'asked' });
+  changed = act(act(changed, voters[0], { type: 'answer', vote: 'yes' }), voters[0], { type: 'answer', vote: 'no' });
+  changed = timeoutWhoAmI(changed);
+  require(changed.players.find((p) => p.id === voters[0])!.votesCast === 2, 'A changed vote counts once.');
+  require(changed.players.find((p) => p.id === voters[1])!.votesCast === 1, 'A voter who did not press when time ran out earns nothing.');
+
+  // Judging pays too, whatever the verdict.
+  const judged = judge(game, ['correct', 'wrong', 'wrong']);
+  require(voters.every((id) => judged.players.find((p) => p.id === id)!.votesCast === 2), 'Every Зөв / Буруу judgement earns its voter 1 point.');
+
+  // A voter who drops before the close is not paid; a player who gave up still earns by answering.
+  let dropped = act(game, asker, { type: 'asked' });
+  dropped = act(dropped, voters[0], { type: 'answer', vote: 'yes' });
+  dropped = setWhoAmIConnected(dropped, voters[0], false);
+  dropped = timeoutWhoAmI(dropped);
+  require(dropped.players.find((p) => p.id === voters[0])!.votesCast === 1, 'A vote removed by a disconnect pays nothing.');
+  let quitter = act(game, voters[2], { type: 'giveUp' });
+  quitter = answer(quitter, ['yes', 'yes', 'yes']);
+  require(quitter.players.find((p) => p.id === voters[2])!.votesCast === 2, 'A player who gave up still earns points by answering.');
+
+  // With nobody solving, the busiest voter wins on vote points alone.
+  let voteOnly = everyoneReady(createWhoAmIGame(seats(3), WHO_AM_I_PACK, createSeededRandom(4), { rounds: 3, categories: [], kidsSafe: false }));
+  const lazy = voteOnly.order[0];
+  const keen = voteOnly.order[1];
+  voteOnly = act(voteOnly, active(voteOnly), { type: 'asked' });
+  voteOnly = act(voteOnly, keen, { type: 'answer', vote: 'no' });
+  voteOnly = timeoutWhoAmI(voteOnly);
+  while (voteOnly.phase !== 'results') voteOnly = timeoutWhoAmI(voteOnly);
+  require(voteOnly.winners.join() === String(keen) && whoAmIRanking(voteOnly)[0].id === keen, 'The highest total wins even without a solve.');
+  require(voteOnly.players.find((p) => p.id === lazy)!.points === 0, 'No votes, no solve → 0 points.');
+}
+
+// --- Stage key (timer restarts) -------------------------------------------------------------------
+{
+  const game = fresh(4, 41);
+  const asking = act(game, active(game), { type: 'asked' });
+  require(whoAmIStageKey(asking) !== whoAmIStageKey(game), 'Opening a question restarts the timer.');
+  const voted = act(asking, eligibleVoters(asking)[0], { type: 'answer', vote: 'yes' });
+  require(whoAmIStageKey(voted) === whoAmIStageKey(asking) && voted.step !== asking.step, 'A vote does not restart the timer.');
+  require(whoAmIStageKey(answer(game, ['yes', 'yes', 'yes'])) !== whoAmIStageKey(game), 'Back to asking after Тийм restarts the timer.');
+}
 
 // --- Turn limit, pass, timeout -------------------------------------------------------------------
 let limit = fresh(3, 11);
@@ -162,8 +218,9 @@ race = answer(race, ['no', 'no']);
 require(active(race) === order[2] && race.round === 2, 'With one guesser left, every turn is theirs (rounds still count).');
 race = judge(race, ['correct', 'correct']); // third player, 1 question
 require(race.phase === 'results', 'Everyone solved → results.');
-const points = order.map((id) => race.players.find((p) => p.id === id)!.points);
-require(points.join() === [solvePoints(0, 1), solvePoints(1, 2), solvePoints(1, 3)].join(), `Points by order: ${points.join(', ')}.`);
+const points = order.map((id) => race.players.find((p) => p.id === id)!.solveScore);
+require(points.join() === [solvePoints(0, 1), solvePoints(1, 2), solvePoints(1, 3)].join(), `Solve points by order: ${points.join(', ')}.`);
+require(race.players.every((p) => p.points === p.solveScore + p.votesCast * POINTS_PER_VOTE), 'Totals are solve points plus vote points.');
 require(race.winners.join() === String(order[0]) && whoAmIRanking(race)[0].id === order[0], 'The fastest solver wins and tops the ranking.');
 
 // --- Give up, leave, disconnect, bots ------------------------------------------------------------
@@ -234,8 +291,12 @@ for (let seed = 1; seed <= 200; seed += 1) {
   }
   if (game.phase !== 'results') throw new Error(`Seed ${seed}: game did not end in ${steps} steps.`);
   const solved = game.players.filter((p) => p.place !== null);
-  if (solved.some((p) => p.points !== solvePoints(p.questions, p.place!))) throw new Error(`Seed ${seed}: points do not match the formula.`);
-  if (game.players.some((p) => p.place === null && p.points !== 0)) throw new Error(`Seed ${seed}: a non-solver scored.`);
+  if (solved.some((p) => p.solveScore !== solvePoints(p.questions, p.place!))) throw new Error(`Seed ${seed}: solve points do not match the formula.`);
+  if (game.players.some((p) => p.place === null && p.solveScore !== 0)) throw new Error(`Seed ${seed}: a non-solver got solve points.`);
+  if (game.players.some((p) => p.points !== p.solveScore + p.votesCast * POINTS_PER_VOTE)) throw new Error(`Seed ${seed}: a total is not solve + vote points.`);
+  if (game.players.some((p) => p.bot && p.votesCast !== 0)) throw new Error(`Seed ${seed}: a bot earned vote points.`);
+  const best = Math.max(0, ...game.players.map((p) => p.points));
+  if (game.winners.join() !== (best > 0 ? game.players.filter((p) => p.points === best).map((p) => p.id).join() : '')) throw new Error(`Seed ${seed}: winners are not the top scorers.`);
 }
 passed += 1;
 
