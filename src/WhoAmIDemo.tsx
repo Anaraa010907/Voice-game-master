@@ -4,8 +4,8 @@ import type { FullscreenState } from './fullscreen';
 import { i18n } from './i18n';
 import { isEnglish, t } from './lang';
 import type { NotifyFn, RoomInfo, RoomSeat } from './multiplayer';
-import { supabaseConfigured } from './supabaseClient';
 import { VoiceChatProvider } from './VoiceChat';
+import { DEMO_PHASES, type DemoPhase, type DemoRequest } from './whoAmIDemoRequest';
 import { WhoAmITable } from './WhoAmI';
 import { WHO_AM_I_PACK } from './whoAmIContent';
 import {
@@ -23,24 +23,11 @@ import {
  *   ?demo=lobby[&seat=2]           lobby (seat 1 is the host)
  *   ?demo=game&phase=reveal|ask|answer|guess|results[&seat=3][&auto=1][&bar=0]
  *
- * Only in dev builds, or in any build that has no Supabase keys (so never on the live app).
+ * Only in dev builds, or in any build that has no Supabase keys (so never on the live app). App.tsx
+ * imports this file lazily behind DEMO_ENABLED, so keyed builds do not ship it (whoAmIDemoRequest.ts).
  */
 
-export type DemoPhase = 'reveal' | 'ask' | 'answer' | 'guess' | 'results';
-export type DemoRequest = { screen: 'hub' | 'create' | 'lobby' | 'game'; phase: DemoPhase; seat: number | null; auto: boolean; bar: boolean };
-const PHASES: DemoPhase[] = ['reveal', 'ask', 'answer', 'guess', 'results'];
-
-export function demoRequest(): DemoRequest | null {
-  if (typeof window === 'undefined') return null;
-  if (!import.meta.env.DEV && supabaseConfigured) return null;
-  const params = new URLSearchParams(window.location.search);
-  const value = params.get('demo');
-  if (!value) return null;
-  const screen = value === 'hub' || value === 'create' || value === 'lobby' ? value : 'game';
-  const phase = PHASES.includes(params.get('phase') as DemoPhase) ? params.get('phase') as DemoPhase : 'ask';
-  const seat = Number(params.get('seat'));
-  return { screen, phase, seat: Number.isInteger(seat) && seat >= 1 && seat <= DEMO_NAMES.length ? seat : null, auto: params.get('auto') === '1', bar: params.get('bar') !== '0' };
-}
+const PHASES = DEMO_PHASES;
 
 const DEMO_NAMES = isEnglish ? ['Bat', 'Saraa', 'Temuulen', 'Nomin', 'Ganaa', 'Khulan'] : ['Бат', 'Сараа', 'Тэмүүлэн', 'Номин', 'Ганаа', 'Хулан'];
 const DEMO_COLORS = ['rose', 'violet', 'gold', 'teal', 'blue', 'plum'];

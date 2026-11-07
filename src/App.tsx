@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode, type CSSProperties } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode, type CSSProperties } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
@@ -24,7 +24,7 @@ import { GAMES, type GameType } from './games';
 import { MafiaRulesCard, MafiaRulesEditor } from './MafiaRules';
 import WhoAmIScreen, { WhoAmIWatch } from './WhoAmI';
 import { WhoAmIRulesCard, WhoAmIRulesEditor } from './WhoAmIRules';
-import { WhoAmIDemo, demoRequest } from './WhoAmIDemo';
+import { DEMO_ENABLED, demoRequest } from './whoAmIDemoRequest';
 import { DEFAULT_WHOAMI_ROUNDS, WHOAMI_ROUND_CHOICES } from './whoAmIEngine';
 import { motionReduced, setMotionReduced } from './motion';
 import { startMusic, wakeMusic } from './sfx';
@@ -48,6 +48,9 @@ const storeRoom = (code: string | null) => {
     // Private mode: the player simply re-enters the code after a reload.
   }
 };
+
+/** The server-free preview; never part of a build that has Supabase keys. */
+const WhoAmIDemo = DEMO_ENABLED ? lazy(() => import('./WhoAmIDemo').then((module) => ({ default: module.WhoAmIDemo }))) : null;
 
 export default function App() {
   // Local preview without a server (dev builds, or any build without Supabase keys): ?demo=hub|create|lobby|game.
@@ -296,7 +299,7 @@ export default function App() {
     <main className="viewport">
       <section className={`game-frame screen-${screen}`} aria-label={t('MAFIA: SHADOWS тоглоом', 'MAFIA: SHADOWS game')}>
         <div className="grain" aria-hidden="true" />
-        {demo && (demo.screen === 'lobby' || demo.screen === 'game') ? <WhoAmIDemo request={demo} fullscreen={fullscreen} notify={notify} lobby={LobbyView} /> : <>
+        {WhoAmIDemo && demo && (demo.screen === 'lobby' || demo.screen === 'game') ? <Suspense fallback={null}><WhoAmIDemo request={demo} fullscreen={fullscreen} notify={notify} lobby={LobbyView} /></Suspense> : <>
         {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} onFeedback={() => requireAccount('feedback')} onShop={() => requireAccount('shop')} onPass={() => requireAccount('pass')} onFriends={() => requireAccount('friends')} friendBadge={friendsState.badge} signedIn={Boolean(userId)} staffRole={staffRole} onAuth={openAuth} fullscreen={fullscreen} />}
         {screen === 'hub' && <GameHub onBack={goBack} onChoose={(type) => { setGameType(type); setScreen('browse'); }} onJoinCode={() => setScreen('join-room')} />}
         {screen === 'browse' && <RoomBrowser key={gameType} gameType={gameType} language={roomLang} onLanguage={setRoomLang} onBack={() => setScreen('hub')} onCreate={() => setScreen('create-room')} onJoinCode={() => setScreen('join-room')} onEnter={enterRoom} />}
