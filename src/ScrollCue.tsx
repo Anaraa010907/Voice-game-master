@@ -53,7 +53,13 @@ export function ScrollCue({ className, wrapClassName = '', label, children, as: 
     else if (bottom > box.scrollTop + box.clientHeight - 36) box.scrollTop = bottom - box.clientHeight + 38;
   }, [focusKey]);
 
-  const more = () => ref.current?.scrollBy({ top: Math.max(40, ref.current.clientHeight * 0.7), behavior: 'smooth' });
+  const more = () => {
+    const box = ref.current;
+    if (!box) return;
+    // Jump instead of gliding when the player asked for less motion (system setting or the in-app switch).
+    const still = document.documentElement.hasAttribute('data-reduce-motion') || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    box.scrollBy({ top: Math.max(40, box.clientHeight * 0.7), behavior: still ? 'auto' : 'smooth' });
+  };
   return <div className={`scroll-cue ${wrapClassName} ${below ? 'has-more' : ''} ${above ? 'is-scrolled' : ''}`}>
     <Tag ref={ref as never} className={className} aria-label={ariaLabel}>{children}</Tag>
     {below > 0 && <button type="button" className="scroll-cue-more" onClick={more}><ChevronDown size={12} aria-hidden="true" />{label(below)}</button>}

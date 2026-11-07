@@ -1029,6 +1029,9 @@
   overflow-y: auto;
   scrollbar-width: thin;
   align-content: start;
+  /* Rows as tall as their content: with no free space, auto rows stop at the rows' min-height (44 px)
+     and a wrapped name/identity spills over the borders (10 players at 740×340). */
+  grid-auto-rows: max-content;
   padding-bottom: 2px;
 }
 
