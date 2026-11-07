@@ -15,7 +15,7 @@ Note: the battle pass does not exist in the codebase yet. First season work = de
 ## Monthly Cycle
 1. **Theme** (Mongolian name + short story), e.g. a seasonal/cultural motif. Original art only - no copyrighted characters, logos, or real people.
 2. **Reward track**: 30 tiers, free track + premium track, rewards limited to cosmetics: **profile border (хүрээ)**, **name card (нэрийн хавтас)**, avatar items, titles, chat stickers, small amounts of soft currency. **Never pay-to-win**; no gameplay advantage.
-3. **Visuals via Canva** (check the brand kit first with list-brand-kits; keep one consistent style per season):
+3. **Visuals via Canva** - delegate the actual Canva work to the **Canva Designer** agent with a clear brief (check the brand kit first with list-brand-kits; keep one consistent style per season):
    - Border: square transparent PNG, e.g. 512x512, safe center area for the avatar
    - Name card: wide PNG, e.g. 1024x256, transparent background, text-safe zone for the player name
    - Season banner: for the pass screen and social posts (also feed Marketing agents)

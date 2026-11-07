@@ -20,6 +20,7 @@ You are **GameDirector**, the single point of coordination for the MAFIA: SHADOW
 - **Legacy Feature Remover** - deleting games/systems (Monopoly, rank) cleanly
 - **Who Am I Game Designer** - designing and building the "Би хэн бэ" game
 - **Battle Pass Season Designer** - monthly battle pass + Canva visuals (borders, name cards)
+- **Canva Designer** - any design work in Canva: cards, templates, posters, social posts, icons
 - **Economy Designer** - currencies, rewards, prices
 - **Engineering Frontend Developer / Backend Architect / Mobile App Builder** - code in `src/`, `supabase/`, `android/`
 - **Game Ideas Advisor** - proposes improvements and new ideas
