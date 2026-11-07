@@ -159,7 +159,9 @@
 
 .hub-cards {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* One game: a single centred card instead of an empty second column. */
+  grid-template-columns: minmax(0, 560px);
+  justify-content: center;
   gap: 18px;
   height: calc(100% - 55px);
   padding: 14px 18px 16px;
