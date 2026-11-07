@@ -524,7 +524,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
         {sections.length > 1 || section.id !== 'coin'
           ? <h3 className="shop-section-title">{section.id === 'diamond' ? <Gem size={13} /> : section.id === 'legacy' ? <Crown size={13} /> : <Coins size={13} />}{section.id === 'legacy' ? t('Таны хуучин шагнал · хөдөлгөөнт', 'Your legacy rewards · animated') : CURRENCY_HEADING[section.id]}</h3>
           : null}
-        {section.id === 'legacy' && <p className="shop-section-note">{t(`Өмнө нь цол ахиж авсан гоёл. Таных хэвээр, зүүж болно. Дахин худалдаалагдахгүй.`, `Looks you won earlier by ranking up. They stay yours to wear; they are no longer sold.`)}</p>}
+        {section.id === 'legacy' && <p className="shop-section-note">{t(`Өмнө нь шагналаар авсан гоёл. Таных хэвээр, зүүж болно. Дахин худалдаалагдахгүй.`, `Looks you won earlier as rewards. They stay yours to wear; they are no longer sold.`)}</p>}
         <div className={`shop-grid kind-${tab}`}>{section.list.map(card)}</div>
       </section>)}
       <p className="admin-note shop-foot"><Coins size={11} />{t(` Зоосыг тоглож олно: тоглолт бүрт +10, ялбал +30, өдөрт тоглолтоос 500 хүртэл, өдрийн бонус +100. Тоглолтын дундуур гарвал зоос өгөхгүй. `, ` Earn coins by playing: +10 for every match, +30 for a win, up to 500 a day from matches, and a +100 daily bonus. Leaving a match early pays nothing. `)}<Gem size={11} />{t(` Алмазыг цэнэглэж авна (тун удахгүй).`, ` Diamonds come from top-ups (coming soon).`)}</p>

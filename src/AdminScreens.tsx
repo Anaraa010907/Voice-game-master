@@ -588,7 +588,7 @@ function OffersTab({ notify }: { notify: NotifyFn }) {
   };
 
   return <div className="admin-pane admin-offers">
-    <p className="admin-note">{t(`Долоо хоног бүр 2 зурган гоёл 20% хямдарч автоматаар гарна (даваагаас даваа). Энд гараар нэмэх эсвэл зогсоож болно. Цолны шагналыг онцлох болгох боломжгүй.`, `Every week two painted looks go 20% off automatically (Monday to Monday). Add or stop offers by hand here. Rank rewards can’t be featured.`)}</p>
+    <p className="admin-note">{t(`Долоо хоног бүр 2 зурган гоёл 20% хямдарч автоматаар гарна (даваагаас даваа). Энд гараар нэмэх эсвэл зогсоож болно. Хуучин шагналыг онцлох болгох боломжгүй.`, `Every week two painted looks go 20% off automatically (Monday to Monday). Add or stop offers by hand here. Legacy rewards can’t be featured.`)}</p>
     <ul className="admin-offer-list">
       {offers === null && <li className="panel-empty">{t(`Ачаалж байна…`, `Loading…`)}</li>}
       {offers?.length === 0 && <li className="panel-empty">{t(`Одоо идэвхтэй санал алга.`, `No active offers.`)}</li>}

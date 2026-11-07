@@ -3,11 +3,11 @@
  * file is in place; until then the screen keeps its CSS gradient, so nothing ever loads a
  * missing image. CSS reads them as var(--bg-<name>).
  */
-export const BACKGROUNDS = ['menu', 'office', 'table-day', 'table-night', 'table-vote', 'ger', 'reveal', 'victory'] as const;
+export const BACKGROUNDS = ['menu', 'office', 'table-day', 'table-night', 'table-vote', 'reveal', 'victory'] as const;
 export type BackgroundName = typeof BACKGROUNDS[number];
 
 /** Backgrounds whose image files have been added to public/assets/bg/. */
-const AVAILABLE: BackgroundName[] = ['menu', 'office', 'table-day', 'table-night', 'table-vote', 'ger', 'reveal', 'victory'];
+const AVAILABLE: BackgroundName[] = ['menu', 'office', 'table-day', 'table-night', 'table-vote', 'reveal', 'victory'];
 
 export function installBackgrounds() {
   for (const name of AVAILABLE) {
