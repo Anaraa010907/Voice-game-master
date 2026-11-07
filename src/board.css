@@ -159,8 +159,8 @@
 
 .hub-cards {
   display: grid;
-  /* One game: a single centred card instead of an empty second column. */
-  grid-template-columns: minmax(0, 560px);
+  /* Two games side by side, each card capped so a wide screen does not stretch the artwork. */
+  grid-template-columns: repeat(2, minmax(0, 520px));
   justify-content: center;
   gap: 18px;
   height: calc(100% - 55px);
@@ -269,6 +269,48 @@
   color: #8f8a8d;
   font-size: 10px;
   letter-spacing: .4px;
+}
+
+/* Who Am I has no painted artwork yet: a drawn "?" card fan instead. */
+.hub-card-whoami {
+  background:
+    linear-gradient(180deg, #0b0d13d9 0%, #0b0d1333 30%, #0b0d1326 55%, #0b0d13c0 76%, #0b0d13f5 100%),
+    radial-gradient(circle at 50% 42%, rgba(122, 92, 160, .45), transparent 58%),
+    radial-gradient(circle at 18% 90%, rgba(210, 176, 115, .22), transparent 50%),
+    #121220;
+}
+
+.hub-whoami-art {
+  position: absolute !important;
+  inset: 16% 0 34%;
+  z-index: 0 !important;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.hub-whoami-art i {
+  position: absolute;
+  width: clamp(54px, 14vh, 96px);
+  aspect-ratio: 5 / 7;
+  border: 1px solid #d2b07388;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #2a2438, #15141f);
+  box-shadow: 0 10px 24px #0009;
+}
+
+.hub-whoami-art i:nth-of-type(1) { transform: translateX(-62%) rotate(-14deg); }
+.hub-whoami-art i:nth-of-type(2) { transform: translateX(62%) rotate(14deg); }
+.hub-whoami-art i:nth-of-type(3) { z-index: 1; border-color: #f1d79a; background: linear-gradient(160deg, #3b3150, #1b1828); }
+
+.hub-whoami-art span {
+  position: relative;
+  z-index: 2;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(40px, 11vh, 72px);
+  font-weight: 700;
+  color: #f6e2b0;
+  text-shadow: 0 4px 14px #000c;
 }
 
 @media (orientation: landscape) and (max-height: 500px) {

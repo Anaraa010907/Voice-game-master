@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
-  ArrowLeft, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, Languages, LockKeyhole, Moon,
+  ArrowLeft, Bot, Check, ChevronRight, CircleAlert, CircleHelp, Info, X, Clipboard, Crown, Languages, LockKeyhole, Moon,
   MessageSquare, Radio, RefreshCw, Settings as SettingsIcon, Shield, ShieldCheck, ShoppingBag, Ticket, UserPlus, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles, type RoleName } from './gameData';
@@ -19,9 +19,13 @@ import { supabase, supabaseConfigured, type PublicProfile } from './supabaseClie
 import { i18n, translateMessage } from './i18n';
 import { removeProfilePhoto, uploadProfilePhoto } from './avatarUpload';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
-import { callGame, useRoom, type ListedRoom, type NoticeTone, type NotifyFn, type RoomSeat } from './multiplayer';
+import { callGame, useRoom, type ListedRoom, type NoticeTone, type NotifyFn, type RoomInfo, type RoomSeat } from './multiplayer';
 import { GAMES, type GameType } from './games';
 import { MafiaRulesCard, MafiaRulesEditor } from './MafiaRules';
+import WhoAmIScreen, { WhoAmIWatch } from './WhoAmI';
+import { WhoAmIRulesCard, WhoAmIRulesEditor } from './WhoAmIRules';
+import { WhoAmIDemo, demoRequest } from './WhoAmIDemo';
+import { DEFAULT_WHOAMI_ROUNDS, WHOAMI_ROUND_CHOICES } from './whoAmIEngine';
 import { motionReduced, setMotionReduced } from './motion';
 import { startMusic, wakeMusic } from './sfx';
 import { VolumeControls } from './VolumeControls';
@@ -46,7 +50,9 @@ const storeRoom = (code: string | null) => {
 };
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('menu');
+  // Local preview without a server (dev builds, or any build without Supabase keys): ?demo=hub|create|lobby|game.
+  const demo = demoRequest();
+  const [screen, setScreen] = useState<Screen>(demo?.screen === 'hub' ? 'hub' : demo?.screen === 'create' ? 'create-room' : demo ? 'lobby' : 'menu');
   const [authView, setAuthView] = useState<AuthView>('sign-in');
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<PublicProfile | null>(null);
@@ -54,7 +60,7 @@ export default function App() {
   const [profileError, setProfileError] = useState('');
   const [copied, setCopied] = useState(false);
   const [roomCode, setRoomCode] = useState<string | null>(null);
-  const [gameType, setGameType] = useState<GameType>('mafia');
+  const [gameType, setGameType] = useState<GameType>(demo ? 'whoami' : 'mafia');
   // Which language pool the room list shows and new rooms join: the app language unless the player picks the other one.
   const [roomLang, setRoomLang] = useState<Lang>(LANG);
   const [notice, setNotice] = useState<{ text: string; tone: NoticeTone } | null>(null);
@@ -290,6 +296,7 @@ export default function App() {
     <main className="viewport">
       <section className={`game-frame screen-${screen}`} aria-label={t('MAFIA: SHADOWS тоглоом', 'MAFIA: SHADOWS game')}>
         <div className="grain" aria-hidden="true" />
+        {demo && (demo.screen === 'lobby' || demo.screen === 'game') ? <WhoAmIDemo request={demo} fullscreen={fullscreen} notify={notify} lobby={LobbyView} /> : <>
         {screen === 'menu' && <Menu onNavigate={setScreen} onPlay={() => requireAccount(roomCode ? 'lobby' : 'hub')} onCreate={() => requireAccount('hub')} onJoin={() => requireAccount('join-room')} onFeedback={() => requireAccount('feedback')} onShop={() => requireAccount('shop')} onPass={() => requireAccount('pass')} onFriends={() => requireAccount('friends')} friendBadge={friendsState.badge} signedIn={Boolean(userId)} staffRole={staffRole} onAuth={openAuth} fullscreen={fullscreen} />}
         {screen === 'hub' && <GameHub onBack={goBack} onChoose={(type) => { setGameType(type); setScreen('browse'); }} onJoinCode={() => setScreen('join-room')} />}
         {screen === 'browse' && <RoomBrowser key={gameType} gameType={gameType} language={roomLang} onLanguage={setRoomLang} onBack={() => setScreen('hub')} onCreate={() => setScreen('create-room')} onJoinCode={() => setScreen('join-room')} onEnter={enterRoom} />}
@@ -324,6 +331,7 @@ export default function App() {
         {screen === 'settings' && <Settings onBack={goBack} onProfile={() => setScreen('profile')} onAuth={() => openAuth(userId ? 'sign-out' : 'sign-in')} signedIn={Boolean(userId)} />}
         {userId && profile && needsName(profile.display_name) && !namePromptDismissed && screen !== 'auth' && screen !== 'profile'
           && <NameSetup current={profile.display_name} onSave={(name) => saveProfile(name, profile.avatar_key)} onLater={() => setNamePromptDismissed(true)} onDone={() => notify(t('Нэр хадгалагдлаа.', 'Name saved.'), 'success')} />}
+        </>}
         {notice && <div className={`toast is-${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}>{notice.tone === 'error' ? <CircleAlert size={14} /> : notice.tone === 'success' ? <Check size={14} /> : <Info size={14} />}{notice.text}</div>}
       </section>
       <div className="rotate-overlay" aria-live="polite">
@@ -377,6 +385,7 @@ function CreateRoom({ gameType, startLanguage, onBack, onCreate }: { gameType: G
   const [isPublic, setIsPublic] = useState(true);
   const [language, setLanguage] = useState<Lang>(startLanguage);
   const [password, setPassword] = useState('');
+  const [rounds, setRounds] = useState<number>(DEFAULT_WHOAMI_ROUNDS);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -387,7 +396,7 @@ function CreateRoom({ gameType, startLanguage, onBack, onCreate }: { gameType: G
     setError('');
     setBusy(true);
     try {
-      await onCreate({ name: name.trim(), maxPlayers, isPublic, password: isPublic ? '' : password, gameType, language });
+      await onCreate({ name: name.trim(), maxPlayers, isPublic, password: isPublic ? '' : password, gameType, language, ...(gameType === 'whoami' ? { settings: { rounds } } : {}) });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('Өрөө үүсгэж чадсангүй.', 'Could not create the room.'));
     } finally {
@@ -398,6 +407,7 @@ function CreateRoom({ gameType, startLanguage, onBack, onCreate }: { gameType: G
   return <div className="inner-screen setup-screen"><TopBar title={t('ӨРӨӨ ҮҮСГЭХ', 'CREATE ROOM')} subtitle={t('ӨРӨӨНИЙ ТӨХИРГӨӨ', 'ROOM SETTINGS')} onBack={onBack} /><div className="setup-content"><div className="setup-heading"><div className="eyebrow left-eye">{t(`ТӨХИРГӨӨ СОНГОХ`, `CHOOSE YOUR SETTINGS`)}</div><h1>{t(`Өөрийнхөө `, `Build your `)}<i>{t(`өрөөг`, `own room`)}</i>{t(` бүтээ.`, `.`)}</h1><p><b className="setup-game-name">{game.title}</b>{t(` · Өрөөний кодыг найзууддаа илгээгээрэй. Дор хаяж ${game.minPlayers} хүн нэгдвэл тоглоом эхэлнэ.`, ` · Send the room code to your friends. The game starts once at least ${game.minPlayers} players join.`)}</p></div><form className="room-form" onSubmit={submit}>
     <label className="form-field room-name-field"><span>{i18n.app.roomName.toUpperCase()}</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder={t('Өрөөний нэрээ оруулна уу', 'Enter a room name')} /></label>
     <label className="form-field"><span>{i18n.app.maxPlayers.toUpperCase()}</span><select value={maxPlayers} onChange={(event) => setMaxPlayers(Number(event.target.value))}>{game.sizes.map((count) => <option key={count} value={count}>{t(`${count} тоглогч`, `${count} players`)}</option>)}</select></label>
+    {gameType === 'whoami' && <label className="form-field"><span>{i18n.whoAmI.rounds.toUpperCase()}</span><select value={rounds} onChange={(event) => setRounds(Number(event.target.value))}>{WHOAMI_ROUND_CHOICES.map((count) => <option key={count} value={count}>{i18n.whoAmI.roundsCount(count)}</option>)}</select></label>}
     <label className="form-field"><span>{t(`ЯРИХ ХЭЛ`, `ROOM LANGUAGE`)}</span><select value={language} onChange={(event) => setLanguage(event.target.value as Lang)}>{ROOM_LANGS.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}</select></label>
     <div className="private-setting"><span><b>{t(`Нийтэд нээлттэй`, `Public room`)}</b><small>{isPublic ? t('Өрөөний жагсаалтад харагдана, хэн ч нэгдэнэ', 'Listed in the room list; anyone can join') : t('Зөвхөн кодоор нэгдэнэ, нууц үг тавьж болно', 'Join by code only; you can set a password')}</small></span><button type="button" role="switch" aria-checked={isPublic} className={`toggle ${isPublic ? 'toggle-on' : ''}`} onClick={() => setIsPublic((value) => !value)}><i /></button></div>
     {!isPublic && <label className="form-field password-field"><span>{t(`ӨРӨӨНИЙ НУУЦ ҮГ `, `ROOM PASSWORD `)}<small>{t(`СОНГОЛТТОЙ`, `OPTIONAL`)}</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} maxLength={32} placeholder={t('Нууц үггүй орж болно', 'Leave empty for no password')} autoComplete="new-password" /></label>}
@@ -439,6 +449,12 @@ function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoos
         <h2>VOICE GAME</h2>
         <button type="button" className="hub-play" onClick={() => onChoose('mafia')}>{t(`ТОГЛОХ `, `PLAY `)}<ChevronRight size={18} /></button>
         <p className="hub-card-meta"><b>{GAMES.mafia.title}</b>{t(`${GAMES.mafia.players} · Дуут чат, нууц дүр`, `${GAMES.mafia.players} · Voice chat, secret roles`)}</p>
+      </article>
+      <article className="hub-card hub-card-whoami">
+        <div className="hub-whoami-art" aria-hidden="true"><span>?</span><i /><i /><i /></div>
+        <h2>{GAMES.whoami.title.toUpperCase()}</h2>
+        <button type="button" className="hub-play" onClick={() => onChoose('whoami')}>{t(`ТОГЛОХ `, `PLAY `)}<ChevronRight size={18} /></button>
+        <p className="hub-card-meta"><b>{GAMES.whoami.title}</b>{`${GAMES.whoami.players} · ${i18n.whoAmI.hubMeta}`}</p>
       </article>
     </div>
   </div>;
@@ -530,7 +546,6 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
   const [inviteOpen, setInviteOpen] = useState(false);
   const { room, seats, loaded, missing, error, reload } = useRoom(roomCode);
   const [busy, setBusy] = useState(false);
-  const [rulesOpen, setRulesOpen] = useState(false);
   const [profileSeat, setProfileSeat] = useState<RoomSeat | null>(null);
   const mine = seats.find((seat) => seat.user_id === userId);
   /** Opens a seated player's card by seat number (games) or seat row (lobby). */
@@ -573,54 +588,81 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
 
   if (!room || !mine) return <div className="inner-screen"><TopBar title={t('ӨРӨӨ', 'ROOM')} subtitle={error ? t('АЛДАА', 'ERROR') : t('АЧААЛЖ БАЙНА', 'LOADING')} onBack={leave} /><div className="room-loading">{error ?? t('Өрөөнд холбогдож байна…', 'Connecting to the room…')}</div></div>;
 
+  if (room.status !== 'lobby' && room.game_type === 'whoami') {
+    return <><WhoAmIScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => { void run('rematch'); }} onNotice={onNotice} onProfile={openProfile} />{overlays}</>;
+  }
   if (room.status !== 'lobby') {
     return <><GameScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} fullscreen={fullscreen} onProfile={openProfile} />{overlays}</>;
   }
 
+  return <LobbyView room={room} seats={seats} roomCode={roomCode} userId={userId} copied={copied} busy={busy} onCopy={onCopy} onLeave={leave} onRun={run}
+    onProfileSeat={setProfileSeat} onInvite={() => setInviteOpen(true)}>
+    {overlays}
+    {inviteOpen && <InviteFriendsModal roomCode={roomCode} friends={friends} onClose={() => setInviteOpen(false)} notify={onNotice} />}
+  </LobbyView>;
+}
+
+export type LobbyViewProps = {
+  room: RoomInfo; seats: RoomSeat[]; roomCode: string; userId: string; copied: boolean; busy: boolean;
+  onCopy: () => void; onLeave: () => void; onRun: (action: string, body?: Record<string, unknown>) => Promise<boolean>;
+  onProfileSeat: (seat: RoomSeat) => void; onInvite: () => void; children?: ReactNode;
+};
+
+/** The waiting room: seats, the game's rules card, ready / start. Also used by the server-free demo. */
+export function LobbyView({ room, seats, roomCode, userId, copied, busy, onCopy, onLeave, onRun, onProfileSeat, onInvite, children }: LobbyViewProps) {
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const mine = seats.find((seat) => seat.user_id === userId);
+  const type: GameType = room.game_type ?? 'mafia';
+  const whoAmI = type === 'whoami';
   const isHost = room.host_id === userId;
   const emptySlots = Math.max(room.max_players - seats.length, 0);
-  const botsAllowed = GAMES[room.game_type ?? 'mafia'].allowBots;
+  const botsAllowed = GAMES[type].allowBots;
   const others = seats.filter((seat) => seat.user_id !== room.host_id);
   const waitingFor = others.filter((seat) => !seat.ready);
-  const minimum = GAMES[room.game_type ?? 'mafia'].minPlayers;
+  const minimum = GAMES[type].minPlayers;
   const canStart = seats.length >= minimum && waitingFor.length === 0;
   const hint = seats.length < minimum
     ? t(`Дор хаяж ${minimum} тоглогч хэрэгтэй · одоо ${seats.length}`, `Needs at least ${minimum} players · now ${seats.length}`)
     : waitingFor.length ? t(`Хүлээж байна: ${waitingFor.map((seat) => seat.display_name).join(', ')}`, `Waiting for: ${waitingFor.map((seat) => seat.display_name).join(', ')}`) : t('Бүгд бэлэн!', 'Everyone is ready!');
+  const saveRules = (settings: Record<string, unknown>) => { void onRun('settings', { settings }).then((saved) => { if (saved) setRulesOpen(false); }); };
 
   return (
     <VoiceChatProvider roomCode={roomCode} userId={userId} phase="lobby" alive isHost={isHost}>
-      <div className="inner-screen lobby-screen">
-        <TopBar title={room.name.toUpperCase()} subtitle={t(`${GAMES[room.game_type ?? 'mafia'].title.toUpperCase()} · ЛОББИ`, `${GAMES[room.game_type ?? 'mafia'].title.toUpperCase()} · LOBBY`)} onBack={leave} />
+      <div className={`inner-screen lobby-screen lobby-${type}`}>
+        <TopBar title={room.name.toUpperCase()} subtitle={t(`${GAMES[type].title.toUpperCase()} · ЛОББИ`, `${GAMES[type].title.toUpperCase()} · LOBBY`)} onBack={onLeave} />
         <div className={`lobby-content capacity-${room.max_players}`}>
           <div className="lobby-heading">
-            <div><div className="eyebrow left-eye">{t(`ХОТ СЭРЭХЭЭСЭЭ ӨМНӨ`, `BEFORE THE CITY WAKES`)}</div><h1>{t(`Бүлгээ `, `Gather your `)}<i>{t(`цуглуулаарай.`, `crew.`)}</i></h1></div>
+            {whoAmI
+              ? <div><div className="eyebrow left-eye">{t(`ДУХАН ДЭЭРХ НУУЦ`, `THE SECRET ON YOUR FOREHEAD`)}</div><h1>{t(`Найзуудаа `, `Gather your `)}<i>{t(`цуглуул.`, `friends.`)}</i></h1></div>
+              : <div><div className="eyebrow left-eye">{t(`ХОТ СЭРЭХЭЭСЭЭ ӨМНӨ`, `BEFORE THE CITY WAKES`)}</div><h1>{t(`Бүлгээ `, `Gather your `)}<i>{t(`цуглуулаарай.`, `crew.`)}</i></h1></div>}
             <div className="room-code"><span>{i18n.app.roomCode.toUpperCase()}</span><strong>{roomCode}</strong><button aria-label={t('Өрөөний код хуулах', 'Copy room code')} title={t('Өрөөний код хуулах', 'Copy room code')} onClick={onCopy}>{copied ? <Check size={16} /> : <Clipboard size={16} />}</button></div>
           </div>
           <div className="lobby-toolbar"><span><Users size={14} />{t(` ТОГЛОГЧИД `, ` PLAYERS `)}<b>{String(seats.length).padStart(2, '0')}</b> <span className="muted">/ {room.max_players}</span></span><span className="room-visibility"><span className="room-lang-badge"><Languages size={10} />{` ${roomLangName(room.language).toUpperCase()}`}</span>{room.is_private ? t('ХУВИЙН · ЗӨВХӨН КОДООР', 'PRIVATE · CODE ONLY') : t('НИЙТЭД НЭЭЛТТЭЙ', 'PUBLIC')}</span></div>
           <div className="player-grid">
             {seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={seat.user_id === userId}
-              onRemoveBot={isHost && seat.is_bot ? () => run('bot-remove', { seat: seat.seat }) : undefined} busy={busy} onProfile={() => setProfileSeat(seat)} />)}
+              onRemoveBot={isHost && seat.is_bot ? () => { void onRun('bot-remove', { seat: seat.seat }); } : undefined} busy={busy} onProfile={() => onProfileSeat(seat)} />)}
             {Array.from({ length: emptySlots }, (_, index) => isHost && botsAllowed
-              ? <button type="button" className="invite-slot add-bot-slot" key={`slot-${index}`} disabled={busy} onClick={() => run('bot-add')}><Bot size={20} /><small>{t(`БОТ НЭМЭХ`, `ADD BOT`)}</small></button>
+              ? <button type="button" className="invite-slot add-bot-slot" key={`slot-${index}`} disabled={busy} onClick={() => { void onRun('bot-add'); }}><Bot size={20} /><small>{t(`БОТ НЭМЭХ`, `ADD BOT`)}</small></button>
               : <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>{t(`СУЛ СУУДАЛ`, `EMPTY SEAT`)}</small></div>)}
           </div>
-          <MafiaRulesCard settings={room.settings} players={seats.length} isHost={isHost} busy={busy} onEdit={() => setRulesOpen(true)} />
+          {whoAmI
+            ? <WhoAmIRulesCard settings={room.settings} isHost={isHost} busy={busy} onEdit={() => setRulesOpen(true)} />
+            : <MafiaRulesCard settings={room.settings} players={seats.length} isHost={isHost} busy={busy} onEdit={() => setRulesOpen(true)} />}
           <div className="lobby-bottom">
             <div className="lobby-hint"><LockKeyhole size={14} /><span>{isHost ? t('ТА ӨРӨӨНИЙ ЭЗЭН', 'YOU ARE THE HOST') : t('ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА', 'WAITING FOR THE HOST TO START')} <b>•</b> {hint}</span></div>
             <div className="lobby-actions">
-              <button className="secondary-button invite-friends-button" onClick={() => setInviteOpen(true)}><UserPlus size={15} />{t(` НАЙЗ УРИХ`, ` INVITE FRIENDS`)}</button>
-              {!isHost && <button className={`secondary-button ready-button ${mine.ready ? 'is-ready' : ''}`} disabled={busy} onClick={() => run('ready', { ready: !mine.ready })}>{mine.ready ? <Check size={15} /> : <Shield size={15} />}{mine.ready ? t('БЭЛЭН', 'READY') : t('БИ БЭЛЭН', 'I’M READY')}</button>}
-              <button className="text-button" onClick={leave}><ArrowLeft size={15} /> {isHost ? t('ӨРӨӨГ ХААХ', 'CLOSE ROOM') : i18n.common.leave.toUpperCase()}</button>
-              {isHost && <button className="primary-button start-button" disabled={busy || !canStart} onClick={() => run('start')}><Moon size={15} /> {i18n.app.startGame.toUpperCase()} <ChevronRight size={16} /></button>}
+              <button className="secondary-button invite-friends-button" onClick={onInvite}><UserPlus size={15} />{t(` НАЙЗ УРИХ`, ` INVITE FRIENDS`)}</button>
+              {!isHost && mine && <button className={`secondary-button ready-button ${mine.ready ? 'is-ready' : ''}`} disabled={busy} onClick={() => { void onRun('ready', { ready: !mine.ready }); }}>{mine.ready ? <Check size={15} /> : <Shield size={15} />}{mine.ready ? t('БЭЛЭН', 'READY') : t('БИ БЭЛЭН', 'I’M READY')}</button>}
+              <button className="text-button" onClick={onLeave}><ArrowLeft size={15} /> {isHost ? t('ӨРӨӨГ ХААХ', 'CLOSE ROOM') : i18n.common.leave.toUpperCase()}</button>
+              {isHost && <button className="primary-button start-button" disabled={busy || !canStart} onClick={() => { void onRun('start'); }}>{whoAmI ? <CircleHelp size={15} /> : <Moon size={15} />} {i18n.app.startGame.toUpperCase()} <ChevronRight size={16} /></button>}
             </div>
           </div>
         </div>
-        {rulesOpen && isHost && <MafiaRulesEditor initial={room.settings} players={seats.length} busy={busy}
-          onClose={() => setRulesOpen(false)} onSave={(settings) => { void run('settings', { settings }).then((saved) => { if (saved) setRulesOpen(false); }); }} />}
+        {rulesOpen && isHost && (whoAmI
+          ? <WhoAmIRulesEditor initial={room.settings} busy={busy} onClose={() => setRulesOpen(false)} onSave={saveRules} />
+          : <MafiaRulesEditor initial={room.settings} players={seats.length} busy={busy} onClose={() => setRulesOpen(false)} onSave={(settings) => saveRules(settings as unknown as Record<string, unknown>)} />)}
       </div>
-      {overlays}
-      {inviteOpen && <InviteFriendsModal roomCode={roomCode} friends={friends} onClose={() => setInviteOpen(false)} notify={onNotice} />}
+      {children}
     </VoiceChatProvider>
   );
 }
@@ -651,6 +693,7 @@ function AdminWatch({ roomCode, userId, notify, fullscreen, onExit }: { roomCode
         <div className="player-grid">{seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={false} onProfile={() => undefined} />)}</div></div>
       {banner}</div>;
   }
+  if (room.game_type === 'whoami') return <><WhoAmIWatch roomCode={roomCode} roomName={room.name} userId={userId} onExit={onExit} />{banner}</>;
   return <><GameScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={false} seats={seats} onLeave={onExit} onRematch={() => undefined} onNotice={notify} fullscreen={fullscreen} onProfile={() => undefined} watching={{ roles }} />{banner}</>;
 }
 

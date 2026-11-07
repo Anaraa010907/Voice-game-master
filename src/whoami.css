@@ -1,0 +1,875 @@
+/* "Би хэн бэ" (Who Am I) table. Landscape phone first (~740×360), same dark palette and gold accents as Mafia. */
+
+.whoami-game,
+.whoami-results {
+  --wa-gold: #d2b073;
+  --wa-line: rgba(210, 176, 115, .35);
+  --wa-panel: linear-gradient(160deg, rgba(23, 24, 32, .96), rgba(12, 13, 19, .97));
+  --wa-yes: #5fae7a;
+  --wa-no: #c85a5f;
+  --wa-unknown: #8f8bb0;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #ece6dc;
+  background:
+    radial-gradient(ellipse at 30% 0%, rgba(122, 92, 160, .16), transparent 52%),
+    radial-gradient(ellipse at 80% 100%, rgba(210, 176, 115, .12), transparent 55%),
+    linear-gradient(135deg, #0a0c12, #11121b 55%, #0b0d13);
+}
+
+.whoami-kicker {
+  color: var(--wa-gold);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
+/* ---------- Top bar ---------- */
+
+.whoami-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px max(12px, 2.5%);
+  border-bottom: 1px solid #ffffff14;
+  background: #0b0d13ee;
+}
+
+.whoami-round {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.whoami-round span {
+  color: #9a9291;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+
+.whoami-round strong,
+.whoami-timer strong {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--wa-gold);
+}
+
+.whoami-phase {
+  padding: 4px 10px;
+  border: 1px solid var(--wa-line);
+  border-radius: 999px;
+  background: #1a1922;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 15px;
+  letter-spacing: .8px;
+}
+
+.whoami-timer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #b2acaa;
+}
+
+.whoami-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.whoami-chip-button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid #ffffff22;
+  border-radius: 999px;
+  background: #15171e;
+  color: #d6cfc4;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .6px;
+}
+
+.whoami-top .game-leave-button {
+  min-height: 34px;
+  font-size: 11px;
+}
+
+/* ---------- Body: stage + player list ---------- */
+
+.whoami-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 30%);
+  gap: 10px;
+  padding: 10px max(12px, 2.5%) 34px;
+}
+
+.phase-reveal .whoami-body {
+  grid-template-columns: minmax(0, 1fr);
+  padding-bottom: 10px;
+}
+
+.whoami-stage {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(150px, .9fr) minmax(0, 1.1fr);
+  gap: 10px;
+}
+
+.whoami-spotlight,
+.whoami-actions {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--wa-line);
+  border-radius: 14px;
+  background: var(--wa-panel);
+  box-shadow: 0 14px 34px #0008;
+  overflow: auto;
+}
+
+.whoami-spotlight {
+  align-items: stretch;
+  justify-content: center;
+  text-align: center;
+}
+
+.whoami-actions {
+  justify-content: center;
+}
+
+.whoami-counters {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.whoami-counters span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #ffffff0d;
+  color: #c9c1b6;
+  font-size: 11px;
+}
+
+/* ---------- Identity cards ---------- */
+
+.whoami-card {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px 9px;
+  border: 1px solid var(--wa-line);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(210, 176, 115, .14), transparent 60%),
+    linear-gradient(180deg, #1b1b25, #111219);
+  color: inherit;
+  text-align: center;
+}
+
+.whoami-card.is-me {
+  border-style: dashed;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(122, 92, 160, .22), transparent 62%),
+    linear-gradient(180deg, #191826, #0f1018);
+}
+
+.whoami-card-who {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+}
+
+.whoami-card-who .avatar {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  font-size: 11px;
+}
+
+.whoami-card-who b,
+.whoami-player-copy b,
+.whoami-ranking-copy b {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.whoami-card-who small,
+.whoami-player-copy small,
+.whoami-ranking-copy small {
+  color: var(--wa-gold);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 9px;
+  letter-spacing: .8px;
+}
+
+.whoami-card-identity {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  max-width: 100%;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(20px, 5.4vh, 30px);
+  font-weight: 700;
+  line-height: 1.05;
+  color: #f6e2b0;
+  overflow-wrap: anywhere;
+}
+
+.whoami-card.is-large .whoami-card-identity {
+  font-size: clamp(26px, 8.5vh, 44px);
+}
+
+.whoami-mystery {
+  display: inline-grid;
+  place-items: center;
+  width: 1.15em;
+  height: 1.15em;
+  border: 1px dashed #b7a3d6;
+  border-radius: 50%;
+  color: #cbbcf0;
+  font-style: normal;
+}
+
+.whoami-card-identity em {
+  color: #a9a1c2;
+  font-size: .5em;
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.whoami-card-category {
+  color: #b9b0a5;
+  font-size: 11px;
+}
+
+.whoami-status {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #ffffff10;
+  color: #c8c0b6;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .7px;
+  white-space: nowrap;
+}
+
+.whoami-card > .whoami-status {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.whoami-status.is-solved { background: #2f5a3d; color: #c8f0d2; }
+.whoami-status.is-gaveUp { background: #4a2a30; color: #f0c6c8; }
+.whoami-status.is-left { background: #2a2a30; color: #9e9a9f; }
+
+/* ---------- Reveal ---------- */
+
+.whoami-reveal {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.whoami-reveal-head h1 {
+  margin: 2px 0;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(22px, 6.5vh, 34px);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.whoami-reveal-head p {
+  margin: 0;
+  color: #b1a9a3;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.whoami-reveal-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  align-content: start;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.whoami-reveal-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.whoami-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #b9b1a7;
+  font-size: 12px;
+}
+
+/* ---------- Actions ---------- */
+
+.whoami-game .primary-button,
+.whoami-game .secondary-button,
+.whoami-results .primary-button,
+.whoami-results .secondary-button {
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.whoami-game .whoami-big {
+  min-height: 52px;
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+
+.whoami-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.whoami-hint,
+.whoami-meta {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: #b8b0a6;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.whoami-meta {
+  justify-content: center;
+  font-size: 11px;
+  text-align: center;
+}
+
+.whoami-prompt {
+  margin: 0;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 19px;
+  text-align: center;
+}
+
+.whoami-waiting {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: #c9c1b6;
+  text-align: center;
+}
+
+.whoami-waiting svg {
+  color: var(--wa-gold);
+}
+
+.whoami-waiting b {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.whoami-waiting span {
+  font-size: 12px;
+  color: #a39b95;
+}
+
+.whoami-vote-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.whoami-vote-buttons.is-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.whoami-vote {
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid #ffffff26;
+  border-radius: 12px;
+  background: #171920;
+  color: #e6dfd4;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .8px;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.whoami-vote:active { transform: translateY(1px); }
+.whoami-vote.is-yes { border-color: #5fae7a88; color: #bfe8cb; }
+.whoami-vote.is-no { border-color: #c85a5f88; color: #f3c3c4; }
+.whoami-vote.is-unknown { border-color: #8f8bb088; color: #d6d2f0; }
+.whoami-vote.is-yes.is-picked { background: #2c5a3c; border-color: var(--wa-yes); box-shadow: 0 0 0 2px #5fae7a55; }
+.whoami-vote.is-no.is-picked { background: #5e2a2f; border-color: var(--wa-no); box-shadow: 0 0 0 2px #c85a5f55; }
+.whoami-vote.is-unknown.is-picked { background: #36345a; border-color: var(--wa-unknown); box-shadow: 0 0 0 2px #8f8bb055; }
+
+.whoami-guess-form {
+  display: grid;
+  gap: 8px;
+}
+
+.whoami-guess-form b {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 20px;
+}
+
+.whoami-guess-form p {
+  margin: 0;
+  color: #b1a9a3;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.whoami-guess-form input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--wa-line);
+  border-radius: 10px;
+  background: #0c0e14;
+  color: #f0e9de;
+  font-size: 16px;
+  outline: none;
+}
+
+.whoami-guess-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.whoami-guess-compare span {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 7px;
+  border: 1px solid #ffffff17;
+  border-radius: 10px;
+  background: #0f1117;
+}
+
+.whoami-guess-compare small {
+  color: #a39b95;
+  font-size: 10px;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+}
+
+.whoami-guess-compare b {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 20px;
+  color: #f6e2b0;
+}
+
+/* ---------- Player list ---------- */
+
+.whoami-players {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.whoami-player {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 1px solid #ffffff17;
+  border-radius: 10px;
+  background: #14161d;
+  color: inherit;
+  text-align: left;
+}
+
+.whoami-player.is-active {
+  border-color: var(--wa-gold);
+  background: linear-gradient(100deg, #33281d, #1a1a21);
+}
+
+.whoami-player.status-left { opacity: .5; }
+
+.whoami-player .avatar {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  font-size: 11px;
+}
+
+.whoami-player-copy {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 1px;
+}
+
+.whoami-player-copy > span {
+  overflow: hidden;
+  color: #b9b0a5;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.whoami-voted { flex: none; color: var(--wa-yes); }
+
+.whoami-player-score {
+  flex: none;
+  display: grid;
+  justify-items: end;
+}
+
+.whoami-player-score b {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 18px;
+  color: var(--wa-gold);
+}
+
+.whoami-player-score small {
+  color: #a39b95;
+  font-size: 8px;
+  letter-spacing: .6px;
+}
+
+.whoami-last {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  z-index: 3;
+  max-width: calc(100% - 24px);
+  transform: translateX(-50%);
+  padding: 4px 14px;
+  overflow: hidden;
+  border: 1px solid var(--wa-line);
+  border-radius: 999px;
+  background: #101219ee;
+  color: #efe5d0;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  animation: whoami-pop .35s ease-out both;
+}
+
+@keyframes whoami-pop {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ---------- Results ---------- */
+
+.whoami-results {
+  align-items: center;
+  gap: 8px;
+  padding: 12px max(14px, 4%);
+  overflow-y: auto;
+}
+
+.whoami-results-head {
+  text-align: center;
+}
+
+.whoami-results-head h1 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 4px 0;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(24px, 7vh, 40px);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.whoami-results-head h1 svg { color: var(--wa-gold); }
+
+.whoami-results-head p {
+  margin: 0;
+  color: #b1a9a3;
+  font-size: 12px;
+}
+
+.whoami-ranking {
+  width: min(760px, 100%);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.whoami-ranking li {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 5px 10px;
+  border: 1px solid #ffffff17;
+  border-radius: 10px;
+  background: #14161d;
+}
+
+.whoami-ranking li.is-winner {
+  border-color: var(--wa-gold);
+  background: linear-gradient(100deg, #3a2c1b, #17171e);
+}
+
+.whoami-ranking li.is-me { box-shadow: inset 0 0 0 1px #ffffff20; }
+
+.whoami-rank {
+  width: 22px;
+  flex: none;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 20px;
+  color: var(--wa-gold);
+  text-align: center;
+}
+
+.whoami-ranking .avatar {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  font-size: 11px;
+}
+
+.whoami-ranking-copy {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 1px;
+}
+
+.whoami-ranking-copy > span {
+  overflow: hidden;
+  color: #d9cfbd;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.whoami-ranking-score {
+  flex: none;
+  display: grid;
+  justify-items: end;
+}
+
+.whoami-ranking-score b {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 17px;
+  color: #f6e2b0;
+  white-space: nowrap;
+}
+
+.whoami-ranking-score small {
+  color: #a39b95;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.whoami-results-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* ---------- Lobby rules card ---------- */
+
+.whoami-rules p { margin: 2px 0 0; }
+.whoami-rules-note { margin: 10px 0 0; color: #a9a2a0; font-size: 11px; line-height: 1.5; }
+
+/* ---------- Demo toolbar (server-free preview only) ---------- */
+
+.whoami-demo-bar {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 4px 8px;
+  border: 1px dashed #8f8bb0aa;
+  border-radius: 10px;
+  background: #0d0e16f0;
+  font-size: 10px;
+}
+
+.whoami-demo-bar b { color: #cbbcf0; letter-spacing: 1px; }
+.whoami-demo-group { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 3px; }
+.whoami-demo-group small { color: #8f8a96; margin-right: 2px; }
+
+.whoami-demo-bar button {
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid #ffffff22;
+  border-radius: 999px;
+  background: #171922;
+  color: #d8d1c6;
+  font-size: 10px;
+}
+
+.whoami-demo-bar button.is-picked {
+  border-color: var(--gold, #d2b073);
+  background: #33281d;
+  color: #f6e2b0;
+}
+
+/* ---------- Narrow screens (portrait or small landscape) ---------- */
+
+@media (max-width: 640px) {
+  .whoami-body { grid-template-columns: 1fr; overflow-y: auto; }
+  .whoami-stage { grid-template-columns: 1fr; }
+  .whoami-players { overflow: visible; }
+  .whoami-ranking { grid-template-columns: 1fr; }
+  .whoami-top { flex-wrap: wrap; }
+}
+
+@media (orientation: landscape) and (max-height: 420px) {
+  .whoami-body { gap: 8px; padding-top: 8px; }
+  .whoami-spotlight, .whoami-actions { padding: 8px 10px; gap: 6px; }
+  .whoami-vote { min-height: 56px; }
+  .whoami-reveal-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .whoami-card { padding: 7px 6px; }
+}
+
+/* Short landscape phones: the voice dock becomes a strip above the table (as in Mafia), so the table flows under it. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .voice-scope > .whoami-game,
+  .voice-scope > .whoami-results {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    flex: 1 1 0;
+  }
+}
+
+.whoami-demo-pill {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 30;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px dashed #8f8bb0aa;
+  border-radius: 999px;
+  background: #0d0e16f0;
+  color: #cbbcf0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.whoami-vote-buttons.is-three .whoami-vote {
+  padding: 0 2px;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.whoami-vote span {
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.whoami-ranking-score small {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.whoami-ranking-score .whoami-status {
+  padding: 1px 5px;
+  font-size: 8px;
+  font-style: normal;
+}
+
+/* Reveal: every card on screen at once (up to 10), the Ready button always visible. */
+.whoami-reveal-grid {
+  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+  grid-auto-rows: auto;
+}
+
+.whoami-reveal .whoami-card {
+  padding: 7px 6px 6px;
+  gap: 2px;
+}
+
+.whoami-reveal .whoami-card-identity {
+  min-height: 26px;
+  font-size: clamp(17px, 4.6vh, 24px);
+}
+
+.whoami-reveal .whoami-card-who .avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+
+.whoami-reveal .whoami-card-who b { font-size: 14px; }
+.whoami-reveal .whoami-card-category { font-size: 10px; }
+.whoami-reveal-head p { font-size: 11px; }
+.whoami-reveal-actions { padding-left: 120px; }
+
+@media (min-height: 501px) {
+  .whoami-reveal-actions { padding-left: 0; }
+}

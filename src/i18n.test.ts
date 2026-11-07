@@ -28,4 +28,9 @@ for (const message of [
   assert.notEqual(translateMessage(message), message, `Expected "${message}" to be translated.`);
 }
 
+
+
+// Who Am I texts exist in both languages (the type keeps the keys in step).
+assert.equal(i18n.whoAmI.yes, 'ТИЙМ');
+assert.equal(i18n.whoAmI.lastAnswer('Бат', 'Тийм', 3, 1), 'Бат: Тийм (3–1)');
 console.log('i18n regression checks passed');

@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { regionalFunction, supabase } from './supabaseClient';
 import { translateMessage } from './i18n';
 import type { PrivateGameView, PublicGameView } from './gameEngine';
+import type { GameType } from './games';
 
 import { t } from './lang.ts';
 /** How a toast looks: errors red, confirmations green, everything else neutral. */
 export type NoticeTone = 'info' | 'success' | 'error';
 export type NotifyFn = (text: string, tone?: NoticeTone) => void;
 
-export type RoomInfo = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type?: 'mafia'; settings?: Record<string, unknown> | null; language?: 'mn' | 'en' };
+export type RoomInfo = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type?: GameType; settings?: Record<string, unknown> | null; language?: 'mn' | 'en' };
 export type ListedRoom = { roomCode: string; name: string; players: number; maxPlayers: number; hostName: string; joined: boolean };
 export type RoomSeat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null; is_bot?: boolean; frame_key?: string | null; nameplate_key?: string | null; border_key?: string | null };
 
@@ -84,10 +85,10 @@ export function useRoom(roomCode: string | null) {
   return { room, seats, loaded, missing, error, reload };
 }
 
-/** Live public table view, this player's private view, and the phase deadline. */
-export function useGame(roomCode: string | null, userId: string | null) {
-  const [publicView, setPublicView] = useState<PublicGameView | null>(null);
-  const [privateView, setPrivateView] = useState<PrivateGameView | null>(null);
+/** Live public table view, this player's private view, and the phase deadline. Mafia views by default; Who Am I passes its own. */
+export function useGame<Public = PublicGameView, Private = PrivateGameView>(roomCode: string | null, userId: string | null) {
+  const [publicView, setPublicView] = useState<Public | null>(null);
+  const [privateView, setPrivateView] = useState<Private | null>(null);
   const [deadline, setDeadline] = useState<number | null>(null);
   const versionRef = useRef(0);
 
@@ -99,12 +100,12 @@ export function useGame(roomCode: string | null, userId: string | null) {
     ]);
     if (pub.data) {
       versionRef.current = pub.data.version as number;
-      setPublicView(pub.data.view as PublicGameView);
+      setPublicView(pub.data.view as Public);
       setDeadline(pub.data.deadline ? Date.parse(pub.data.deadline as string) : null);
     } else {
       setPublicView(null);
     }
-    setPrivateView((priv.data?.view as PrivateGameView | undefined) ?? null);
+    setPrivateView((priv.data?.view as Private | undefined) ?? null);
   }, [roomCode, userId]);
 
   useEffect(() => {
