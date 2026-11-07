@@ -239,6 +239,14 @@ require(whoAmIPublicView(leave).players.find((p) => p.id === leaver)!.identity =
 leave = removeWhoAmIPlayer(removeWhoAmIPlayer(leave, leave.order.find((id) => id !== leaver)!), leave.order.filter((id) => id !== leaver)[1]);
 require(leave.phase === 'results', 'Fewer than 2 players left ends the game.');
 
+let runaway = fresh(4, 9);
+const leader = active(runaway);
+runaway = act(runaway, leader, { type: 'guess', text: runaway.identities[leader].name });
+require(runaway.players.find((p) => p.id === leader)!.status === 'solved', 'A typed exact name solves at once.');
+runaway = removeWhoAmIPlayer(runaway, leader);
+for (const p of runaway.players.filter((value) => value.status === 'playing')) runaway = act(runaway, p.id, { type: 'giveUp' });
+require(runaway.phase === 'results' && !runaway.winners.includes(leader), 'A leader who left the game cannot win it.');
+
 let away = fresh(4, 8);
 const absent = away.order[1];
 away = setWhoAmIConnected(away, absent, false);
@@ -295,8 +303,9 @@ for (let seed = 1; seed <= 200; seed += 1) {
   if (game.players.some((p) => p.place === null && p.solveScore !== 0)) throw new Error(`Seed ${seed}: a non-solver got solve points.`);
   if (game.players.some((p) => p.points !== p.solveScore + p.votesCast * POINTS_PER_VOTE)) throw new Error(`Seed ${seed}: a total is not solve + vote points.`);
   if (game.players.some((p) => p.bot && p.votesCast !== 0)) throw new Error(`Seed ${seed}: a bot earned vote points.`);
-  const best = Math.max(0, ...game.players.map((p) => p.points));
-  if (game.winners.join() !== (best > 0 ? game.players.filter((p) => p.points === best).map((p) => p.id).join() : '')) throw new Error(`Seed ${seed}: winners are not the top scorers.`);
+  const stayed = game.players.filter((p) => p.status !== 'left');
+  const best = Math.max(0, ...stayed.map((p) => p.points));
+  if (game.winners.join() !== (best > 0 ? stayed.filter((p) => p.points === best).map((p) => p.id).join() : '')) throw new Error(`Seed ${seed}: winners are not the top scorers among those who stayed.`);
 }
 passed += 1;
 

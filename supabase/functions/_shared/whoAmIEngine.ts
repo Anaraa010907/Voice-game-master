@@ -316,8 +316,10 @@ export function createWhoAmIGame(seats: WhoAmISeat[], pack: WhoAmIPack, random: 
 
 function finish(state: WhoAmIState): WhoAmIState {
   if (state.phase === 'results') return state;
-  const best = Math.max(0, ...state.players.map((value) => value.points));
-  const winners = best > 0 ? state.players.filter((value) => value.points === best).map((value) => value.id) : [];
+  // Players who left were recorded as leavers (a loss) when they went, so they cannot take the win.
+  const present = state.players.filter((value) => value.status !== 'left');
+  const best = Math.max(0, ...present.map((value) => value.points));
+  const winners = best > 0 ? present.filter((value) => value.points === best).map((value) => value.id) : [];
   const names = winners.map((id) => playerOf(state, id)?.name).join(', ');
   return bump(log({ ...state, phase: 'results', winners, answerVotes: {}, judgeVotes: {}, guess: null }, winners.length ? `Тоглоом дууслаа. Ялагч: ${names}.` : 'Тоглоом дууслаа. Хэн ч таасангүй.'));
 }

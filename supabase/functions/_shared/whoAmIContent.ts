@@ -298,7 +298,7 @@ export const SPORTS: WhoAmICategory = {
   nameEn: 'Sports and games',
   kidsSafe: true,
   entries: entries('sport', [
-    ['wrestling', 'Бөхийн барилдаан', 'Mongolian wrestling', ['бөх', 'барилдаан']],
+    ['wrestling', 'Бөхийн барилдаан', 'Mongolian wrestling', ['барилдаан']],
     ['horse-racing', 'Морин уралдаан', 'Horse racing', ['морь уралдаан']],
     ['archery', 'Сур харваа', 'Archery', ['харваа']],
     ['shagai-shooting', 'Шагай харваа', 'Knucklebone shooting'],
