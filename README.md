@@ -38,11 +38,13 @@ Never run `db push` until the project ref and SQL review are confirmed. On a cle
 
 ### Migration review
 
-- `20261016_auth_profiles_ranks.sql` is required for Auth profiles and rankings. It creates profile, match, and rating tables; Auth triggers; and the match processor. **It exposes every profile column to anon and authenticated users until the new forward migration is applied.** Its match processor is service-role-only, but completion/validity flags are not independent proof of a valid result. This project has no trusted match-validation backend.
+- `20261016_auth_profiles_ranks.sql` is required for Auth profiles. It creates profile, match, and (since removed) rating tables; Auth triggers; and the match processor. **It exposes every profile column to anon and authenticated users until the new forward migration is applied.** Its match processor is service-role-only, but completion/validity flags are not independent proof of a valid result. This project has no trusted match-validation backend.
 - `20261017_voice_rooms.sql` is required by the voice function. It additively creates the room/member tables and grants access only to `service_role`; it does not provision rooms or membership.
-- `20261018_public_profile_security.sql` is a forward security repair. It revokes broad profile/table privileges, gives users read access to their own full profile, exposes only the intended leaderboard columns via a view, keeps profile updates limited to `display_name` and `avatar_key`, and backfills Auth users that predate the profile trigger.
+- `20261018_public_profile_security.sql` is a forward security repair. It revokes broad profile/table privileges, gives users read access to their own full profile, exposes only the intended public profile columns via the `leaderboard_profiles` view, keeps profile updates limited to `display_name` and `avatar_key`, and backfills Auth users that predate the profile trigger.
 
-The migrations do not drop tables or reset data. `CREATE TABLE IF NOT EXISTS` does not verify an existing table's shape, so compare the target schema first. Apply the first and third migrations together before app launch to avoid leaving the broad profile-read policy active.
+- `20261107_remove_monopoly_and_rank.sql` removes the board game and the rank system. **It is destructive:** it deletes every Monopoly room (seats, state and voice room cascade), restricts `game_rooms.game_type` to `mafia` and `max_players` to 4–12, drops `profiles.rank_name`/`rank_points`, the rank columns of `match_records`, the `rating_changes` table, `rank_for_points` and `process_verified_competitive_match`. It adds `record_match_outcome(match_id, user_id, outcome)` (service-role only, idempotent per match and player) and recreates `leaderboard_profiles` with `wins` and `total_matches`. Deploy the `game` Edge Function in the same release, since it now calls `record_match_outcome`.
+
+Apart from `20261107_remove_monopoly_and_rank.sql`, the migrations do not drop tables or reset data. `CREATE TABLE IF NOT EXISTS` does not verify an existing table's shape, so compare the target schema first. Apply the first and third migrations together before app launch to avoid leaving the broad profile-read policy active.
 
 ## LiveKit voice setup
 
@@ -76,7 +78,7 @@ There are no simulated players. Every seat is a signed-in person.
 - At least 4 players are needed; everyone except the host must press Ready.
 - **Public rooms** appear in the room list (Play → open rooms) with live seat counts; **Quick join** picks the lobby closest to starting. Private rooms are joined by code only and may have a password.
 - **Eliminated players** become spectators: they see every role and can talk in a separate *ghost* voice room (`<ROOM>-GHOST`). `livekit-voice` only issues ghost tokens to members marked not alive during a game, so living players cannot hear it even with a modified client. Ghosts still hear the main table. Returning to the lobby clears the ghost room.
-- There is no competitive rank. Finished games still add wins and losses to profile statistics; leaving a live game counts as a loss.
+- There is no competitive rank. The only standing is the **win count**: finished games add a win or a loss to the player's profile statistics (`wins`, `losses`, `total_matches`, `win_rate`, win streaks) through `record_match_outcome`, once per match; leaving a live game counts as a loss. The profile screen shows matches, wins, losses and win rate, and `leaderboard_profiles` exposes `wins` (index `profiles_wins_order`) for any future leaderboard sorted by wins.
 
 Deploy from a Codespace terminal:
 
@@ -87,15 +89,9 @@ npx supabase db push
 npx supabase functions deploy game
 ```
 
-## Game hub and board games
+## Game hub
 
-The app is a hub with two kinds of games. **Play** opens the game picker: *Card & voice games* (Mafia; a Spyfall-style game is marked "coming soon") and *Board games* (**Монгол Монополь**). Every game shares the same rooms, lobby, public room list, quick join, voice chat and profile statistics; `game_rooms.game_type` (`20261023_board_games.sql`) says which game a room plays.
-
-**Монгол Монополь** (`supabase/functions/_shared/monopolyEngine.ts`, UI in `src/Monopoly.tsx`):
-- 32-tile board of Mongolian places in eight colour groups (Говь, Хойд нутаг, Баруун нутаг, Хангай, Эртний нийслэл, Нуур тал, Аж үйлдвэр, Нийслэл), three transport tiles (Улаанбаатар өртөө, Чингис хаан нисэх буудал, Замын-Үүд боомт), two utilities, two taxes, "Хувь тавилан" and "Эрдэнэсийн авдар" cards, Шорон and Наадам corners.
-- 2–6 players, 1500₮ each, +200₮ for passing Эхлэл. Buy, collect rent (double for a full colour group), build up to four gers and a tourist camp evenly across a group, mortgage and redeem. Three doubles or "Шоронд яв" sends you to jail (roll doubles or pay 50₮). Cash shortfalls automatically sell gers and mortgage land; whoever still cannot pay goes bankrupt to their creditor.
-- The game ends when one player remains, or after 20 rounds the richest player (cash + property) wins. Each step has a 40-second timer; when it runs out the server rolls, skips the purchase or ends the turn for that player.
-- The server rolls the dice; the whole board is public, so it is published to everyone. Voice stays open for all players during the match.
+**Play** opens the game picker. Today it offers one game, **Мафи: Сүүдэр** (voice game). Rooms, the lobby, the public room list, quick join, voice chat and profile statistics are shared code, and `game_rooms.game_type` says which game a room plays, so new games can be added next to Mafia.
 
 ## Facebook sign-in and profile photos
 

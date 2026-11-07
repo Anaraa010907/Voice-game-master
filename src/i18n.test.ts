@@ -4,6 +4,9 @@ import { i18n, translateMessage, translatePhase, translateRole } from './i18n.ts
 assert.equal(i18n.app.title, 'MAFIA: SHADOWS', 'The game title must remain unchanged.');
 assert.equal(translatePhase('Role Reveal'), 'Дүр тодруулах');
 assert.equal(translateRole('Detective'), 'Цагдаа');
+assert.equal(i18n.account.wins, 'ЯЛАЛТ', 'The profile keeps the win count label.');
+assert.ok(!('rankNames' in i18n.game), 'Rank tiers were removed; only the win count remains.');
+assert.ok(!JSON.stringify(i18n).includes('Монопол'), 'The board game was removed.');
 
 assert.equal(
   translateMessage('You can only observe the simulated night.'),

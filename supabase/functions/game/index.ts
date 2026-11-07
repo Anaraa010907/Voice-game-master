@@ -410,9 +410,7 @@ class GameServer {
   /** Adds the win or loss to the player's profile statistics. Idempotent per match and player. */
   async recordOutcome(userId: string, outcome: 'win' | 'loss', matchId?: string) {
     if (!matchId) return;
-    const { error } = await this.admin.rpc('process_verified_competitive_match', {
-      p_match_id: matchId, p_user_id: userId, p_outcome: outcome, p_match_completed: true, p_match_valid: true,
-    });
+    const { error } = await this.admin.rpc('record_match_outcome', { p_match_id: matchId, p_user_id: userId, p_outcome: outcome });
     if (error) console.error('stats update failed', error);
   }
 
