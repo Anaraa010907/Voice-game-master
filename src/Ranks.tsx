@@ -30,7 +30,6 @@ export function useRanks(userId: string | null | undefined) {
     const rows = (data ?? []) as RankRow[];
     setRanks({
       mafia: rows.find((row) => row.game_type === 'mafia') ?? { ...EMPTY, game_type: 'mafia' },
-      monopoly: rows.find((row) => row.game_type === 'monopoly') ?? { ...EMPTY, game_type: 'monopoly' },
     });
   }, [userId]);
   useEffect(() => { void load(); }, [load]);
@@ -39,17 +38,11 @@ export function useRanks(userId: string | null | undefined) {
 
 const percent = (wins: number, matches: number) => (matches ? Math.round((wins / matches) * 100) : 0);
 
-function RulesList({ game }: { game: RankGame }) {
+function RulesList(_props: { game: RankGame }) {
   return <ul className="rank-rules">
-    {game === 'mafia' ? <>
-      <li><b className="is-plus">+{RANK_POINTS.mafiaWin}</b>{t(` Ялалт`, ` Win`)}</li>
-      <li><b className="is-plus">+{RANK_POINTS.mafiaAliveBonus}</b>{t(` Ялаад амьд үлдвэл`, ` Win and survive`)}</li>
-      <li><b className="is-minus">{RANK_POINTS.mafiaLoss}</b>{t(` Ялагдал`, ` Loss`)}</li>
-    </> : <>
-      <li><b className="is-plus">+{RANK_POINTS.boardWin}</b>{t(` Ялагч`, ` Winner`)}</li>
-      <li><b className="is-minus">{RANK_POINTS.boardSurvived}</b>{t(` Дампуураагүй ч ялагдсан`, ` Lost without going bankrupt`)}</li>
-      <li><b className="is-minus">{RANK_POINTS.boardBankrupt}</b>{t(` Дампуурсан`, ` Bankrupt`)}</li>
-    </>}
+    <li><b className="is-plus">+{RANK_POINTS.mafiaWin}</b>{t(` Ялалт`, ` Win`)}</li>
+    <li><b className="is-plus">+{RANK_POINTS.mafiaAliveBonus}</b>{t(` Ялаад амьд үлдвэл`, ` Win and survive`)}</li>
+    <li><b className="is-minus">{RANK_POINTS.mafiaLoss}</b>{t(` Ялагдал`, ` Loss`)}</li>
     <li><b className="is-minus">{RANK_POINTS.leave}</b>{t(` Тоглолтоос дундуур гарвал`, ` Leaving a match early`)}</li>
   </ul>;
 }

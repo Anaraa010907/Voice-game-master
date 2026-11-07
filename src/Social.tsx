@@ -374,7 +374,7 @@ type Me = { coins: number; diamonds: number; frame_key: string | null; title_key
 type ShopTab = ShopKind | 'offers';
 const TABS: { key: ShopTab; label: string }[] = [{ key: 'offers', label: t('Онцлох', 'Featured') }, { key: 'frame', label: t('Аватар хүрээ', 'Avatar frame') }, { key: 'nameplate', label: t('Нэрийн хавтан', 'Nameplate') }, { key: 'border', label: t('Нэрийн хүрээ', 'Name border') }, { key: 'gift', label: t('Бэлэг', 'Gift') }];
 const CURRENCY_HEADING: Record<Currency, string> = { coin: t('Зоосоор · энгийн, хөдөлгөөнгүй', 'For coins · plain, still'), diamond: t('Алмазаар · зурган гоёл', 'For diamonds · painted looks') };
-const GAME_SHORT: Record<RankGame, string> = { mafia: t('Мафи', 'Mafia'), monopoly: t('Монополь', 'Monopoly') };
+const GAME_SHORT: Record<RankGame, string> = { mafia: t('Мафи', 'Mafia') };
 type RankPrize = { game_type: RankGame; level: number; item_key: string | null };
 
 /** A look sold for a while at its own price (a weekly discount, or one an admin set). */

@@ -5,7 +5,6 @@ import { isEnglish } from './lang.ts';
 
 const RANK_NAMES_EN: Record<RankGame, readonly string[]> = {
   mafia: ['Newcomer', 'Street Kid', 'Associate', 'Soldier', 'Capo', 'Consigliere', 'Right Hand', 'Don', 'Mafia Legend'],
-  monopoly: ['New Trader', 'Trader', 'Merchant', 'Landowner', 'Banker', 'Capitalist', 'Magnate', 'Billionaire', 'Monopoly King'],
 };
 
 /** Rank names in the player's language (the server keeps the Mongolian ones). */

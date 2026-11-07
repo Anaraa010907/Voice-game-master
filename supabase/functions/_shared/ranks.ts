@@ -1,11 +1,11 @@
 /*
- * Ranked play. Mafia and the board game each have their own ladder of nine ranks. Points are won
+ * Ranked play. Mafia has a ladder of nine ranks. Points are won
  * and lost only in ranked rooms (people only, no bots, standard rules). Reaching a rank from the
  * second one up unlocks its title for good, even if the player later drops back.
  * The database mirrors RANK_THRESHOLDS in public.rank_level() and the title keys in shop_items.
  */
-export type RankGame = 'mafia' | 'monopoly';
-export const RANK_GAMES: RankGame[] = ['mafia', 'monopoly'];
+export type RankGame = 'mafia';
+export const RANK_GAMES: RankGame[] = ['mafia'];
 
 /** Points needed for ranks 1 to 9. */
 export const RANK_THRESHOLDS = [0, 100, 250, 450, 700, 1000, 1400, 1900, 2600] as const;
@@ -13,7 +13,6 @@ export const MAX_RANK_LEVEL = RANK_THRESHOLDS.length;
 
 export const RANK_NAMES: Record<RankGame, readonly string[]> = {
   mafia: ['Шинэ хүн', 'Гудамжны хүү', 'Туслах', 'Цэрэг', 'Капо', 'Зөвлөх', 'Баруун гар', 'Дон', 'Мафийн домог'],
-  monopoly: ['Шинэ наймаачин', 'Наймаачин', 'Худалдаачин', 'Газрын эзэн', 'Банкир', 'Хөрөнгөтөн', 'Магнат', 'Тэрбумтан', 'Монополийн хаан'],
 };
 
 /** The metal of each rank: it colours the emblem and the title plaque. */
@@ -26,19 +25,11 @@ export const RANK_POINTS = {
   /** Extra for winners who are still alive at the end. */
   mafiaAliveBonus: 4,
   mafiaLoss: -12,
-  boardWin: 30,
-  /** Lost, but still in business when the game ended. */
-  boardSurvived: -6,
-  boardBankrupt: -12,
   leave: -20,
 } as const;
 
 export function mafiaRankDelta(won: boolean, alive: boolean) {
   return won ? RANK_POINTS.mafiaWin + (alive ? RANK_POINTS.mafiaAliveBonus : 0) : RANK_POINTS.mafiaLoss;
-}
-
-export function boardRankDelta(won: boolean, bankrupt: boolean) {
-  return won ? RANK_POINTS.boardWin : bankrupt ? RANK_POINTS.boardBankrupt : RANK_POINTS.boardSurvived;
 }
 
 const safe = (points: number) => Math.max(0, Math.floor(Number.isFinite(points) ? points : 0));
@@ -70,10 +61,10 @@ export function rankInfo(game: RankGame, points: number) {
 
 /** The title a rank unlocks (none for the first rank). */
 export function rankTitleKey(game: RankGame, level: number) {
-  return level >= 2 && level <= MAX_RANK_LEVEL ? `title-${game === 'mafia' ? 'mafia' : 'mono'}-${level}` : null;
+  return level >= 2 && level <= MAX_RANK_LEVEL ? `title-${game}-${level}` : null;
 }
 
 export function parseRankTitle(key: string | null | undefined): { game: RankGame; level: number } | null {
-  const match = key ? /^title-(mafia|mono)-([2-9])$/.exec(key) : null;
-  return match ? { game: match[1] === 'mafia' ? 'mafia' : 'monopoly', level: Number(match[2]) } : null;
+  const match = key ? /^title-(mafia)-([2-9])$/.exec(key) : null;
+  return match ? { game: 'mafia' as RankGame, level: Number(match[2]) } : null;
 }

@@ -4,12 +4,8 @@ import {
   openDiscussion, privateView, publicView, recordVerdict, recordVote, removePlayer, resolveNight, resolveTrial, resolveVoting, sanitizeMafiaSettings,
   startNight, startVoting, submitNightAction, type GameEngineState, type MafiaSettings, type Verdict, type VoteChoice,
 } from '../_shared/gameEngine.ts';
-import {
-  MIN_MONOPOLY_PLAYERS, applyMonopolyAction, autoPlay, createMonopolyGame, removeMonopolyPlayer, sanitizeMonopolySettings,
-  type MonopolyAction, type MonopolySettings, type MonopolyState,
-} from '../_shared/monopolyEngine.ts';
-import { BOT_STEP_SECONDS, boardBotToMove, mafiaBotsAct, monopolyBotStep, nextBotName } from '../_shared/bots.ts';
-import { RANK_POINTS, boardRankDelta, mafiaRankDelta } from '../_shared/ranks.ts';
+import { mafiaBotsAct, nextBotName } from '../_shared/bots.ts';
+import { RANK_POINTS, mafiaRankDelta } from '../_shared/ranks.ts';
 import { isAllowedOrigin } from '../_shared/voiceRequest.ts';
 import type { VoicePhase } from '../_shared/voicePolicy.ts';
 
@@ -19,26 +15,16 @@ import type { VoicePhase } from '../_shared/voicePolicy.ts';
  * per player. Realtime pushes those rows to the right people under RLS.
  */
 
-type GameType = 'mafia' | 'monopoly';
-type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type: GameType; settings?: Partial<MafiaSettings> | Partial<MonopolySettings> | null; ranked?: boolean };
+type GameType = 'mafia';
+type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type: GameType; settings?: Partial<MafiaSettings> | null; ranked?: boolean };
 /** The stored engine also carries the match id used to record win/loss statistics exactly once. */
 type StoredGame = GameEngineState & { matchId?: string };
-type StoredBoard = MonopolyState & { matchId?: string };
-type AnyGame = StoredGame | StoredBoard;
-const isBoard = (state: AnyGame): state is StoredBoard => (state as StoredBoard).kind === 'monopoly';
-const GAME_TYPES: GameType[] = ['mafia', 'monopoly'];
-const ROOM_SIZES: Record<GameType, number[]> = { mafia: [6, 8, 10, 12], monopoly: [2, 3, 4, 5, 6] };
-const MIN_SEATS: Record<GameType, number> = { mafia: MIN_PLAYERS, monopoly: MIN_MONOPOLY_PLAYERS };
-/** Seconds each board-game player has for every step (roll, buy, finish turn). */
-const BOARD_STEP_SECONDS = 40;
-/** Seconds a bidder has at an auction before passing, and a player has to answer a trade offer. */
-const BOARD_BID_SECONDS = 15;
-const BOARD_TRADE_SECONDS = 30;
-const BOARD_ACTIONS = ['roll', 'buy', 'decline', 'end', 'pay-jail', 'use-card', 'build', 'sell', 'mortgage', 'unmortgage', 'bid', 'pass', 'propose', 'accept', 'reject', 'cancel-trade'];
-const TILE_ACTIONS = ['build', 'sell', 'mortgage', 'unmortgage'];
+const GAME_TYPES: GameType[] = ['mafia'];
+const ROOM_SIZES: Record<GameType, number[]> = { mafia: [6, 8, 10, 12] };
+const MIN_SEATS: Record<GameType, number> = { mafia: MIN_PLAYERS };
 const LISTED_LOBBY_HOURS = 6;
 /** Which games let the host fill seats with bots (never in ranked rooms). Mafia is played by people only for now. */
-const BOTS_ALLOWED: Record<GameType, boolean> = { mafia: false, monopoly: true };
+const BOTS_ALLOWED: Record<GameType, boolean> = { mafia: false };
 type Seat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null; is_bot?: boolean };
 type Body = Record<string, unknown>;
 
@@ -110,57 +96,12 @@ function code(body: Body) {
   return value;
 }
 
-const whole = (value: unknown, max: number) => {
-  const number = typeof value === 'number' || typeof value === 'string' ? Number(value) : NaN;
-  return Number.isInteger(number) && number >= 0 && number <= max ? number : null;
-};
-
-/** Turns a validated board move into an engine action; the engine then checks it against the rules. */
-function boardAction(move: string, body: Body): MonopolyAction {
-  if (TILE_ACTIONS.includes(move)) {
-    const tile = whole(body.tile, 31);
-    if (tile === null) throw new GameError(400, 'Нүд буруу байна.');
-    return { type: move, tile } as MonopolyAction;
-  }
-  if (move === 'bid') {
-    const amount = whole(body.amount, 1_000_000);
-    if (!amount) throw new GameError(400, 'Үнийн санал буруу байна.');
-    return { type: 'bid', amount };
-  }
-  if (move === 'propose') {
-    const offer = (body.offer ?? {}) as Body;
-    const tiles = (value: unknown) => Array.isArray(value) && value.length <= 32 && value.every((tile) => whole(tile, 31) !== null) ? value.map(Number) : null;
-    const to = whole(offer.to, 99);
-    const give = tiles(offer.give ?? []);
-    const get = tiles(offer.get ?? []);
-    const giveCash = whole(offer.giveCash ?? 0, 1_000_000);
-    const getCash = whole(offer.getCash ?? 0, 1_000_000);
-    const giveCards = whole(offer.giveCards ?? 0, 2);
-    const getCards = whole(offer.getCards ?? 0, 2);
-    if (to === null || !give || !get || giveCash === null || getCash === null || giveCards === null || getCards === null) throw new GameError(400, 'Арилжааны санал буруу байна.');
-    return { type: 'propose', offer: { to, give, get, giveCash, getCash, giveCards, getCards } };
-  }
-  return { type: move } as MonopolyAction;
-}
-
-/** Validated room rules for this kind of game. */
-/**
- * Ranked rooms play fixed rules so every ranked game is alike: the board game goes on until
- * everyone else is bankrupt, and Mafia uses the standard roles and timers.
- */
-function roomSettings(type: GameType, input: unknown, ranked = false) {
-  if (type === 'monopoly') return ranked ? sanitizeMonopolySettings({ rounds: null }) : sanitizeMonopolySettings(input);
+/** Validated room rules. Ranked rooms play fixed rules: the standard roles and timers. */
+function roomSettings(_type: GameType, input: unknown, ranked = false) {
   return ranked ? sanitizeMafiaSettings({ mode: 'classic', discussion: 'normal' }) : sanitizeMafiaSettings(input);
 }
 
-function deadlineFor(state: AnyGame): string | null {
-  if (isBoard(state)) {
-    if (state.phase === 'finished') return null;
-    // A bot "thinks" for a moment; whoever's phone sees the timer run out asks the server to move it.
-    const seconds = boardBotToMove(state) ? BOT_STEP_SECONDS
-      : state.trade ? BOARD_TRADE_SECONDS : state.phase === 'auction' ? BOARD_BID_SECONDS : BOARD_STEP_SECONDS;
-    return new Date(Date.now() + seconds * 1000).toISOString();
-  }
+function deadlineFor(state: StoredGame): string | null {
   if (state.phase === 'Results') return null;
   const key = state.phase === 'Voting'
     ? state.votesRevealed ? 'VoteReveal' : state.trial ? 'Trial' : state.runoffCandidates ? 'Runoff' : 'Voting'
@@ -216,11 +157,8 @@ function progress(state: GameEngineState): GameEngineState {
   return current;
 }
 
-// Board games keep voice open for everyone the whole match.
-const voicePhase = (state: AnyGame): VoicePhase => isBoard(state)
-  ? state.phase === 'finished' ? 'results' : 'discussion'
-  : state.phase === 'Role Reveal' ? 'role-reveal' : state.phase.toLowerCase() as VoicePhase;
-const isFinished = (state: AnyGame) => isBoard(state) ? state.phase === 'finished' : state.phase === 'Results';
+const voicePhase = (state: StoredGame): VoicePhase => state.phase === 'Role Reveal' ? 'role-reveal' : state.phase.toLowerCase() as VoicePhase;
+const isFinished = (state: StoredGame) => state.phase === 'Results';
 const gameType = (value: unknown): GameType => GAME_TYPES.includes(value as GameType) ? value as GameType : 'mafia';
 /** Rooms are split into language pools so strangers in a voice room can talk; older apps send no language and are Mongolian. */
 const roomLanguage = (value: unknown): 'mn' | 'en' => value === 'en' ? 'en' : 'mn';
@@ -362,10 +300,10 @@ class GameServer {
     if (room.status === 'playing') {
       // Leaving a live game counts as a loss, recorded first so the final tally cannot turn it into a win.
       const { data: stored } = await this.admin.from('game_states').select('engine').eq('room_code', roomCodeValue).maybeSingle();
-      const game = stored?.engine as AnyGame | null;
+      const game = stored?.engine as StoredGame | null;
       if (game && !isFinished(game)) await this.recordOutcome(room, this.userId, 'loss', game.matchId, RANK_POINTS.leave);
       // If the leaver was the last one the phase was waiting on, the game moves on right away.
-      await this.mutate(roomCodeValue, (state) => isBoard(state) ? removeMonopolyPlayer(state, mine.seat) : progress(removePlayer(state, mine.seat)));
+      await this.mutate(roomCodeValue, (state) => progress(removePlayer(state, mine.seat)));
     }
     await Promise.all([
       this.admin.from('game_room_players').delete().eq('room_code', roomCodeValue).eq('user_id', this.userId),
@@ -409,9 +347,7 @@ class GameServer {
       host: seat.user_id === room.host_id,
       bot: seat.is_bot === true,
     }));
-    const engine: AnyGame = room.game_type === 'monopoly'
-      ? { ...createMonopolyGame(people, secureRandom, roomSettings('monopoly', room.settings, room.ranked) as MonopolySettings), matchId: crypto.randomUUID() }
-      : { ...createInitialGame(people, undefined, secureRandom, roomSettings('mafia', room.settings, room.ranked) as MafiaSettings), matchId: crypto.randomUUID() };
+    const engine: StoredGame = { ...createInitialGame(people, undefined, secureRandom, roomSettings('mafia', room.settings, room.ranked) as MafiaSettings), matchId: crypto.randomUUID() };
     await this.admin.from('game_private').delete().eq('room_code', roomCodeValue);
     const { error } = await this.admin.from('game_states').update({ engine, version: 1, updated_at: new Date().toISOString() }).eq('room_code', roomCodeValue);
     if (error) throw error;
@@ -422,13 +358,13 @@ class GameServer {
   }
 
   /** Read-modify-write with optimistic locking so simultaneous actions never overwrite each other. */
-  async mutate(roomCode: string, change: (state: AnyGame, seats: Seat[]) => AnyGame) {
+  async mutate(roomCode: string, change: (state: StoredGame, seats: Seat[]) => StoredGame) {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const { data, error } = await this.admin.from('game_states').select('engine,version').eq('room_code', roomCode).maybeSingle();
       if (error) throw error;
       if (!data?.engine) throw new GameError(409, 'Тоглоом эхлээгүй байна.');
       const seats = await this.seats(roomCode);
-      const current = data.engine as AnyGame;
+      const current = data.engine as StoredGame;
       const next = change(current, seats);
       if (next === current) return current;
       const { data: written, error: writeError } = await this.admin.from('game_states')
@@ -443,9 +379,8 @@ class GameServer {
     throw new GameError(409, 'Олон хүсэлт зэрэг ирлээ. Дахин оролдоно уу.');
   }
 
-  async publish(roomCode: string, state: AnyGame, seats: Seat[], version: number, previous?: AnyGame) {
-    if (isBoard(state)) return this.publishBoard(roomCode, state, seats, version, previous as StoredBoard | undefined);
-    const prior = previous as StoredGame | undefined;
+  async publish(roomCode: string, state: StoredGame, seats: Seat[], version: number, previous?: StoredGame) {
+    const prior = previous;
     const phaseChanged = !prior || prior.phase !== state.phase || prior.votesRevealed !== state.votesRevealed
       || prior.runoffCandidates?.join() !== state.runoffCandidates?.join() || prior.round !== state.round
       || prior.trial?.accusedId !== state.trial?.accusedId;
@@ -466,23 +401,14 @@ class GameServer {
     }
   }
 
-  /** Board games have no secrets: the whole state is the public view. Every step resets the turn timer. */
-  async publishBoard(roomCode: string, state: StoredBoard, seats: Seat[], version: number, previous?: StoredBoard) {
-    const { matchId: _matchId, ...view } = state;
-    const { error } = await this.admin.from('game_public').upsert({ room_code: roomCode, view, deadline: deadlineFor(state), version, updated_at: new Date().toISOString() });
-    if (error) throw error;
-    if (state.phase === 'finished' && previous?.phase !== 'finished') await this.touchRoom(roomCode, { status: 'finished' });
-    if (!previous || (state.phase === 'finished') !== (previous.phase === 'finished')) await this.syncVoice(roomCode, state, seats);
-  }
-
   /** Mirrors phase and life/death into the voice tables, then asks LiveKit to apply permissions. */
-  async syncVoice(roomCode: string, state: AnyGame, seats: Seat[]) {
+  async syncVoice(roomCode: string, state: StoredGame, seats: Seat[]) {
     try {
       const phase = voicePhase(state);
       await this.admin.from('voice_rooms').update({ game_phase: phase, post_game_voice: phase === 'results', updated_at: new Date().toISOString() }).eq('room_code', roomCode);
       for (const seat of seats) {
         if (seat.is_bot) continue;
-        const alive = isBoard(state) ? true : state.publicPlayers.find((player) => player.id === seat.seat)?.alive ?? false;
+        const alive = state.publicPlayers.find((player) => player.id === seat.seat)?.alive ?? false;
         await this.admin.from('voice_room_members').update({ is_alive: alive }).eq('room_code', roomCode).eq('user_id', seat.user_id);
       }
       const controller = Deno.env.get('ROOM_CONTROLLER_SECRET');
@@ -511,17 +437,8 @@ class GameServer {
     if (error) console.error('result update failed', error);
   }
 
-  async recordResults(roomCode: string, state: AnyGame, seats: Seat[]) {
+  async recordResults(roomCode: string, state: StoredGame, seats: Seat[]) {
     const room = await this.room(roomCode);
-    if (isBoard(state)) {
-      for (const seat of seats) {
-        const entry = state.players.find((candidate) => candidate.id === seat.seat);
-        if (seat.is_bot || !entry) continue;
-        const won = state.winner === seat.seat;
-        await this.recordOutcome(room, seat.user_id, won ? 'win' : 'loss', state.matchId, boardRankDelta(won, entry.bankrupt));
-      }
-      return;
-    }
     if (!state.winner) return;
     for (const seat of seats) {
       const secret = state.privatePlayers[seat.seat];
@@ -576,24 +493,6 @@ class GameServer {
     return this.join({ roomCode: pick.roomCode });
   }
 
-  /** One board-game move: the current player's turn, a bid at an auction, or an answer to a trade offer. */
-  async board(body: Body) {
-    const roomCodeValue = code(body);
-    const { mine } = await this.requireSeat(roomCodeValue);
-    const move = typeof body.move === 'string' && BOARD_ACTIONS.includes(body.move) ? body.move : null;
-    if (!move) throw new GameError(400, 'Үйлдэл буруу байна.');
-    const action = boardAction(move, body);
-    let failure = '';
-    await this.mutate(roomCodeValue, (state) => {
-      if (!isBoard(state)) { failure = 'Энэ өрөөнд board game явагдаагүй байна.'; return state; }
-      const result = applyMonopolyAction(state, mine.seat, action, secureRandom);
-      failure = result.error ?? '';
-      return result.error ? state : result.state;
-    });
-    if (failure) throw new GameError(409, failure);
-    return { ok: true };
-  }
-
   async night(body: Body) {
     const roomCodeValue = code(body);
     const { mine } = await this.requireSeat(roomCodeValue);
@@ -601,7 +500,6 @@ class GameServer {
     if (!Number.isInteger(targetId)) throw new GameError(400, 'Зорилт буруу байна.');
     let failure = '';
     await this.mutate(roomCodeValue, (state) => {
-      if (isBoard(state)) return state;
       const result = submitNightAction(state, mine.seat, targetId);
       failure = result.error ?? '';
       return result.error ? state : progress(result.state);
@@ -617,7 +515,6 @@ class GameServer {
     const { mine } = await this.requireSeat(roomCodeValue);
     let failure = '';
     await this.mutate(roomCodeValue, (state) => {
-      if (isBoard(state)) return state;
       const result = markRevealReady(state, mine.seat);
       failure = result.error ?? '';
       return result.error ? state : progress(result.state);
@@ -632,7 +529,6 @@ class GameServer {
     const { mine } = await this.requireSeat(roomCodeValue);
     let failure = '';
     await this.mutate(roomCodeValue, (state) => {
-      if (isBoard(state)) return state;
       const result = markReady(state, mine.seat);
       failure = result.error ?? '';
       return result.error ? state : progress(result.state);
@@ -641,7 +537,7 @@ class GameServer {
     return { ok: true };
   }
 
-  /** Host-only, in the lobby: the room rules (Mafia: mode, roles, reveal, ballots, discussion; board game: round limit). */
+  /** Host-only, in the lobby: the room rules (mode, roles, reveal, ballots, discussion). */
   async settings(body: Body) {
     const roomCodeValue = code(body);
     const room = await this.room(roomCodeValue);
@@ -660,7 +556,6 @@ class GameServer {
     if (!choice) throw new GameError(400, 'Шийдвэр буруу байна.');
     let failure = '';
     await this.mutate(roomCodeValue, (state) => {
-      if (isBoard(state)) return state;
       const result = recordVerdict(state, mine.seat, choice);
       failure = result.error ?? '';
       return result.error ? state : progress(result.state);
@@ -675,7 +570,6 @@ class GameServer {
     const choice: VoteChoice = body.choice === 'skip' ? 'skip' : Number.isInteger(body.choice) ? body.choice as number : null;
     let failure = '';
     await this.mutate(roomCodeValue, (state) => {
-      if (isBoard(state)) return state;
       const result = recordVote(state, mine.seat, choice);
       failure = result.error ?? '';
       return result.error ? state : progress(result.state);
@@ -695,8 +589,6 @@ class GameServer {
     // In a ranked game the clock alone moves the game on: the host cannot cut a phase short.
     const hostSkip = body.skip === true && room.host_id === this.userId && room.ranked !== true;
     await this.mutate(roomCodeValue, (state) => {
-      // On a bot's turn the bot plays a real step; for a human who ran out of time the safe default is taken.
-      if (isBoard(state)) return !expired ? state : boardBotToMove(state) ? monopolyBotStep(state, secureRandom) : autoPlay(state, secureRandom);
       const skippable = state.phase === 'Role Reveal' || state.phase === 'Morning' || state.phase === 'Discussion' || (state.phase === 'Voting' && state.votesRevealed);
       if (!expired && !(hostSkip && skippable)) return state;
       return progress(advance(state));
@@ -841,14 +733,14 @@ class AdminTools {
     return { unbanned: true };
   }
 
-  /** Mafia roles for an admin watching a room (the board game has nothing hidden). */
+  /** Mafia roles for an admin watching a room. */
   async watch(body: Body) {
     await this.requireAdmin();
     const roomCodeValue = code(body);
     const { data: stored, error } = await this.admin.from('game_states').select('engine').eq('room_code', roomCodeValue).maybeSingle();
     if (error) throw error;
-    const game = stored?.engine as AnyGame | null;
-    if (!game || isBoard(game)) return { roles: null };
+    const game = stored?.engine as StoredGame | null;
+    if (!game) return { roles: null };
     const roles = Object.fromEntries(Object.entries(game.privatePlayers).map(([seat, secret]) => [seat, secret.role]));
     return { roles };
   }
@@ -923,7 +815,6 @@ Deno.serve(async (request) => {
       rematch: (value) => server.rematch(value),
       list: (value) => server.list(value),
       quick: (value) => server.quick(value),
-      board: (value) => server.board(value),
       'bot-add': (value) => server.addBot(value),
       'bot-remove': (value) => server.removeBot(value),
     };

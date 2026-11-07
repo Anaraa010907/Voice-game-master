@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
-  ArrowLeft, BookOpen, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, Languages, LockKeyhole, Moon,
+  ArrowLeft, Bot, Check, ChevronRight, CircleAlert, Info, X, Clipboard, Crown, Languages, LockKeyhole, Moon,
   MessageSquare, Radio, RefreshCw, Settings as SettingsIcon, Shield, ShieldCheck, ShoppingBag, Swords, Ticket, Trophy, UserPlus, UserRound, Users, WandSparkles, Zap,
 } from 'lucide-react';
 import { roles, type RoleName } from './gameData';
@@ -22,10 +22,7 @@ import { removeProfilePhoto, uploadProfilePhoto } from './avatarUpload';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
 import { callGame, useRoom, type ListedRoom, type NoticeTone, type NotifyFn, type RoomSeat } from './multiplayer';
 import { GAMES, type GameType } from './games';
-import MonopolyScreen from './Monopoly';
 import { MafiaRulesCard, MafiaRulesEditor } from './MafiaRules';
-import { BoardRulesCard, BoardRulesEditor, ROUND_OPTIONS, roundsLabel } from './BoardRules';
-import { MonopolyGuide } from './MonopolyGuide';
 import { motionReduced, setMotionReduced } from './motion';
 import { startMusic, wakeMusic } from './sfx';
 import { VolumeControls } from './VolumeControls';
@@ -387,7 +384,6 @@ function CreateRoom({ gameType, startRanked, startLanguage, onBack, onCreate }: 
   const [ranked, setRanked] = useState(startRanked);
   const [language, setLanguage] = useState<Lang>(startLanguage);
   const [password, setPassword] = useState('');
-  const [rounds, setRounds] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -399,7 +395,7 @@ function CreateRoom({ gameType, startRanked, startLanguage, onBack, onCreate }: 
     setBusy(true);
     try {
       const open = ranked || isPublic;
-      await onCreate({ name: name.trim(), maxPlayers, isPublic: open, password: open ? '' : password, gameType, ranked, language, ...(gameType === 'monopoly' ? { settings: { rounds: ranked ? null : rounds } } : {}) });
+      await onCreate({ name: name.trim(), maxPlayers, isPublic: open, password: open ? '' : password, gameType, ranked, language });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('Өрөө үүсгэж чадсангүй.', 'Could not create the room.'));
     } finally {
@@ -411,8 +407,7 @@ function CreateRoom({ gameType, startRanked, startLanguage, onBack, onCreate }: 
     <label className="form-field room-name-field"><span>{i18n.app.roomName.toUpperCase()}</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder={t('Өрөөний нэрээ оруулна уу', 'Enter a room name')} /></label>
     <label className="form-field"><span>{i18n.app.maxPlayers.toUpperCase()}</span><select value={maxPlayers} onChange={(event) => setMaxPlayers(Number(event.target.value))}>{game.sizes.map((count) => <option key={count} value={count}>{t(`${count} тоглогч`, `${count} players`)}</option>)}</select></label>
     <label className="form-field"><span>{t(`ЯРИХ ХЭЛ`, `ROOM LANGUAGE`)}</span><select value={language} onChange={(event) => setLanguage(event.target.value as Lang)}>{ROOM_LANGS.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}</select></label>
-    {gameType === 'monopoly' && <label className="form-field wide-field"><span>{t(`ТОГЛОХ ХУГАЦАА`, `GAME LENGTH`)}</span><select disabled={ranked} value={ranked || rounds === null ? 'all' : rounds} onChange={(event) => setRounds(event.target.value === 'all' ? null : Number(event.target.value))}>{ROUND_OPTIONS.map((option) => <option key={String(option)} value={option === null ? 'all' : option}>{option === null ? t('Бусад нь дампууртал', 'Until the others go bankrupt') : roundsLabel(option)}</option>)}</select></label>}
-    <div className={`private-setting ranked-setting ${ranked ? 'is-on' : ''}`}><span><b><Swords size={13} />{t(` Рэйтинг тоглолт`, ` Ranked match`)}</b><small>{ranked ? (gameType === 'monopoly' ? t('Цол, оноо хожино · бусад нь дампууртал тоглоно', 'Win rank points · play until the others go bankrupt') : t('Цол, оноо хожино · стандарт дүрэм, тогтмол цаг', 'Win rank points · standard rules, fixed timers')) : t('Энгийн тоглолт: оноо, цол өөрчлөгдөхгүй', 'Casual match: no change to points or rank')}</small></span><button type="button" role="switch" aria-checked={ranked} aria-label={t('Рэйтинг тоглолт', 'Ranked match')} className={`toggle ${ranked ? 'toggle-on' : ''}`} onClick={() => setRanked((value) => !value)}><i /></button></div>
+    <div className={`private-setting ranked-setting ${ranked ? 'is-on' : ''}`}><span><b><Swords size={13} />{t(` Рэйтинг тоглолт`, ` Ranked match`)}</b><small>{ranked ? t('Цол, оноо хожино · стандарт дүрэм, тогтмол цаг', 'Win rank points · standard rules, fixed timers') : t('Энгийн тоглолт: оноо, цол өөрчлөгдөхгүй', 'Casual match: no change to points or rank')}</small></span><button type="button" role="switch" aria-checked={ranked} aria-label={t('Рэйтинг тоглолт', 'Ranked match')} className={`toggle ${ranked ? 'toggle-on' : ''}`} onClick={() => setRanked((value) => !value)}><i /></button></div>
     <div className={`private-setting ${ranked ? 'is-disabled' : ''}`}><span><b>{t(`Нийтэд нээлттэй`, `Public room`)}</b><small>{ranked ? t('Рэйтинг өрөө үргэлж нийтэд нээлттэй', 'Ranked rooms are always public') : isPublic ? t('Өрөөний жагсаалтад харагдана, хэн ч нэгдэнэ', 'Listed in the room list; anyone can join') : t('Зөвхөн кодоор нэгдэнэ, нууц үг тавьж болно', 'Join by code only; you can set a password')}</small></span><button type="button" role="switch" aria-checked={ranked || isPublic} disabled={ranked} className={`toggle ${ranked || isPublic ? 'toggle-on' : ''}`} onClick={() => setIsPublic((value) => !value)}><i /></button></div>
     {!ranked && !isPublic && <label className="form-field password-field"><span>{t(`ӨРӨӨНИЙ НУУЦ ҮГ `, `ROOM PASSWORD `)}<small>{t(`СОНГОЛТТОЙ`, `OPTIONAL`)}</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} maxLength={32} placeholder={t('Нууц үггүй орж болно', 'Leave empty for no password')} autoComplete="new-password" /></label>}
     {error && <p className="form-error" role="alert">{error}</p>}
@@ -445,25 +440,16 @@ function JoinRoom({ onBack, onJoin }: { onBack: () => void; onJoin: (code: strin
   </form></div></div>;
 }
 
-/** Choose a game type: two large cards (board game / voice game) with illustrations. */
+/** Choose a game type: one large illustrated card per game. */
 function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoose: (type: GameType) => void; onJoinCode: () => void }) {
-  const [guideOpen, setGuideOpen] = useState(false);
   return <div className="inner-screen hub-screen"><TopBar title={t('ТОГЛООМ СОНГОНО УУ', 'CHOOSE A GAME')} subtitle={t('ТОГЛОХ', 'PLAY')} onBack={onBack} trailing={<button className="text-button hub-code-button" onClick={onJoinCode}><Radio size={14} />{t(` КОДООР НЭГДЭХ`, ` JOIN BY CODE`)}</button>} />
     <div className="hub-cards">
-      <article className="hub-card hub-card-board" style={{ '--hub-bg': "url('/assets/hub/board-bg.jpg')" } as CSSProperties}>
-        <h2>BOARD GAME</h2>
-        <button type="button" className="hub-guide" onClick={() => setGuideOpen(true)}><BookOpen size={13} />{t(` ХЭРХЭН ТОГЛОХ`, ` HOW TO PLAY`)}</button>
-        <button type="button" className="hub-play" onClick={() => onChoose('monopoly')}>{t(`ТОГЛОХ `, `PLAY `)}<ChevronRight size={18} /></button>
-        <p className="hub-card-meta"><b>{GAMES.monopoly.title}</b>{t(`${GAMES.monopoly.players} · Монгол газрууд, гэр бааз`, `${GAMES.monopoly.players} · Mongolian places, ger camps`)}</p>
-      </article>
-
       <article className="hub-card hub-card-voice" style={{ '--hub-bg': "url('/assets/hub/voice-bg.jpg')" } as CSSProperties}>
         <h2>VOICE GAME</h2>
         <button type="button" className="hub-play" onClick={() => onChoose('mafia')}>{t(`ТОГЛОХ `, `PLAY `)}<ChevronRight size={18} /></button>
         <p className="hub-card-meta"><b>{GAMES.mafia.title}</b>{t(`${GAMES.mafia.players} · Дуут чат, нууц дүр`, `${GAMES.mafia.players} · Voice chat, secret roles`)}</p>
       </article>
     </div>
-    {guideOpen && <MonopolyGuide onClose={() => setGuideOpen(false)} />}
   </div>;
 }
 
@@ -554,7 +540,6 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
   const { room, seats, loaded, missing, error, reload } = useRoom(roomCode);
   const [busy, setBusy] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(false);
   const [profileSeat, setProfileSeat] = useState<RoomSeat | null>(null);
   const mine = seats.find((seat) => seat.user_id === userId);
   /** Opens a seated player's card by seat number (games) or seat row (lobby). */
@@ -597,10 +582,6 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
 
   if (!room || !mine) return <div className="inner-screen"><TopBar title={t('ӨРӨӨ', 'ROOM')} subtitle={error ? t('АЛДАА', 'ERROR') : t('АЧААЛЖ БАЙНА', 'LOADING')} onBack={leave} /><div className="room-loading">{error ?? t('Өрөөнд холбогдож байна…', 'Connecting to the room…')}</div></div>;
 
-  if (room.status !== 'lobby' && room.game_type === 'monopoly') {
-    return <><MonopolyScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} onProfile={openProfile} />{overlays}</>;
-  }
-
   if (room.status !== 'lobby') {
     return <><GameScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} ranked={room.ranked === true} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} fullscreen={fullscreen} onProfile={openProfile} />{overlays}</>;
   }
@@ -633,9 +614,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
               ? <button type="button" className="invite-slot add-bot-slot" key={`slot-${index}`} disabled={busy} onClick={() => run('bot-add')}><Bot size={20} /><small>{t(`БОТ НЭМЭХ`, `ADD BOT`)}</small></button>
               : <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>{t(`СУЛ СУУДАЛ`, `EMPTY SEAT`)}</small></div>)}
           </div>
-          {(room.game_type ?? 'mafia') === 'mafia'
-            ? <MafiaRulesCard settings={room.settings} players={seats.length} isHost={isHost && !room.ranked} busy={busy} ranked={room.ranked === true} onEdit={() => setRulesOpen(true)} />
-            : <BoardRulesCard settings={room.settings} isHost={isHost && !room.ranked} busy={busy} ranked={room.ranked === true} onEdit={() => setRulesOpen(true)} onGuide={() => setGuideOpen(true)} />}
+          <MafiaRulesCard settings={room.settings} players={seats.length} isHost={isHost && !room.ranked} busy={busy} ranked={room.ranked === true} onEdit={() => setRulesOpen(true)} />
           <div className="lobby-bottom">
             <div className="lobby-hint"><LockKeyhole size={14} /><span>{isHost ? t('ТА ӨРӨӨНИЙ ЭЗЭН', 'YOU ARE THE HOST') : t('ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА', 'WAITING FOR THE HOST TO START')} <b>•</b> {hint}</span></div>
             <div className="lobby-actions">
@@ -646,12 +625,8 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
             </div>
           </div>
         </div>
-        {rulesOpen && isHost && !room.ranked && ((room.game_type ?? 'mafia') === 'mafia'
-          ? <MafiaRulesEditor initial={room.settings} players={seats.length} busy={busy}
-            onClose={() => setRulesOpen(false)} onSave={(settings) => { void run('settings', { settings }).then((saved) => { if (saved) setRulesOpen(false); }); }} />
-          : <BoardRulesEditor initial={room.settings} busy={busy}
-            onClose={() => setRulesOpen(false)} onSave={(settings) => { void run('settings', { settings }).then((saved) => { if (saved) setRulesOpen(false); }); }} />)}
-        {guideOpen && <MonopolyGuide settings={room.ranked ? { ...(room.settings ?? {}), rounds: null } : room.settings ?? {}} onClose={() => setGuideOpen(false)} />}
+        {rulesOpen && isHost && !room.ranked && <MafiaRulesEditor initial={room.settings} players={seats.length} busy={busy}
+          onClose={() => setRulesOpen(false)} onSave={(settings) => { void run('settings', { settings }).then((saved) => { if (saved) setRulesOpen(false); }); }} />}
       </div>
       {overlays}
       {inviteOpen && <InviteFriendsModal roomCode={roomCode} friends={friends} onClose={() => setInviteOpen(false)} notify={onNotice} />}
@@ -684,9 +659,6 @@ function AdminWatch({ roomCode, userId, notify, fullscreen, onExit }: { roomCode
       <div className="watch-lobby-body"><p className="admin-note">{t(`Тоглоом хараахан эхлээгүй байна. Эхэлмэгц энд шууд харагдана.`, `The game hasn’t started yet. It will show here as soon as it does.`)}</p>
         <div className="player-grid">{seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={false} onProfile={() => undefined} />)}</div></div>
       {banner}</div>;
-  }
-  if (room.game_type === 'monopoly') {
-    return <><MonopolyScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={false} seats={seats} onLeave={onExit} onRematch={() => undefined} onNotice={notify} onProfile={() => undefined} watching />{banner}</>;
   }
   return <><GameScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={false} seats={seats} onLeave={onExit} onRematch={() => undefined} onNotice={notify} fullscreen={fullscreen} onProfile={() => undefined} watching={{ roles }} />{banner}</>;
 }

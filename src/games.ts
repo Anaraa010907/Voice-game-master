@@ -1,7 +1,7 @@
 import { t } from './lang.ts';
 
-export type GameType = 'mafia' | 'monopoly';
-export type GameCategory = 'card' | 'board';
+export type GameType = 'mafia';
+export type GameCategory = 'card';
 
 export type GameInfo = {
   type: GameType;
@@ -31,18 +31,5 @@ export const GAMES: Record<GameType, GameInfo> = {
     defaultSize: 8,
     defaultRoomName: t('Блэкуотерын шөнө', 'Blackwater Night'),
     allowBots: false,
-  },
-  monopoly: {
-    type: 'monopoly',
-    category: 'board',
-    title: t('Монгол Монополь', 'Mongol Monopoly'),
-    tagline: t('Аймаг, хот, байгалийн газруудыг худалдаж аваад гэр бааз барь.', 'Buy provinces, cities and natural wonders, and build ger camps.'),
-    players: t('2–6 тоглогч', '2–6 players'),
-    duration: t('30–60 мин', '30–60 min'),
-    minPlayers: 2,
-    sizes: [2, 3, 4, 5, 6],
-    defaultSize: 4,
-    defaultRoomName: t('Талын наймаа', 'Steppe Trade'),
-    allowBots: true,
   },
 };
