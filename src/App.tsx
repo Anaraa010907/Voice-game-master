@@ -17,9 +17,7 @@ import { removeProfilePhoto, uploadProfilePhoto } from './avatarUpload';
 import Avatar from './Avatar';
 import { callGame, useRoom, type ListedRoom, type NoticeTone, type NotifyFn, type RoomSeat } from './multiplayer';
 import { GAMES, type GameType } from './games';
-import MonopolyScreen from './Monopoly';
 import { MafiaRulesCard, MafiaRulesEditor } from './MafiaRules';
-import { BoardRulesCard, ROUND_OPTIONS, roundsLabel } from './BoardRules';
 import { motionReduced, setMotionReduced } from './motion';
 import { musicEnabled, setMusicEnabled, setSfxEnabled, sfxEnabled, startMusic, wakeMusic } from './sfx';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
@@ -328,7 +326,6 @@ function CreateRoom({ gameType, onBack, onCreate }: { gameType: GameType; onBack
   const [maxPlayers, setMaxPlayers] = useState(game.defaultSize);
   const [isPublic, setIsPublic] = useState(true);
   const [password, setPassword] = useState('');
-  const [rounds, setRounds] = useState<number | null>(20);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -339,7 +336,7 @@ function CreateRoom({ gameType, onBack, onCreate }: { gameType: GameType; onBack
     setError('');
     setBusy(true);
     try {
-      await onCreate({ name: name.trim(), maxPlayers, isPublic, password: isPublic ? '' : password, gameType, ...(gameType === 'monopoly' ? { settings: { rounds } } : {}) });
+      await onCreate({ name: name.trim(), maxPlayers, isPublic, password: isPublic ? '' : password, gameType });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Өрөө үүсгэж чадсангүй.');
     } finally {
@@ -350,7 +347,6 @@ function CreateRoom({ gameType, onBack, onCreate }: { gameType: GameType; onBack
   return <div className="inner-screen setup-screen"><TopBar title="ӨРӨӨ ҮҮСГЭХ" subtitle="ӨРӨӨНИЙ ТӨХИРГӨӨ" onBack={onBack} /><div className="setup-content"><div className="setup-heading"><div className="eyebrow left-eye">ТӨХИРГӨӨ СОНГОХ</div><h1>Өөрийнхөө <i>өрөөг</i> бүтээ.</h1><p><b className="setup-game-name">{game.title}</b> · Өрөөний кодыг найзууддаа илгээгээрэй. Дор хаяж {game.minPlayers} хүн нэгдвэл тоглоом эхэлнэ.</p></div><form className="room-form" onSubmit={submit}>
     <label className="form-field room-name-field"><span>{i18n.app.roomName.toUpperCase()}</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder="Өрөөний нэрээ оруулна уу" /></label>
     <label className="form-field"><span>{i18n.app.maxPlayers.toUpperCase()}</span><select value={maxPlayers} onChange={(event) => setMaxPlayers(Number(event.target.value))}>{game.sizes.map((count) => <option key={count} value={count}>{count} тоглогч</option>)}</select></label>
-    {gameType === 'monopoly' && <label className="form-field"><span>ТОГЛОХ ХУГАЦАА</span><select value={rounds === null ? 'all' : rounds} onChange={(event) => setRounds(event.target.value === 'all' ? null : Number(event.target.value))}>{ROUND_OPTIONS.map((option) => <option key={String(option)} value={option === null ? 'all' : option}>{option === null ? 'Бусад нь дампууртал' : roundsLabel(option)}</option>)}</select></label>}
     <div className="private-setting"><span><b>Нийтэд нээлттэй</b><small>{isPublic ? 'Өрөөний жагсаалтад харагдана, хэн ч нэгдэнэ' : 'Зөвхөн кодоор нэгдэнэ, нууц үг тавьж болно'}</small></span><button type="button" role="switch" aria-checked={isPublic} className={`toggle ${isPublic ? 'toggle-on' : ''}`} onClick={() => setIsPublic((value) => !value)}><i /></button></div>
     {!isPublic && <label className="form-field password-field"><span>ӨРӨӨНИЙ НУУЦ ҮГ <small>СОНГОЛТТОЙ</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} maxLength={32} placeholder="Нууц үггүй орж болно" autoComplete="new-password" /></label>}
     {error && <p className="form-error" role="alert">{error}</p>}
@@ -383,16 +379,10 @@ function JoinRoom({ onBack, onJoin }: { onBack: () => void; onJoin: (code: strin
   </form></div></div>;
 }
 
-/** Choose a game type: two large cards (board game / voice game) with illustrations. */
+/** Choose a game type: one large illustrated card per game. */
 function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoose: (type: GameType) => void; onJoinCode: () => void }) {
   return <div className="inner-screen hub-screen"><TopBar title="ТОГЛООМ СОНГОНО УУ" subtitle="ТОГЛОХ" onBack={onBack} trailing={<button className="text-button hub-code-button" onClick={onJoinCode}><Radio size={14} /> КОДООР НЭГДЭХ</button>} />
     <div className="hub-cards">
-      <article className="hub-card hub-card-board" style={{ '--hub-bg': "url('/assets/hub/board-bg.jpg')" } as CSSProperties}>
-        <h2>BOARD GAME</h2>
-        <button type="button" className="hub-play" onClick={() => onChoose('monopoly')}>ТОГЛОХ <ChevronRight size={18} /></button>
-        <p className="hub-card-meta"><b>{GAMES.monopoly.title}</b>{GAMES.monopoly.players} · Монгол газрууд, гэр бааз</p>
-      </article>
-
       <article className="hub-card hub-card-voice" style={{ '--hub-bg': "url('/assets/hub/voice-bg.jpg')" } as CSSProperties}>
         <h2>VOICE GAME</h2>
         <button type="button" className="hub-play" onClick={() => onChoose('mafia')}>ТОГЛОХ <ChevronRight size={18} /></button>
@@ -511,10 +501,6 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
 
   if (!room || !mine) return <div className="inner-screen"><TopBar title="ӨРӨӨ" subtitle={error ? 'АЛДАА' : 'АЧААЛЖ БАЙНА'} onBack={leave} /><div className="room-loading">{error ?? 'Өрөөнд холбогдож байна…'}</div></div>;
 
-  if (room.status !== 'lobby' && room.game_type === 'monopoly') {
-    return <MonopolyScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} />;
-  }
-
   if (room.status !== 'lobby') {
     return <GameScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} fullscreen={fullscreen} />;
   }
@@ -547,9 +533,7 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
               ? <button type="button" className="invite-slot add-bot-slot" key={`slot-${index}`} disabled={busy} onClick={() => run('bot-add')}><Bot size={20} /><small>БОТ НЭМЭХ</small></button>
               : <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>СУЛ СУУДАЛ</small></div>)}
           </div>
-          {(room.game_type ?? 'mafia') === 'mafia'
-            ? <MafiaRulesCard settings={room.settings} players={seats.length} isHost={isHost} busy={busy} onEdit={() => setRulesOpen(true)} />
-            : <BoardRulesCard settings={room.settings} isHost={isHost} busy={busy} onChange={(settings) => { void run('settings', { settings }); }} />}
+          <MafiaRulesCard settings={room.settings} players={seats.length} isHost={isHost} busy={busy} onEdit={() => setRulesOpen(true)} />
           <div className="lobby-bottom">
             <div className="lobby-hint"><LockKeyhole size={14} /><span>{isHost ? 'ТА ӨРӨӨНИЙ ЭЗЭН' : 'ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА'} <b>•</b> {hint}</span></div>
             <div className="lobby-actions">

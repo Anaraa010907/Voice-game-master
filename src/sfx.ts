@@ -1,5 +1,5 @@
 /** Small synthesized sound effects (Web Audio) — no audio files to download. */
-export type Sfx = 'roll' | 'step' | 'buy' | 'turn' | 'night' | 'morning' | 'vote' | 'death' | 'win' | 'click' | 'reveal';
+export type Sfx = 'night' | 'morning' | 'vote' | 'death' | 'win' | 'click' | 'reveal';
 
 const KEY = 'night-table:sfx';
 let context: AudioContext | null = null;
@@ -59,14 +59,6 @@ export function playSfx(name: Sfx) {
     if (!c) return;
     const t = c.currentTime + 0.01;
     switch (name) {
-      case 'roll':
-        for (let index = 0; index < 9; index += 1) noise(c, t + index * 0.07 + Math.random() * 0.02, 0.05, 0.14, 1400 + Math.random() * 1600);
-        tone(c, t + 0.62, 140, 0.16, 'triangle', 0.22, 70);
-        tone(c, t + 0.7, 160, 0.14, 'triangle', 0.16, 80);
-        break;
-      case 'step': tone(c, t, 520, 0.05, 'square', 0.05); break;
-      case 'buy': tone(c, t, 988, 0.09, 'square', 0.08); tone(c, t + 0.08, 1319, 0.22, 'square', 0.08); noise(c, t, 0.06, 0.06, 5000); break;
-      case 'turn': tone(c, t, 660, 0.16, 'sine', 0.16); tone(c, t + 0.14, 880, 0.26, 'sine', 0.16); break;
       case 'night': tone(c, t, 220, 0.9, 'sine', 0.16, 110); tone(c, t, 165, 0.9, 'triangle', 0.08, 82); break;
       case 'morning': [523, 659, 784, 1047].forEach((f, i) => tone(c, t + i * 0.11, f, 0.3, 'triangle', 0.13)); break;
       case 'vote': noise(c, t, 0.05, 0.2, 500); tone(c, t, 110, 0.12, 'triangle', 0.25, 60); break;
@@ -80,7 +72,7 @@ export function playSfx(name: Sfx) {
 
 /* ---------- Background music: a menu theme plus a quiet generative loop per game ---------- */
 
-export type MusicTheme = 'menu' | 'mafia' | 'monopoly';
+export type MusicTheme = 'menu' | 'mafia';
 const MUSIC_KEY = 'night-table:music';
 let musicOn = (() => { try { return localStorage.getItem(MUSIC_KEY) !== 'off'; } catch { return true; } })();
 let theme: MusicTheme | null = null;
@@ -97,10 +89,9 @@ export function setMusicEnabled(value: boolean) {
   if (value && theme) startMusic(theme); else halt();
 }
 
-// Generative loops: A minor pentatonic for the night game, D major pentatonic (a steppe-song feel) for the board game.
-const SCALES: Record<'mafia' | 'monopoly', { root: number; notes: number[]; bpm: number; pad: number[] }> = {
+// Generative loop: A minor pentatonic for the night game.
+const SCALES: Record<'mafia', { root: number; notes: number[]; bpm: number; pad: number[] }> = {
   mafia: { root: 55, notes: [220, 261.6, 293.7, 329.6, 392, 440, 523.3], bpm: 62, pad: [110, 164.8] },
-  monopoly: { root: 73.4, notes: [293.7, 329.6, 370, 440, 493.9, 587.3, 740], bpm: 84, pad: [146.8, 220] },
 };
 
 /*
@@ -183,11 +174,10 @@ function schedule() {
   const spb = 60 / cfg.bpm;
   while (nextBeat < c.currentTime + 1.2) {
     if (beat % 8 === 0) pad(c, master, nextBeat, cfg.pad, spb * 8.5);
-    const sparse = playing === 'mafia';
-    // The night game plays a few long, sparse notes; the board game a gentle walking pattern.
-    if (sparse ? beat % 4 === 2 && Math.random() < 0.7 : beat % 2 === 0 || Math.random() < 0.3) {
+    // The night game plays a few long, sparse notes.
+    if (beat % 4 === 2 && Math.random() < 0.7) {
       const note = cfg.notes[Math.floor(Math.random() * cfg.notes.length)];
-      pluck(c, master, nextBeat, note, sparse ? spb * 3.2 : spb * 1.6, sparse ? 'sine' : 'triangle');
+      pluck(c, master, nextBeat, note, spb * 3.2, 'sine');
     }
     if (beat % 4 === 0) pluck(c, master, nextBeat, cfg.root, spb * 2.5, 'sine');
     nextBeat += spb;

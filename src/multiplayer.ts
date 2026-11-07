@@ -7,7 +7,7 @@ import type { PrivateGameView, PublicGameView } from './gameEngine';
 export type NoticeTone = 'info' | 'success' | 'error';
 export type NotifyFn = (text: string, tone?: NoticeTone) => void;
 
-export type RoomInfo = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type?: 'mafia' | 'monopoly'; settings?: Record<string, unknown> | null };
+export type RoomInfo = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type?: 'mafia'; settings?: Record<string, unknown> | null };
 export type ListedRoom = { roomCode: string; name: string; players: number; maxPlayers: number; hostName: string; joined: boolean };
 export type RoomSeat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null; is_bot?: boolean };
 

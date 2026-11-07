@@ -1,5 +1,5 @@
-export type GameType = 'mafia' | 'monopoly';
-export type GameCategory = 'card' | 'board';
+export type GameType = 'mafia';
+export type GameCategory = 'card';
 
 export type GameInfo = {
   type: GameType;
@@ -28,19 +28,6 @@ export const GAMES: Record<GameType, GameInfo> = {
     sizes: [6, 8, 10, 12],
     defaultSize: 8,
     defaultRoomName: 'Блэкуотерын шөнө',
-    allowBots: true,
-  },
-  monopoly: {
-    type: 'monopoly',
-    category: 'board',
-    title: 'Монгол Монополь',
-    tagline: 'Аймаг, хот, байгалийн газруудыг худалдаж аваад гэр бааз барь.',
-    players: '2–6 тоглогч',
-    duration: '20–40 мин',
-    minPlayers: 2,
-    sizes: [2, 3, 4, 5, 6],
-    defaultSize: 4,
-    defaultRoomName: 'Талын наймаа',
     allowBots: true,
   },
 };
