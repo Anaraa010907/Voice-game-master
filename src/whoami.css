@@ -988,7 +988,7 @@
 
 /* Very short landscape lobby: the rules card needs the room more than the "waiting for" hint, which the seat cards already show. */
 @media (orientation: landscape) and (max-height: 360px) {
-  .viewport .game-frame .lobby-whoami .lobby-hint { display: none; }
+  .viewport .game-frame .lobby-whoami .lobby-hint:not(.is-blocking) { display: none; }
 }
 
 /* Short landscape lobby: the hint keeps only the "waiting for" part, on one line. */
@@ -1068,6 +1068,11 @@
   .whoami-guess-compare b { font-size: clamp(15px, 4.8vh, 20px); line-height: 1.05; }
   .whoami-prompt { font-size: 17px; line-height: 1.15; }
 }
+
+/* "МЭДЭХГҮЙ" is about 5.5× its font size wide: at 13px (71px) it ran past the 68px content box at 740×340
+   and the 59px one at 667×375. The label shrinks with its button (12px where container units are missing). */
+.whoami-vote-buttons.is-three .whoami-vote { container-type: inline-size; }
+.whoami-vote-buttons.is-three .whoami-vote span { font-size: 12px; font-size: min(13px, 17cqi); }
 
 @media (orientation: landscape) and (max-height: 360px) {
   .whoami-vote { min-height: 46px; }

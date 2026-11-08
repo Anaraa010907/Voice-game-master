@@ -1105,7 +1105,8 @@ button.toggle::after,
 }
 
 @media (orientation: landscape) and (max-height: 360px) {
-  .viewport .game-frame .lobby-mafia .lobby-hint {
+  /* Not while the table is short of players: then the hint is the only place that says why Start is off. */
+  .viewport .game-frame .lobby-mafia .lobby-hint:not(.is-blocking) {
     display: none;
   }
 }

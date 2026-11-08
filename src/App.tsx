@@ -691,7 +691,7 @@ export function LobbyView({ room, seats, roomCode, userId, copied, busy, onCopy,
             ? <WhoAmIRulesCard settings={room.settings} isHost={isHost} busy={busy} onEdit={() => setRulesOpen(true)} />
             : <MafiaRulesCard settings={room.settings} players={seats.length} isHost={isHost} busy={busy} onEdit={() => setRulesOpen(true)} />}
           <div className="lobby-bottom">
-            <div className="lobby-hint"><LockKeyhole size={14} /><span><span className="lobby-hint-role">{isHost ? t('ТА ӨРӨӨНИЙ ЭЗЭН', 'YOU ARE THE HOST') : t('ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА', 'WAITING FOR THE HOST TO START')} <b>•</b> </span>{hint}</span></div>
+            <div className={`lobby-hint ${seats.length < minimum ? 'is-blocking' : ''}`}><LockKeyhole size={14} /><span><span className="lobby-hint-role">{isHost ? t('ТА ӨРӨӨНИЙ ЭЗЭН', 'YOU ARE THE HOST') : t('ЭЗЭН ЭХЛҮҮЛЭХИЙГ ХҮЛЭЭЖ БАЙНА', 'WAITING FOR THE HOST TO START')} <b>•</b> </span>{hint}</span></div>
             <div className="lobby-actions">
               <button className="secondary-button invite-friends-button" onClick={onInvite}><UserPlus size={15} />{t(` НАЙЗ УРИХ`, ` INVITE FRIENDS`)}</button>
               {!isHost && mine && <button className={`secondary-button ready-button ${mine.ready ? 'is-ready' : ''}`} disabled={busy} onClick={() => { void onRun('ready', { ready: !mine.ready }); }}>{mine.ready ? <Check size={15} /> : <Shield size={15} />}{mine.ready ? t('БЭЛЭН', 'READY') : t('БИ БЭЛЭН', 'I’M READY')}</button>}
