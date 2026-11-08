@@ -8,6 +8,7 @@ const EXACT: Record<string, string> = {
   'Өрөөний код буруу байна.': 'The room code is invalid.',
   'Өрөө олдсонгүй.': 'Room not found.',
   'Тоглогчийн тоо буруу байна.': 'The number of players is invalid.',
+  'Энэ тоглоом серверт хараахан алга. Аппаа шинэчилнэ үү.': 'This game is not on the server yet. Please update the app.',
   'Өрөөний нууц үг хамгийн багадаа 4 тэмдэгт байна.': 'The room password needs at least 4 characters.',
   'Өрөөний код үүсгэж чадсангүй. Дахин оролдоно уу.': 'Could not create a room code. Please try again.',
   'Энэ өрөөнд тоглоом аль хэдийн эхэлсэн байна.': 'The game in this room has already started.',

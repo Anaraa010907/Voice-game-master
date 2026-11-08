@@ -198,6 +198,12 @@ const voicePhase = (state: StoredGame): VoicePhase => isWhoAmI(state)
   : state.phase === 'Role Reveal' ? 'role-reveal' : state.phase.toLowerCase() as VoicePhase;
 const isFinished = (state: StoredGame) => isWhoAmI(state) ? state.phase === 'results' : state.phase === 'Results';
 const gameType = (value: unknown): GameType => GAME_TYPES.includes(value as GameType) ? value as GameType : 'mafia';
+/** A game type a client asked for: older apps send none (Mafia), but a type this server doesn't know is refused rather than silently turned into a Mafia room. */
+const requestedGameType = (value: unknown): GameType => {
+  if (value === undefined || value === null || value === '') return 'mafia';
+  if (GAME_TYPES.includes(value as GameType)) return value as GameType;
+  throw new GameError(400, 'Энэ тоглоом серверт хараахан алга. Аппаа шинэчилнэ үү.');
+};
 /** Rooms are split into language pools so strangers in a voice room can talk; older apps send no language and are Mongolian. */
 const roomLanguage = (value: unknown): 'mn' | 'en' => value === 'en' ? 'en' : 'mn';
 
@@ -274,7 +280,7 @@ class GameServer {
 
   async create(body: Body) {
     const name = text(body, 'name', 32);
-    const type = gameType(body.gameType);
+    const type = requestedGameType(body.gameType);
     const maxPlayers = Number(body.maxPlayers);
     if (!ROOM_SIZES[type].includes(maxPlayers)) throw new GameError(400, 'Тоглогчийн тоо буруу байна.');
     // Public rooms appear in the room list; private rooms are joined by code only (optionally with a password).
@@ -568,7 +574,7 @@ class GameServer {
 
   /** Open public lobbies of one language pool that still have a free seat, fullest first. */
   async list(body: Body = {}) {
-    const type = gameType(body.gameType);
+    const type = requestedGameType(body.gameType);
     const since = new Date(Date.now() - LISTED_LOBBY_HOURS * 3600 * 1000).toISOString();
     const { data: rooms, error } = await this.admin.from('game_rooms')
       .select('room_code,name,host_id,max_players,updated_at')
