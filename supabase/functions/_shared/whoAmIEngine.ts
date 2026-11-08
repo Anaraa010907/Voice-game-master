@@ -546,8 +546,12 @@ export function setWhoAmIConnected(state: WhoAmIState, id: number, connected: bo
   return maybeClose(next);
 }
 
-/** How often a player's app reports that it is still at the table, and when a silent seat counts as away. */
-export const WHOAMI_HEARTBEAT_MS = 8_000;
+/**
+ * How often a player's app reports that it is still at the table, and when a silent seat counts as away.
+ * 10 s keeps a full table near 60 server calls a minute while one lost report (a 20 s gap plus latency)
+ * still stays inside the 25 s grace, so a single dropped request never marks anyone away.
+ */
+export const WHOAMI_HEARTBEAT_MS = 10_000;
 export const WHOAMI_PRESENCE_STALE_MS = 25_000;
 
 /**

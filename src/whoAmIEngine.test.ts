@@ -1,7 +1,7 @@
 import {
   BASE_POINTS, MAX_QUESTIONS_PER_TURN, MIN_SOLVE_POINTS, PLACE_BONUS, POINTS_PER_QUESTION, POINTS_PER_VOTE,
   activeWhoAmIPlayerId, applyWhoAmIAction, createSeededRandom, createWhoAmIGame, eligibleVoters, guessMatches,
-  WHOAMI_PRESENCE_STALE_MS, applyWhoAmIPresence, identityPool, normalizeGuess, removeWhoAmIPlayer, sanitizeWhoAmISettings, setWhoAmIConnected, solvePoints,
+  WHOAMI_HEARTBEAT_MS, WHOAMI_PRESENCE_STALE_MS, applyWhoAmIPresence, identityPool, normalizeGuess, removeWhoAmIPlayer, sanitizeWhoAmISettings, setWhoAmIConnected, solvePoints,
   timeoutWhoAmI, whoAmIBotStep, whoAmIBotToMove, whoAmIDeadlineSeconds, whoAmIPresence, whoAmIPrivateView, whoAmIPublicView, whoAmIRanking, whoAmIStageKey,
 } from './whoAmIEngine.ts';
 import type { WhoAmIAction, WhoAmISeat, WhoAmIState } from './whoAmIEngine.ts';
@@ -267,6 +267,8 @@ require(eligibleVoters(away).includes(absent), 'Reconnecting restores voting.');
   require(applyWhoAmIPresence(table, whoAmIPresence(table, beats, now)) === table, 'Fresh heartbeats everywhere change nothing (same object).');
   for (const id of others) table = act(table, id, { type: 'answer', vote: 'yes' });
   require(table.phase === 'answer', 'The vote waits on the one voter who has not pressed.');
+  require(2 * WHOAMI_HEARTBEAT_MS + 3000 < WHOAMI_PRESENCE_STALE_MS, 'One lost heartbeat (plus a few seconds of latency) never marks a seat away.');
+  require(whoAmIPresence(table, { ...beats, [drops]: now - 2 * WHOAMI_HEARTBEAT_MS - 3000 }, now)[drops] === true, 'A seat that missed one report is still at the table.');
   const stale = { ...beats, [drops]: now - WHOAMI_PRESENCE_STALE_MS - 1 };
   const presence = whoAmIPresence(table, stale, now);
   require(presence[drops] === false && presence[stays] === true, 'A heartbeat older than the grace time counts as away.');
