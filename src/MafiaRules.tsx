@@ -5,6 +5,8 @@ import {
   type DiscussionLength, type GameMode, type MafiaSettings, type OptionalRole, type RoleName,
 } from './gameEngine';
 import { SHORT_ROLE_NAMES } from './gameData';
+import { i18n } from './i18n';
+import { ScrollCue } from './ScrollCue';
 
 import { t } from './lang';
 export const MODE_LABEL: Record<GameMode, string> = { classic: t('Сонгодог', 'Classic'), hard: t('Хатуу', 'Strict'), custom: t('Өөрийн', 'Custom') };
@@ -39,13 +41,16 @@ export function rulesSummary(raw: unknown) {
 /** The lobby card: which roles this table will get, and (for the host) the button to change the rules. */
 export function MafiaRulesCard({ settings, players, isHost, busy, onEdit }: { settings: unknown; players: number; isHost: boolean; busy: boolean; onEdit: () => void }) {
   const rules = sanitizeMafiaSettings(settings);
-  return <section className="lobby-rules" aria-label={t('Тоглоомын дүрэм', 'Game rules')}>
+  return <section className="lobby-rules mafia-rules" aria-label={t('Тоглоомын дүрэм', 'Game rules')}>
     <header>
       <span><ScrollText size={13} />{t(` ДҮРЭМ · `, ` RULES · `)}<b>{MODE_LABEL[rules.mode].toUpperCase()}</b></span>
       {isHost && <button type="button" className="lobby-rules-edit" disabled={busy} onClick={onEdit}><SlidersHorizontal size={13} />{t(` ӨӨРЧЛӨХ`, ` CHANGE`)}</button>}
     </header>
-    <RoleChips players={players} settings={rules} />
-    <p>{t(`${Math.max(MIN_PLAYERS, players)} тоглогчтой · ${rulesSummary(rules).split(' · ').slice(1).join(' · ')}`, `${Math.max(MIN_PLAYERS, players)} players · ${rulesSummary(rules).split(' · ').slice(1).join(' · ')}`)}</p>
+    {/* The header (with CHANGE) stays put; on a short screen the roles and the rules line scroll, with a cue. */}
+    <ScrollCue className="lobby-rules-body" label={i18n.app.moreRules}>
+      <RoleChips players={players} settings={rules} />
+      <p>{t(`${Math.max(MIN_PLAYERS, players)} тоглогчтой · ${rulesSummary(rules).split(' · ').slice(1).join(' · ')}`, `${Math.max(MIN_PLAYERS, players)} players · ${rulesSummary(rules).split(' · ').slice(1).join(' · ')}`)}</p>
+    </ScrollCue>
   </section>;
 }
 

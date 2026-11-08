@@ -21,6 +21,7 @@ import {
  *   ?demo=hub                      game picker
  *   ?demo=create                   create-room form for Who Am I
  *   ?demo=lobby[&seat=2]           lobby (seat 1 is the host)
+ *   ?demo=create&game=mafia, ?demo=lobby&game=mafia   the same screens for Mafia (rules card, no rounds)
  *   ?demo=game&phase=reveal|ask|answer|guess|results[&seat=3][&auto=1][&bar=0]
  *   any of the above with &players=3..10 for another table size (6 by default)
  *
@@ -107,6 +108,7 @@ export function WhoAmIDemo({ request, notify, lobby: Lobby }: DemoProps) {
   const [deadline, setDeadline] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [settings, setSettings] = useState<Record<string, unknown>>({ rounds: 5, categories: [], kidsSafe: false });
+  const [mafiaSettings, setMafiaSettings] = useState<Record<string, unknown>>({});
   const [ready, setReady] = useState<Record<string, boolean>>({ 'demo-2': true, 'demo-3': true, 'demo-5': true });
 
   const stage = whoAmIStageKey(state);
@@ -151,9 +153,14 @@ export function WhoAmIDemo({ request, notify, lobby: Lobby }: DemoProps) {
   const seats: RoomSeat[] = useMemo(() => DEMO_SEATS.map((seat) => ({ user_id: `demo-${seat.id}`, seat: seat.id, display_name: seat.name, color: seat.color, ready: seat.id === 1 || ready[`demo-${seat.id}`] === true })), [ready]);
 
   if (mode === 'lobby') {
-    const room: RoomInfo = { room_code: 'NIGHT-WHO1', name: isEnglish ? 'Guess Who I Am' : 'Хэн бэ би?', host_id: 'demo-1', max_players: Math.max(8, DEMO_SEATS.length), is_private: false, status: 'lobby', game_type: 'whoami', settings, language: isEnglish ? 'en' : 'mn' };
+    const mafia = request.game === 'mafia';
+    const room: RoomInfo = mafia
+      ? { room_code: 'NIGHT-MAF1', name: isEnglish ? 'Night Table' : 'Шөнийн ширээ', host_id: 'demo-1', max_players: Math.max(8, DEMO_SEATS.length), is_private: false, status: 'lobby', game_type: 'mafia', settings: mafiaSettings, language: isEnglish ? 'en' : 'mn' }
+      : { room_code: 'NIGHT-WHO1', name: isEnglish ? 'Guess Who I Am' : 'Хэн бэ би?', host_id: 'demo-1', max_players: Math.max(8, DEMO_SEATS.length), is_private: false, status: 'lobby', game_type: 'whoami', settings, language: isEnglish ? 'en' : 'mn' };
     const onRun = async (action: string, body: Record<string, unknown> = {}) => {
-      if (action === 'settings') setSettings(sanitizeWhoAmISettings(body.settings, WHO_AM_I_PACK));
+      if (action === 'settings' && mafia) setMafiaSettings((body.settings ?? {}) as Record<string, unknown>);
+      else if (action === 'settings') setSettings(sanitizeWhoAmISettings(body.settings, WHO_AM_I_PACK));
+      else if (action === 'start' && mafia) notify(t('Туршилтын горимд сервер алга.', 'There is no server in the demo.'));
       else if (action === 'ready') setReady((current) => ({ ...current, [`demo-${viewer}`]: body.ready === true }));
       else if (action === 'start') choosePhase('reveal');
       else notify(t('Туршилтын горимд сервер алга.', 'There is no server in the demo.'));

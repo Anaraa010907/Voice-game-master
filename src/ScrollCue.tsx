@@ -36,11 +36,24 @@ export function ScrollCue({ className, wrapClassName = '', label, children, as: 
     };
     update();
     box.addEventListener('scroll', update, { passive: true });
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
-    observer?.observe(box);
-    Array.from(box.children).forEach((child) => observer?.observe(child));
-    return () => { box.removeEventListener('scroll', update); observer?.disconnect(); };
-  });
+    // Set up once per list element (not on every render: parents such as a ticking timer re-render
+    // each second). Size changes of the list or of any item recount; items added or removed are
+    // picked up by the MutationObserver, which also starts watching the new ones' sizes.
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    const watched = new Set<Element>();
+    const watchChildren = () => {
+      if (!resize) return;
+      const current = new Set(Array.from(box.children));
+      watched.forEach((child) => { if (!current.has(child)) { resize.unobserve(child); watched.delete(child); } });
+      current.forEach((child) => { if (!watched.has(child)) { resize.observe(child); watched.add(child); } });
+    };
+    resize?.observe(box);
+    watchChildren();
+    const mutations = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => { watchChildren(); update(); });
+    mutations?.observe(box, { childList: true });
+    window.addEventListener('resize', update);
+    return () => { box.removeEventListener('scroll', update); window.removeEventListener('resize', update); resize?.disconnect(); mutations?.disconnect(); };
+  }, [Tag]);
 
   useEffect(() => {
     const box = ref.current;

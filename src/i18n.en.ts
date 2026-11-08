@@ -40,6 +40,8 @@ export const en: I18n = {
     ready: 'Ready',
     notReady: 'Not ready',
     startGame: 'Start game',
+    moreSeats: (count: number) => `${count} more below`,
+    moreRules: () => 'More',
     leaveRoom: 'Leave room',
     host: 'Host',
     inLobby: 'In lobby',
