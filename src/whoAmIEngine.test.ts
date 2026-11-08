@@ -1,8 +1,8 @@
 import {
   BASE_POINTS, MAX_QUESTIONS_PER_TURN, MIN_SOLVE_POINTS, PLACE_BONUS, POINTS_PER_QUESTION, POINTS_PER_VOTE,
   activeWhoAmIPlayerId, applyWhoAmIAction, createSeededRandom, createWhoAmIGame, eligibleVoters, guessMatches,
-  identityPool, normalizeGuess, removeWhoAmIPlayer, sanitizeWhoAmISettings, setWhoAmIConnected, solvePoints,
-  timeoutWhoAmI, whoAmIBotStep, whoAmIBotToMove, whoAmIDeadlineSeconds, whoAmIPrivateView, whoAmIPublicView, whoAmIRanking, whoAmIStageKey,
+  WHOAMI_PRESENCE_STALE_MS, applyWhoAmIPresence, identityPool, normalizeGuess, removeWhoAmIPlayer, sanitizeWhoAmISettings, setWhoAmIConnected, solvePoints,
+  timeoutWhoAmI, whoAmIBotStep, whoAmIBotToMove, whoAmIDeadlineSeconds, whoAmIPresence, whoAmIPrivateView, whoAmIPublicView, whoAmIRanking, whoAmIStageKey,
 } from './whoAmIEngine.ts';
 import type { WhoAmIAction, WhoAmISeat, WhoAmIState } from './whoAmIEngine.ts';
 import { WHO_AM_I_PACK } from './whoAmIContent.ts';
@@ -255,6 +255,42 @@ require(active(away) === away.order[2], 'A disconnected player\'s turn is skippe
 require(!eligibleVoters(away).includes(absent), 'A disconnected player does not vote.');
 away = setWhoAmIConnected(away, absent, true);
 require(eligibleVoters(away).includes(absent), 'Reconnecting restores voting.');
+
+// --- Presence from heartbeats (what the server applies on every tick) ------------------------------
+{
+  const now = 1_000_000;
+  let table = fresh(4, 8);
+  table = act(table, active(table), { type: 'asked' });
+  const [stays, drops] = eligibleVoters(table);
+  const others = eligibleVoters(table).filter((id) => id !== drops);
+  const beats: Record<number, number> = Object.fromEntries(table.players.map((p) => [p.id, now - 1000]));
+  require(applyWhoAmIPresence(table, whoAmIPresence(table, beats, now)) === table, 'Fresh heartbeats everywhere change nothing (same object).');
+  for (const id of others) table = act(table, id, { type: 'answer', vote: 'yes' });
+  require(table.phase === 'answer', 'The vote waits on the one voter who has not pressed.');
+  const stale = { ...beats, [drops]: now - WHOAMI_PRESENCE_STALE_MS - 1 };
+  const presence = whoAmIPresence(table, stale, now);
+  require(presence[drops] === false && presence[stays] === true, 'A heartbeat older than the grace time counts as away.');
+  const closed = applyWhoAmIPresence(table, presence);
+  require(closed.phase !== 'answer' && closed.lastResult?.kind === 'answer' && closed.lastResult.result === 'yes', 'A voter who dropped stops holding up the vote: it closes at once.');
+  require(closed.players.find((p) => p.id === drops)!.connected === false, 'The dropped seat is marked away.');
+  require(applyWhoAmIPresence(closed, presence) === closed, 'Applying the same presence again changes nothing.');
+  const back = applyWhoAmIPresence(closed, whoAmIPresence(closed, { ...stale, [drops]: now }, now + 10));
+  require(back.players.find((p) => p.id === drops)!.connected === true, 'A fresh heartbeat brings the seat back.');
+  require(Object.keys(whoAmIPresence(table, {}, now)).length === 0, 'Seats with no heartbeat on record are left as they are.');
+  // Someone back mid-vote is counted before anyone is dropped, so they get to vote.
+  let mid = act(back, active(back), { type: 'asked' });
+  mid = setWhoAmIConnected(mid, drops, false);
+  const voters = eligibleVoters(mid);
+  for (const id of voters.slice(1)) mid = act(mid, id, { type: 'answer', vote: 'no' });
+  const swap = applyWhoAmIPresence(mid, { [drops]: true, [voters[0]]: false });
+  require(swap.phase === 'answer' && eligibleVoters(swap).includes(drops) && !eligibleVoters(swap).includes(voters[0]), 'A returning voter keeps the vote open for their button.');
+  // The reveal no longer waits for a phone that never reported in.
+  let reveal = createWhoAmIGame(seats(3), WHO_AM_I_PACK, createSeededRandom(4));
+  reveal = act(act(reveal, 1, { type: 'ready' }), 2, { type: 'ready' });
+  require(reveal.phase === 'reveal', 'The reveal waits for the third player.');
+  reveal = applyWhoAmIPresence(reveal, whoAmIPresence(reveal, { 1: now, 2: now, 3: now - WHOAMI_PRESENCE_STALE_MS - 5 }, now));
+  require(reveal.phase === 'ask', 'An absent player does not hold up the start.');
+}
 
 let bots = createWhoAmIGame([...seats(3), { id: 9, name: 'Болд (бот)', initials: 'БО', color: 'gold', bot: true }], WHO_AM_I_PACK, createSeededRandom(2));
 require(bots.players.find((p) => p.id === 9)!.ready, 'Bots are ready at once.');

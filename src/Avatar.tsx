@@ -1,9 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { initialsOf } from '../supabase/functions/_shared/initials.ts';
 
-/** Two letters, the same rule the game server uses for seats (its first two letters), so a player looks alike everywhere. */
-export function initialsOf(name: string) {
-  return Array.from(name.replace(/\s+/g, '')).slice(0, 2).join('').toUpperCase() || '??';
-}
+/** Two letters, the very rule the game server uses for seat initials, so a player looks alike everywhere. */
+export { initialsOf };
 
 /** Painted frames: a 512px image whose transparent hole is half its width, centred on the avatar. */
 const FRAME_IMAGES: Record<string, string> = {

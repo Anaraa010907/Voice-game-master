@@ -546,6 +546,40 @@ export function setWhoAmIConnected(state: WhoAmIState, id: number, connected: bo
   return maybeClose(next);
 }
 
+/** How often a player's app reports that it is still at the table, and when a silent seat counts as away. */
+export const WHOAMI_HEARTBEAT_MS = 8_000;
+export const WHOAMI_PRESENCE_STALE_MS = 25_000;
+
+/**
+ * Who is at the table, from each seat's last heartbeat (epoch ms): fresh = connected, older than
+ * `staleMs` = away. Seats with no heartbeat on record (bots, players who left, older apps) are not
+ * listed, so their flag is left as it is.
+ */
+export function whoAmIPresence(state: WhoAmIState, lastSeen: Record<number, number | null | undefined>, now: number, staleMs = WHOAMI_PRESENCE_STALE_MS): Record<number, boolean> {
+  const presence: Record<number, boolean> = {};
+  for (const player of state.players) {
+    const seen = lastSeen[player.id];
+    if (player.bot || player.status === 'left' || typeof seen !== 'number' || !Number.isFinite(seen)) continue;
+    presence[player.id] = now - seen <= staleMs;
+  }
+  return presence;
+}
+
+/**
+ * Applies a presence snapshot. Returning players are marked first, so one who comes back mid-vote gets
+ * to vote; then the absent ones are dropped, which may close a vote nobody present is still holding up.
+ * Returns the same state object when nothing changes (idempotent).
+ */
+export function applyWhoAmIPresence(state: WhoAmIState, presence: Record<number, boolean>): WhoAmIState {
+  let next = state;
+  for (const connected of [true, false]) {
+    for (const player of state.players) {
+      if (presence[player.id] === connected) next = setWhoAmIConnected(next, player.id, connected);
+    }
+  }
+  return next;
+}
+
 /** A player who leaves the room for good. Their identity stays secret from the public view. */
 export function removeWhoAmIPlayer(state: WhoAmIState, id: number): WhoAmIState {
   const leaver = playerOf(state, id);

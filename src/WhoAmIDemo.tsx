@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import type { LobbyViewProps } from './App';
+import { initialsOf } from './Avatar';
 import type { FullscreenState } from './fullscreen';
 import { i18n } from './i18n';
 import { isEnglish, t } from './lang';
@@ -34,7 +35,7 @@ const DEMO_NAMES = isEnglish
   ? ['Bat', 'Saraa', 'Temuulen', 'Nomin', 'Ganaa', 'Khulan', 'Enkhjin', 'Dorj', 'Oyunchimeg', 'Boldbaatar']
   : ['Бат', 'Сараа', 'Тэмүүлэн', 'Номин', 'Ганаа', 'Хулан', 'Энхжин', 'Дорж', 'Оюунчимэг', 'Болдбаатар'];
 const DEMO_COLORS = ['rose', 'violet', 'gold', 'teal', 'blue', 'plum', 'rose', 'violet', 'gold', 'teal'];
-const ALL_DEMO_SEATS: WhoAmISeat[] = DEMO_NAMES.map((name, index) => ({ id: index + 1, name, initials: name.slice(0, 2).toUpperCase(), color: DEMO_COLORS[index], host: index === 0 }));
+const ALL_DEMO_SEATS: WhoAmISeat[] = DEMO_NAMES.map((name, index) => ({ id: index + 1, name, initials: initialsOf(name), color: DEMO_COLORS[index], host: index === 0 }));
 /** The demo table: the first `players` seats (see whoAmIDemoRequest.ts). */
 const DEMO_SEATS = ALL_DEMO_SEATS.slice(0, demoRequest()?.players ?? DEMO_SEAT_COUNT);
 
