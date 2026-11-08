@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ArrowLeft, Check, Clock3, Coins, Crown, Gem, Gift, Lock, Sparkles, Ticket } from 'lucide-react';
-import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
+import Avatar, { BackdropCard, RowBorder, nameplate, rowBorderClass } from './Avatar';
 import { CoinCount, DiamondCount, TopUpModal, timeLeft, useFreeShopping, useMyWallet, useShopItems, type ShopItem } from './Social';
 import { supabase } from './supabaseClient';
 import type { NotifyFn } from './multiplayer';
@@ -200,10 +200,11 @@ export function BattlePassScreen({ onBack, notify }: { onBack: () => void; notif
   </div>;
 }
 
-/** A look as it will appear: the frame on my avatar, the nameplate or border behind my name. */
+/** A look as it will appear: the frame on my avatar, the nameplate or border behind my name, the backdrop behind my avatar. */
 function ItemPreview({ item, me }: { item: ShopItem; me: { display_name: string; avatar_url: string | null; avatar_key: string; nameplate_key: string | null } | null }) {
   if (item.kind === 'frame') return <Avatar name={me?.display_name ?? t('Би', 'Me')} color={me?.avatar_key ?? 'rose'} url={me?.avatar_url} frame={item.key} className="pass-avatar" />;
   if (item.kind === 'nameplate') return <span className={`pass-plate ${nameplate(item.key).className}`} style={nameplate(item.key).style} />;
+  if (item.kind === 'backdrop') return <BackdropCard backdropKey={item.key} className="pass-backdrop"><Avatar name={me?.display_name ?? t('Би', 'Me')} color={me?.avatar_key ?? 'rose'} url={me?.avatar_url} /></BackdropCard>;
   const plate = nameplate(me?.nameplate_key);
   return <span className={`pass-plate ${plate.className} ${rowBorderClass(item.key)}`} style={plate.style}><RowBorder borderKey={item.key} /></span>;
 }

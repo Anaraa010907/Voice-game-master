@@ -537,7 +537,7 @@ function RoomsTab({ notify, onChanged, onWatch }: { notify: NotifyFn; onChanged:
 }
 
 const OFFER_DAYS = [1, 3, 7, 14];
-const KIND_LABEL: Record<string, string> = { frame: t('Хүрээ', 'Frame'), nameplate: t('Нэрийн хавтан', 'Nameplate'), border: t('Нэрийн хүрээ', 'Name border') };
+const KIND_LABEL: Record<string, string> = { frame: t('Хүрээ', 'Frame'), nameplate: t('Нэрийн хавтан', 'Nameplate'), border: t('Нэрийн хүрээ', 'Name border'), backdrop: t('Дэвсгэр', 'Backdrop') };
 
 /**
  * Limited offers: the weekly discount runs by itself (two painted looks, 20% off, Monday to Monday);
@@ -559,7 +559,7 @@ function OffersTab({ notify }: { notify: NotifyFn }) {
   }, [notify]);
   useEffect(() => { void load(); }, [load]);
 
-  const choices = items.filter((item) => ['frame', 'nameplate', 'border'].includes(item.kind) && item.source !== 'legacy');
+  const choices = items.filter((item) => ['frame', 'nameplate', 'border', 'backdrop'].includes(item.kind) && item.source !== 'legacy');
   const picked = choices.find((item) => item.key === itemKey) ?? null;
   const pick = (key: string) => {
     setItemKey(key);

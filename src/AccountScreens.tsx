@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { ArrowLeft, Camera, Check, ChevronRight, LoaderCircle, LockKeyhole, Shield, ShoppingBag, Trash2, UserRound, X } from 'lucide-react';
 import { CoinCount, DiamondCount, TitleBadge, TopUpModal, useShopItems } from './Social';
 import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
+import { backdrop } from './backdrops';
 import { PORTRAITS } from './portraits';
 import { supabaseConfigured, type PublicProfile } from './supabaseClient';
 import { i18n } from './i18n';
@@ -74,7 +75,7 @@ export function ProfileScreen({ profile, loading, loadError, onBack, onSignIn, o
 
   return <div className="inner-screen account-screen"><AccountTopBar title={i18n.account.yourFile.toUpperCase()} subtitle={i18n.account.playerProfile.toUpperCase()} onBack={onBack} trailing={profile && <button className="account-signout-link" onClick={onSignOut}>{i18n.account.signOut}</button>} />
     {!supabaseConfigured ? <BackendSetupNotice /> : loading ? <LoadingState label={i18n.account.loadingAccount} /> : !profile ? <AccountEmpty title={i18n.account.profileWaiting} detail={loadError || i18n.account.profileDetail} action={i18n.account.signInAction} onAction={onSignIn} /> : <div className="account-body profile-body">
-      <section className="profile-showcase showcase-plain" aria-label={t('Аватар ба цол', 'Avatar and title')}>
+      <section className={`profile-showcase showcase-plain ${backdrop(profile.backdrop_key).className}`} style={backdrop(profile.backdrop_key).style} aria-label={t('Аватар ба цол', 'Avatar and title')}>
         <span className="showcase-decor" aria-hidden="true"><i className="sc-backdrop" /></span>
         <Avatar name={profile.display_name} color={profile.avatar_key} url={profile.avatar_url} frame={profile.frame_key} className="account-avatar" />
         {profile.title_key && <TitleBadge titleKey={profile.title_key} items={shopItems} size="hero" />}

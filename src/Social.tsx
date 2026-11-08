@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, Bot, Check, Clock3, Coins, Crown, Flag, Flame, Gem, Gift, Lock, Plus, Send, ShoppingBag, Sparkles, UserPlus, X } from 'lucide-react';
-import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
+import Avatar, { BackdropCard, RowBorder, nameplate, rowBorderClass } from './Avatar';
+import { backdrop } from './backdrops';
 import { supabase } from './supabaseClient';
 import type { NotifyFn, RoomSeat } from './multiplayer';
 import { playSfx } from './sfx';
@@ -9,7 +10,7 @@ import { isEnglish, t } from './lang';
 import { translateMessage } from './i18n';
 /* ---------- shop catalogue ---------- */
 
-export type ShopKind = 'gift' | 'frame' | 'title' | 'nameplate' | 'border';
+export type ShopKind = 'gift' | 'frame' | 'title' | 'nameplate' | 'border' | 'backdrop';
 /** Coins are earned by playing; diamonds are bought with real money. */
 export type Currency = 'coin' | 'diamond';
 /**
@@ -20,6 +21,13 @@ export type ItemSource = 'shop' | 'legacy' | 'pass' | 'limited';
 export type ShopItem = { key: string; kind: ShopKind; name: string; description: string; icon: string; price: number; sort: number; currency: Currency; source?: ItemSource };
 /** Only shop items can be bought or given. */
 export const forSale = (item: ShopItem) => (item.source ?? 'shop') === 'shop';
+/** What each kind of look is called (shop tabs, offers, gifts, the admin's offer list). */
+export const LOOK_KIND_LABEL: Record<Exclude<ShopKind, 'gift' | 'title'>, string> = {
+  frame: t('Аватар хүрээ', 'Avatar frame'),
+  nameplate: t('Нэрийн хавтан', 'Nameplate'),
+  border: t('Нэрийн хүрээ', 'Name border'),
+  backdrop: t('Профайлын дэвсгэр', 'Profile backdrop'),
+};
 
 let catalogue: Promise<ShopItem[]> | null = null;
 /** The shop's items, loaded once per app start. */
@@ -170,11 +178,11 @@ export function GiftLayer({ roomCode }: { roomCode: string }) {
 
 /* ---------- choosing a gift ---------- */
 
-type GiftTab = 'gift' | 'frame' | 'nameplate' | 'border';
-const GIFT_TABS: { key: GiftTab; label: string }[] = [{ key: 'gift', label: t('Бэлэг', 'Gift') }, { key: 'frame', label: t('Хүрээ', 'Frame') }, { key: 'nameplate', label: t('Нэрийн хавтан', 'Nameplate') }, { key: 'border', label: t('Нэрийн хүрээ', 'Name border') }];
+type GiftTab = 'gift' | 'frame' | 'nameplate' | 'border' | 'backdrop';
+const GIFT_TABS: { key: GiftTab; label: string }[] = [{ key: 'gift', label: t('Бэлэг', 'Gift') }, { key: 'frame', label: t('Хүрээ', 'Frame') }, { key: 'nameplate', label: t('Нэрийн хавтан', 'Nameplate') }, { key: 'border', label: t('Нэрийн хүрээ', 'Name border') }, { key: 'backdrop', label: t('Дэвсгэр', 'Backdrop') }];
 
 /**
- * The gift grid. Frames and nameplates (given to a friend to keep) are offered only outside a game;
+ * The gift grid. Looks (frames, nameplates, name borders, backdrops: given to a friend to keep) are offered only outside a game;
  * `onSend` gets the item so the caller decides how it is delivered.
  */
 export function GiftPicker({ targetName, allowCosmetics, busy, note, onBack, onSend }: {
@@ -197,6 +205,7 @@ export function GiftPicker({ targetName, allowCosmetics, busy, note, onBack, onS
       {item.kind === 'frame' && <Avatar name={item.name} color="rose" frame={item.key} className="gift-frame-preview" />}
       {item.kind === 'nameplate' && <span className={`gift-plate-preview ${nameplate(item.key).className}`} style={nameplate(item.key).style} />}
       {item.kind === 'border' && <span className={`gift-plate-preview gift-border-preview ${rowBorderClass(item.key)}`}><RowBorder borderKey={item.key} /></span>}
+      {item.kind === 'backdrop' && <BackdropCard backdropKey={item.key} className="gift-backdrop-preview" />}
       <b>{item.name}</b><small><Price item={item} free={free} size={10} /></small></button>)}</div>
     <p className="pcard-note">{tab === 'gift' ? note : t('Найз тань энэ барааг өөрийн болгож авна. Аль хэдийн байгаа бол илгээгдэхгүй.', 'Your friend keeps this item. If they already have it, it isn’t sent.')}</p>
     <div className="modal-actions"><button type="button" className="primary-button" disabled={busy || !choice} onClick={() => choice && onSend(choice)}>
@@ -207,14 +216,14 @@ export function GiftPicker({ targetName, allowCosmetics, busy, note, onBack, onS
 /* ---------- a player's card at the table ---------- */
 
 type Card = {
-  id: string; display_name: string; avatar_url: string | null; avatar_key: string; frame_key: string | null; title_key: string | null; nameplate_key?: string | null; border_key?: string | null;
+  id: string; display_name: string; avatar_url: string | null; avatar_key: string; frame_key: string | null; title_key: string | null; nameplate_key?: string | null; border_key?: string | null; backdrop_key?: string | null;
   total_matches: number; wins: number; win_rate: number; best_win_streak: number;
   created_at: string; gift_total: number; gifts: { gift_key: string; count: number }[];
 };
 
 const REPORT_REASONS = [t('Доромжилсон, хараасан', 'Insults or swearing'), t('Хуурсан, луйвардсан', 'Cheating or scamming'), t('Тоглоомыг зориуд эвдсэн', 'Ruining the game on purpose'), t('Зохисгүй нэр, зураг', 'Inappropriate name or picture'), t('Бусад', 'Other')];
 
-/** Sends a frame, nameplate or gift to a friend outside a room. Returns '' or the error. */
+/** Sends a look (frame, nameplate, name border, backdrop) or a gift to a friend outside a room. Returns '' or the error. */
 export async function sendFriendGift(to: string, item: ShopItem) {
   if (!supabase) return t('Сервер тохируулагдаагүй байна.', 'The server is not set up.');
   const { error } = await supabase.rpc('send_friend_gift', { p_to: to, p_key: item.key });
@@ -248,7 +257,7 @@ export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, not
   const sendGift = async (item: ShopItem) => {
     if (!supabase) return;
     setBusy(true);
-    // Emoji gifts pop up for the whole table; frames and nameplates go to a friend to keep.
+    // Emoji gifts pop up for the whole table; looks (frames, nameplates, borders, backdrops) go to a friend to keep.
     const problem = item.kind === 'gift'
       ? failureOf(await supabase.rpc('send_gift', { p_room: roomCode, p_to: seat.user_id, p_gift: item.key }))
       : await sendFriendGift(seat.user_id, item);
@@ -278,6 +287,8 @@ export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, not
   };
 
   const name = card?.display_name ?? seat.display_name.replace(/ \(бот\)$/, '');
+  // The player's backdrop puts their avatar on a small showcase card, as on their profile.
+  const hasBackdrop = Boolean(backdrop(card?.backdrop_key).className);
   const giftIcon = (key: string) => items.find((item) => item.key === key)?.icon || '🎁';
   let body: ReactNode;
   if (view === 'gift') {
@@ -292,12 +303,13 @@ export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, not
       <div className="modal-actions"><button type="button" className="primary-button" disabled={busy} onClick={() => void sendReport()}><Send size={14} />{t(` АДМИНД ИЛГЭЭХ`, ` SEND TO ADMINS`)}</button></div>
     </>;
   } else {
+    const avatar = <Avatar name={name} color={card?.avatar_key ?? seat.color} url={card?.avatar_url ?? seat.avatar_url} frame={card?.frame_key ?? seat.frame_key} className="pcard-avatar">
+      {isBot && <i className="bot-badge"><Bot size={12} /></i>}
+    </Avatar>;
     body = <>
       <div className={`pcard-hero ${nameplate(card?.nameplate_key ?? seat.nameplate_key).className} ${rowBorderClass(card?.border_key ?? seat.border_key)}`} style={nameplate(card?.nameplate_key ?? seat.nameplate_key).style}>
         <RowBorder borderKey={card?.border_key ?? seat.border_key} />
-        <Avatar name={name} color={card?.avatar_key ?? seat.color} url={card?.avatar_url ?? seat.avatar_url} frame={card?.frame_key ?? seat.frame_key} className="pcard-avatar">
-          {isBot && <i className="bot-badge"><Bot size={12} /></i>}
-        </Avatar>
+        {hasBackdrop ? <BackdropCard backdropKey={card?.backdrop_key} className="pcard-showcase">{avatar}</BackdropCard> : avatar}
         <div className="pcard-name">
           <h2>{name}{isMe && <small>{t(`ЧИ`, `YOU`)}</small>}</h2>
           <TitleBadge titleKey={card?.title_key} items={items} size="lg" />
@@ -357,11 +369,18 @@ export function PlatePreview({ plateKey, borderKey, me, large = false }: { plate
   </span>;
 }
 
+/** How a backdrop looks behind my own avatar (with my frame), as on my profile. */
+export function BackdropPreview({ backdropKey, me, large = false }: { backdropKey: string; me: { display_name: string; avatar_url: string | null; avatar_key: string; frame_key: string | null } | null; large?: boolean }) {
+  return <BackdropCard backdropKey={backdropKey} className={`backdrop-preview ${large ? 'is-large' : ''}`}>
+    <Avatar name={me?.display_name ?? t('Би', 'Me')} color={me?.avatar_key ?? 'rose'} url={me?.avatar_url} frame={me?.frame_key} />
+  </BackdropCard>;
+}
+
 type Owned = { item_key: string };
-type Me = { coins: number; diamonds: number; frame_key: string | null; title_key: string | null; nameplate_key?: string | null; border_key?: string | null; avatar_url: string | null; avatar_key: string; display_name: string; bonus_claimed_at: string | null };
+type Me = { coins: number; diamonds: number; frame_key: string | null; title_key: string | null; nameplate_key?: string | null; border_key?: string | null; backdrop_key?: string | null; avatar_url: string | null; avatar_key: string; display_name: string; bonus_claimed_at: string | null };
 
 type ShopTab = ShopKind | 'offers';
-const TABS: { key: ShopTab; label: string }[] = [{ key: 'offers', label: t('Онцлох', 'Featured') }, { key: 'frame', label: t('Аватар хүрээ', 'Avatar frame') }, { key: 'nameplate', label: t('Нэрийн хавтан', 'Nameplate') }, { key: 'border', label: t('Нэрийн хүрээ', 'Name border') }, { key: 'gift', label: t('Бэлэг', 'Gift') }];
+const TABS: { key: ShopTab; label: string }[] = [{ key: 'offers', label: t('Онцлох', 'Featured') }, { key: 'frame', label: LOOK_KIND_LABEL.frame }, { key: 'nameplate', label: LOOK_KIND_LABEL.nameplate }, { key: 'border', label: LOOK_KIND_LABEL.border }, { key: 'backdrop', label: LOOK_KIND_LABEL.backdrop }, { key: 'gift', label: t('Бэлэг', 'Gift') }];
 const CURRENCY_HEADING: Record<Currency, string> = { coin: t('Зоосоор · энгийн, хөдөлгөөнгүй', 'For coins · plain, still'), diamond: t('Алмазаар · зурган гоёл', 'For diamonds · painted looks') };
 
 /** A look sold for a while at its own price (a weekly discount, or one an admin set). */
@@ -407,7 +426,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
     if (!supabase) return;
     const { data: auth } = await supabase.auth.getSession();
     const id = auth.session?.user.id;
-    const profileQuery = supabase.from('profiles').select('coins,diamonds,frame_key,title_key,nameplate_key,border_key,avatar_url,avatar_key,display_name,bonus_claimed_at');
+    const profileQuery = supabase.from('profiles').select('coins,diamonds,frame_key,title_key,nameplate_key,border_key,backdrop_key,avatar_url,avatar_key,display_name,bonus_claimed_at');
     const [profile, mine] = await Promise.all([
       (id ? profileQuery.eq('id', id) : profileQuery).maybeSingle(),
       supabase.from('player_items').select('item_key'),
@@ -440,7 +459,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
     { id: 'legacy' as const, list: legacyList },
     { id: 'diamond' as const, list: shown.filter((item) => forSale(item) && item.currency === 'diamond') },
   ].filter((section) => section.list.length);
-  const equippedFor = (kind: ShopKind) => kind === 'frame' ? me?.frame_key : kind === 'title' ? me?.title_key : kind === 'nameplate' ? me?.nameplate_key : kind === 'border' ? me?.border_key : null;
+  const equippedFor = (kind: ShopKind) => kind === 'frame' ? me?.frame_key : kind === 'title' ? me?.title_key : kind === 'nameplate' ? me?.nameplate_key : kind === 'border' ? me?.border_key : kind === 'backdrop' ? me?.backdrop_key : null;
   const offerItems = offers.map((offer) => ({ offer, item: items.find((item) => item.key === offer.item_key) })).filter((entry): entry is { offer: ShopOffer; item: ShopItem } => Boolean(entry.item));
 
   const visual = (item: ShopItem) => <button type="button" className="shop-visual" onClick={() => setPreview(item)} aria-label={t(`${item.name} харах`, `View ${item.name}`)}>
@@ -449,6 +468,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
     {item.kind === 'title' && <TitlePlaque titleKey={item.key} name={item.name} size="lg" />}
     {item.kind === 'nameplate' && <PlatePreview plateKey={item.key} me={me} />}
     {item.kind === 'border' && <PlatePreview plateKey={me?.nameplate_key ?? null} borderKey={item.key} me={me} />}
+    {item.kind === 'backdrop' && <BackdropPreview backdropKey={item.key} me={me} />}
   </button>;
 
   /** Wear / take off / buy (at the offer's price while one runs) / not for sale. */
@@ -490,7 +510,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
       <span className="offer-badge">{discount ? `−${discount}%` : t('ОНЦЛОХ', 'FEATURED')}</span>
       {visual(item)}
       <b>{item.name}</b>
-      <small className="offer-kind">{item.kind === 'frame' ? t('Аватар хүрээ', 'Avatar frame') : item.kind === 'nameplate' ? t('Нэрийн хавтан', 'Nameplate') : t('Нэрийн хүрээ', 'Name border')}{item.source === 'limited' ? t(' · зөвхөн энд', ' · only here') : ''}</small>
+      <small className="offer-kind">{item.kind === 'gift' || item.kind === 'title' ? '' : LOOK_KIND_LABEL[item.kind]}{item.source === 'limited' ? t(' · зөвхөн энд', ' · only here') : ''}</small>
       <span className="offer-time"><Clock3 size={11} />{t(` ${timeLeft(offer.ends_at, now)} үлдсэн`, ` ${timeLeft(offer.ends_at, now)} left`)}</span>
       {discount > 0 && !owns && <s className="offer-old"><Price item={item} size={10} /></s>}
       {action(item, offer)}
@@ -537,6 +557,7 @@ export function ShopScreen({ onBack, notify }: { onBack: () => void; notify: Not
         {preview.kind === 'title' && <TitlePlaque titleKey={preview.key} name={preview.name} size="hero" />}
         {preview.kind === 'nameplate' && <PlatePreview plateKey={preview.key} me={me} large />}
         {preview.kind === 'border' && <PlatePreview plateKey={me?.nameplate_key ?? null} borderKey={preview.key} me={me} large />}
+        {preview.kind === 'backdrop' && <BackdropPreview backdropKey={preview.key} me={me} large />}
         <h2>{preview.name}</h2><p>{preview.description}</p>
         <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setPreview(null)}>{t(`ХААХ`, `CLOSE`)}</button></div>
       </section>

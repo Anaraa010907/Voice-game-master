@@ -3491,3 +3491,73 @@
   vertical-align: middle;
   white-space: nowrap;
 }
+
+/* ---------- Profile backdrops: a painted picture behind the avatar ----------
+ * The player's backdrop (backdrops.ts) fills their profile showcase inside its gold edge; a small
+ * portrait card (.backdrop-card, the showcase in miniature) carries it on the player card, in the
+ * shop, in gifts and in the Battle Pass. A soft dark pool in the middle keeps the avatar and its
+ * frame clear of the picture, and the bottom darkens a little under the title plaque.
+ * Without a backdrop nothing here applies and the showcase stays as it was. */
+.viewport .game-frame .profile-showcase.has-backdrop {
+  background:
+    var(--backdrop) center / cover no-repeat padding-box,
+    linear-gradient(180deg, var(--sc-bg, #16151c), #07080c 92%) padding-box,
+    linear-gradient(155deg, var(--m-hi), var(--m-mid) 22%, var(--m-lo) 48%, var(--m-mid) 74%, var(--m-hi)) border-box;
+}
+.viewport .game-frame .profile-showcase.has-backdrop .sc-backdrop {
+  background:
+    radial-gradient(ellipse 50% 36% at 50% 44%, rgba(4, 5, 9, .5), rgba(4, 5, 9, .18) 62%, transparent 100%),
+    linear-gradient(180deg, rgba(4, 5, 9, .28), transparent 22%, transparent 66%, rgba(4, 5, 9, .6));
+}
+
+/* The card is a size container: the avatar on it is sized in cqw, so it keeps the same share of the
+ * card (with room for a painted frame) whether the card is a gift tile or the shop's big preview. */
+.backdrop-card {
+  position: relative;
+  isolation: isolate;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  aspect-ratio: 4 / 5;
+  container-type: inline-size;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background:
+    radial-gradient(ellipse 52% 40% at 50% 47%, rgba(4, 5, 9, .5), rgba(4, 5, 9, .16) 64%, transparent 100%) padding-box,
+    radial-gradient(ellipse at 50% 50%, transparent 56%, rgba(0, 0, 0, .55) 100%) padding-box,
+    var(--backdrop, none) center / cover no-repeat padding-box,
+    linear-gradient(180deg, #16151c, #07080c) padding-box,
+    linear-gradient(155deg, #fff1cf, #d8b066 22%, #6e4a17 48%, #d8b066 74%, #fff1cf) border-box;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .5), 0 0 12px rgba(226, 192, 132, .22);
+}
+.viewport .game-frame .backdrop-card > .avatar { width: 46cqw; height: 46cqw; margin: 0; font-size: 16cqw; }
+
+/* Player card: the avatar sits on the card instead of straight on the row. */
+.viewport .game-frame .pcard-showcase { width: 128px; }
+.viewport .game-frame .pcard-showcase > .pcard-avatar,
+.viewport .game-frame .pcard-showcase > .pcard-avatar.has-frame,
+.viewport .game-frame .pcard-showcase > .pcard-avatar:has(> .is-painted) { width: 55cqw; height: 55cqw; margin: 0; font-size: 19cqw; }
+
+/* Shop: a portrait card as tall as the frame previews, my avatar (with my frame) on it. */
+.viewport .game-frame .shop-grid.kind-backdrop { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
+.viewport .game-frame .shop-grid.kind-backdrop .shop-visual { height: 152px; background: none; }
+.viewport .game-frame .backdrop-preview { height: 100%; }
+.viewport .game-frame .backdrop-preview.is-large { height: auto; width: 168px; margin: 12px 0 8px; }
+/* Featured offers: the card's other looks are small, but a backdrop needs some height to read. */
+.viewport .game-frame .shop-grid.kind-offers .shop-visual:has(> .backdrop-preview) { height: 112px; background: none; }
+
+/* Gifts and the Battle Pass: a small card. */
+.viewport .game-frame .gift-grid .gift-backdrop-preview { width: 46px; margin: 2px 0 5px; }
+.viewport .game-frame .pass-cell .pass-backdrop { width: 46px; }
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .viewport .game-frame .pcard-showcase { width: 112px; }
+  .viewport .game-frame .shop-grid.kind-backdrop { grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); }
+  .viewport .game-frame .shop-grid.kind-backdrop .shop-visual { height: 136px; }
+  .viewport .game-frame .backdrop-preview.is-large { width: 132px; margin: 8px 0 6px; }
+}
+@media (orientation: landscape) and (max-height: 380px) {
+  /* The player card keeps its height: the card is no taller than a painted frame on the bare row. */
+  .viewport .game-frame .pcard-showcase { width: 92px; }
+  .viewport .game-frame .backdrop-preview.is-large { width: 104px; margin: 4px 0 2px; }
+}

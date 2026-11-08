@@ -47,5 +47,7 @@ export type PublicProfile = {
   nameplate_key?: string | null;
   player_no?: number;
   border_key?: string | null;
+  /** The picture behind the avatar on the profile showcase and the player card (see backdrops.ts). */
+  backdrop_key?: string | null;
 };
 

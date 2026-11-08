@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { initialsOf } from '../supabase/functions/_shared/initials.ts';
+import { backdrop } from './backdrops';
 
 /** Two letters, the very rule the game server uses for seat initials, so a player looks alike everywhere. */
 export { initialsOf };
@@ -68,6 +69,16 @@ export function RowBorder({ borderKey }: { borderKey: string | null | undefined 
   return <span className={`row-border ${borderKey} ${PLAIN_BORDERS.includes(borderKey) ? 'is-plain' : ''}`} aria-hidden="true"><i /></span>;
 }
 export const rowBorderClass = (key: string | null | undefined) => (key && BORDER_KEYS.includes(key) ? 'has-row-border' : '');
+
+/**
+ * The profile showcase in miniature: a small portrait card, gold-edged, with the backdrop's picture
+ * (see backdrops.ts) and whatever sits on it (usually an avatar) in the middle. Used by the player
+ * card, the shop, gifts and the Battle Pass; the profile screen puts the backdrop on its own showcase.
+ */
+export function BackdropCard({ backdropKey, className = '', children }: { backdropKey: string | null | undefined; className?: string; children?: ReactNode }) {
+  const look = backdrop(backdropKey);
+  return <span className={`backdrop-card ${look.className} ${className}`} style={look.style}>{children}</span>;
+}
 
 /** Plain rings (coins): still and matte. Two carry a pattern drawn as an image. */
 const PLAIN_FRAMES = ['frame-bronze', 'frame-silver', 'frame-brass', 'frame-wood', 'frame-leather', 'frame-double', 'frame-sky', 'frame-onyx', 'frame-khana', 'frame-ulzii', 'frame-season1'];
