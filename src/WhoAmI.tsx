@@ -9,6 +9,7 @@ import { ScrollCue } from './ScrollCue';
 import { playSfx } from './sfx';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { WHO_AM_I_PACK } from './whoAmIContent';
+import { WHOAMI_HEARTBEAT_MS } from './whoAmIEngine';
 import type {
   AnswerVote, JudgeVote, WhoAmIAction, WhoAmIIdentity, WhoAmILastResult, WhoAmIPrivateView, WhoAmIPublicPlayer, WhoAmIPublicView,
 } from './whoAmIEngine';
@@ -286,6 +287,18 @@ export default function WhoAmIScreen({ roomCode, roomName, userId, isHost, seats
     }
     heardPhase.current = phase;
   }, [game?.phase]);
+
+  // Presence: while this screen is visible the phone reports in every few seconds. The server marks a seat
+  // that goes quiet as away (it stops holding up votes) and brings it back on the next report.
+  const playing = Boolean(game) && game?.phase !== 'results';
+  useEffect(() => {
+    if (!playing) return;
+    const beat = () => { if (document.visibilityState === 'visible') void callGame('tick', { roomCode, heartbeat: true }).catch(() => undefined); };
+    beat();
+    const timer = window.setInterval(beat, WHOAMI_HEARTBEAT_MS);
+    document.addEventListener('visibilitychange', beat);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', beat); };
+  }, [playing, roomCode]);
 
   // When the clock runs out, any phone may ask the server to move on. The server re-checks the deadline.
   useEffect(() => {

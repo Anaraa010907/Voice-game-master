@@ -1,15 +1,18 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import {
   MIN_PLAYERS, allNightActionsSubmitted, allReady, allVerdictsSubmitted, allVotesSubmitted, createInitialGame, finishDay, markRevealReady,
-  openDiscussion, privateView, publicView, recordVerdict, recordVote, removePlayer, resolveNight, resolveTrial, resolveVoting, sanitizeMafiaSettings,
-  startNight, startVoting, submitNightAction, type GameEngineState, type MafiaSettings, type Verdict, type VoteChoice,
+  mafiaStageKey, mafiaTickApplies, openDiscussion, privateView, publicView, recordVerdict, recordVote, removePlayer, resolveNight, resolveTrial,
+  resolveVoting, sanitizeMafiaSettings, startNight, startVoting, submitNightAction, type GameEngineState, type MafiaSettings, type PublicGameView,
+  type Verdict, type VoteChoice,
 } from '../_shared/gameEngine.ts';
 import { mafiaBotsAct, nextBotName } from '../_shared/bots.ts';
 import {
-  MIN_WHOAMI_PLAYERS, applyWhoAmIAction, createWhoAmIGame, removeWhoAmIPlayer, sanitizeWhoAmISettings, timeoutWhoAmI,
-  whoAmIBotStep, whoAmIDeadlineSeconds, whoAmIPrivateView, whoAmIPublicView, whoAmIStageKey, type WhoAmIAction, type WhoAmIState,
+  MIN_WHOAMI_PLAYERS, applyWhoAmIAction, applyWhoAmIPresence, createWhoAmIGame, removeWhoAmIPlayer, sanitizeWhoAmISettings, setWhoAmIConnected,
+  timeoutWhoAmI, whoAmIBotStep, whoAmIDeadlineSeconds, whoAmIPresence, whoAmIPrivateView, whoAmIPublicView, whoAmIStageKey,
+  type WhoAmIAction, type WhoAmIState,
 } from '../_shared/whoAmIEngine.ts';
 import { WHO_AM_I_PACK } from '../_shared/whoAmIContent.ts';
+import { initialsOf } from '../_shared/initials.ts';
 import { isAllowedOrigin } from '../_shared/voiceRequest.ts';
 import type { VoicePhase } from '../_shared/voicePolicy.ts';
 
@@ -173,6 +176,11 @@ function whoAmIProgress(state: WhoAmIGame): WhoAmIGame {
   return current;
 }
 
+/** Keeps the stored match id on a Who Am I state the engine returned (the same object when nothing changed). */
+function withMatch(next: WhoAmIState, stored: WhoAmIGame): WhoAmIGame {
+  return next === stored || (next as WhoAmIGame).matchId === stored.matchId ? next as WhoAmIGame : { ...next, matchId: stored.matchId };
+}
+
 /** Lets bots act in every phase that opens, then skips waiting, until nothing more happens. */
 function progress(state: GameEngineState): GameEngineState {
   let current = state;
@@ -243,6 +251,25 @@ class GameServer {
 
   async addVoiceMember(roomCode: string, seat: Seat, isHost: boolean) {
     await this.admin.from('voice_room_members').upsert({ room_code: roomCode, user_id: seat.user_id, participant_name: seat.display_name, is_host: isHost, is_alive: true, is_muted: false });
+  }
+
+  /**
+   * Who Am I presence: each seated app reports in every few seconds (a `tick` with `heartbeat`, and every
+   * move it makes). The heartbeats live in their own table, outside Realtime, so they wake nobody's screen.
+   */
+  async heartbeat(roomCode: string, userIds: string[] = [this.userId]) {
+    if (!userIds.length) return;
+    const now = new Date().toISOString();
+    const { error } = await this.admin.from('game_seat_presence')
+      .upsert(userIds.map((userId) => ({ room_code: roomCode, user_id: userId, last_seen_at: now })));
+    if (error) console.error('presence write failed', error);
+  }
+
+  /** The last heartbeat of every seat at the table, by user id (epoch ms). */
+  async lastSeen(roomCode: string): Promise<Map<string, number>> {
+    const { data, error } = await this.admin.from('game_seat_presence').select('user_id,last_seen_at').eq('room_code', roomCode);
+    if (error) console.error('presence read failed', error);
+    return new Map(((data ?? []) as Array<{ user_id: string; last_seen_at: string }>).map((row) => [row.user_id, Date.parse(row.last_seen_at)]));
   }
 
   async create(body: Body) {
@@ -359,6 +386,7 @@ class GameServer {
       this.admin.from('game_room_players').delete().eq('room_code', roomCodeValue).eq('user_id', this.userId),
       this.admin.from('game_private').delete().eq('room_code', roomCodeValue).eq('user_id', this.userId),
       this.admin.from('voice_room_members').delete().eq('room_code', roomCodeValue).eq('user_id', this.userId),
+      this.admin.from('game_seat_presence').delete().eq('room_code', roomCodeValue).eq('user_id', this.userId),
     ]);
     // The host leaving a room that is not mid-game closes it for everyone; a live game keeps going under a new host.
     if (!remaining.length || (room.host_id === this.userId && room.status !== 'playing')) {
@@ -391,7 +419,7 @@ class GameServer {
     const people = seats.map((seat) => ({
       id: seat.seat,
       name: seat.display_name,
-      initials: seat.display_name.slice(0, 2).toUpperCase(),
+      initials: initialsOf(seat.display_name),
       color: seat.color,
       avatarUrl: seat.avatar_url ?? null,
       host: seat.user_id === room.host_id,
@@ -406,6 +434,11 @@ class GameServer {
     if (error) throw error;
     await this.touchRoom(roomCodeValue, { status: 'playing' });
     await this.admin.from('voice_room_members').update({ is_alive: true }).eq('room_code', roomCodeValue);
+    // Everyone counts as present at the start; a phone that never reports in is marked away after the grace time.
+    if (type === 'whoami') {
+      await this.admin.from('game_seat_presence').delete().eq('room_code', roomCodeValue);
+      await this.heartbeat(roomCodeValue, seats.filter((seat) => !seat.is_bot).map((seat) => seat.user_id));
+    }
     await this.publish(roomCodeValue, engine, seats, 1);
     return { started: true };
   }
@@ -435,9 +468,7 @@ class GameServer {
   async publish(roomCode: string, state: StoredGame, seats: Seat[], version: number, previous?: StoredGame) {
     if (isWhoAmI(state)) return this.publishWhoAmI(roomCode, state, seats, version, previous && isWhoAmI(previous) ? previous : undefined);
     const prior = previous && !isWhoAmI(previous) ? previous : undefined;
-    const phaseChanged = !prior || prior.phase !== state.phase || prior.votesRevealed !== state.votesRevealed
-      || prior.runoffCandidates?.join() !== state.runoffCandidates?.join() || prior.round !== state.round
-      || prior.trial?.accusedId !== state.trial?.accusedId;
+    const phaseChanged = !prior || mafiaStageKey(prior) !== mafiaStageKey(state);
     const { data: currentPublic } = await this.admin.from('game_public').select('deadline').eq('room_code', roomCode).maybeSingle();
     const deadline = phaseChanged ? deadlineFor(state) : currentPublic?.deadline ?? deadlineFor(state);
     const writes = [
@@ -654,15 +685,28 @@ class GameServer {
     const { data: pub } = await this.admin.from('game_public').select('deadline,view').eq('room_code', roomCodeValue).maybeSingle();
     const expired = pub?.deadline ? Date.parse(pub.deadline) <= Date.now() + 500 : false;
     const hostSkip = body.skip === true && room.host_id === this.userId;
-    await this.mutate(roomCodeValue, (state) => {
+    // Who Am I: this tick is also my heartbeat; then every seat's connection flag follows its own heartbeats,
+    // so a phone that dropped stops holding up votes, and one that came back counts again.
+    let lastSeen: Map<string, number> | null = null;
+    if (gameType(room.game_type) === 'whoami') {
+      await this.heartbeat(roomCodeValue);
+      lastSeen = await this.lastSeen(roomCodeValue);
+    }
+    const now = Date.now();
+    await this.mutate(roomCodeValue, (state, seats) => {
       if (isWhoAmI(state)) {
+        const bySeat: Record<number, number | undefined> = {};
+        for (const seat of seats) if (!seat.is_bot) bySeat[seat.seat] = lastSeen?.get(seat.user_id);
+        const present = withMatch(applyWhoAmIPresence(state, whoAmIPresence(state, bySeat, now)), state);
         // Every client ticks when the clock hits zero. The expired deadline belongs to the stage published with it,
-        // so a stage that opened since (another tick won, or this is a retry on newer state) keeps its own timer.
-        const sameStage = pub?.view ? whoAmIStageKey(pub.view as WhoAmIState) === whoAmIStageKey(state) : false;
-        return expired && sameStage ? whoAmIProgress(timeoutWhoAmI(state) as WhoAmIGame) : whoAmIProgress(state);
+        // so a stage that opened since (another tick won, a presence change closed a vote, or this is a retry on
+        // newer state) keeps its own timer.
+        const sameStage = pub?.view ? whoAmIStageKey(pub.view as WhoAmIState) === whoAmIStageKey(present) : false;
+        return expired && sameStage ? whoAmIProgress(withMatch(timeoutWhoAmI(present), state)) : whoAmIProgress(present);
       }
-      const skippable = state.phase === 'Role Reveal' || state.phase === 'Morning' || state.phase === 'Discussion' || (state.phase === 'Voting' && state.votesRevealed);
-      if (!expired && !(hostSkip && skippable)) return state;
+      // Same rule as Who Am I: the deadline (and the host's skip) belong to the step published with them. A late or
+      // retried tick from another phone, arriving after the first tick opened the next step, leaves that step alone.
+      if (!mafiaTickApplies(pub?.view as PublicGameView | null | undefined, state, expired, hostSkip)) return state;
       return progress(advance(state));
     });
     return { ok: true };
@@ -677,13 +721,16 @@ class GameServer {
     // (the engine's own host flag is only set at the start).
     const hostSkip = action.type === 'hostSkip';
     if (hostSkip && (await this.room(roomCodeValue)).host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн алгасна.');
+    // A move is proof of presence: it refreshes my heartbeat and, if I had been marked away, brings me back first.
+    await this.heartbeat(roomCodeValue);
     let failure = '';
-    await this.mutate(roomCodeValue, (state) => {
-      if (!isWhoAmI(state)) throw new GameError(409, 'Энэ үйлдэл энэ тоглоомд хамаарахгүй.');
-      if (hostSkip) return state.phase === 'results' ? state : whoAmIProgress(timeoutWhoAmI(state) as WhoAmIGame);
+    await this.mutate(roomCodeValue, (stored) => {
+      if (!isWhoAmI(stored)) throw new GameError(409, 'Энэ үйлдэл энэ тоглоомд хамаарахгүй.');
+      const state = withMatch(setWhoAmIConnected(stored, mine.seat, true), stored);
+      if (hostSkip) return state.phase === 'results' ? state : whoAmIProgress(withMatch(timeoutWhoAmI(state), stored));
       const result = applyWhoAmIAction(state, mine.seat, action);
       failure = result.error ?? '';
-      return result.error ? state : whoAmIProgress({ ...result.state, matchId: state.matchId });
+      return result.error ? state : whoAmIProgress(withMatch(result.state, stored));
     });
     if (failure) throw new GameError(409, failure);
     return { ok: true };
@@ -737,6 +784,7 @@ class GameServer {
       this.admin.from('game_room_players').update({ ready: false }).eq('room_code', roomCodeValue).neq('user_id', room.host_id).eq('is_bot', false),
       this.admin.from('voice_rooms').update({ game_phase: 'lobby', post_game_voice: false }).eq('room_code', roomCodeValue),
       this.admin.from('voice_room_members').update({ is_alive: true }).eq('room_code', roomCodeValue),
+      this.admin.from('game_seat_presence').delete().eq('room_code', roomCodeValue),
     ]);
     await this.touchRoom(roomCodeValue, { status: 'lobby' });
     return { ok: true };

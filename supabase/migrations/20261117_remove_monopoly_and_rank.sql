@@ -274,10 +274,12 @@ grant execute on function public.player_card(uuid) to authenticated;
 /*
  * Records one player's finished game, once per match and player (a repeat call changes nothing).
  *   * Statistics: one more match, a win or a loss, win rate, level and win streaks.
- *   * Coins: 10 for taking part, 30 for a win, at most 500 a day from games (UTC day).
+ *   * Coins: 10 for taking part, 30 for a win, at most 500 a day from games.
  *   * Battle Pass XP (while a season runs, see award_pass_xp): 50 for taking part, +50 for a win,
  *     +100 for the first game of the day.
  *   * Leaving a live game early (p_left): it counts as a loss and pays no coins and no XP.
+ *   * "A day" is the Ulaanbaatar calendar day for both the coin cap and the Battle Pass daily bonus
+ *     (award_pass_xp), so both reset together at local midnight (16:00 UTC).
  * Only the game server (service_role) may call it.
  */
 create or replace function public.record_match_result(p_match_id uuid, p_user_id uuid, p_room_code text, p_outcome text, p_left boolean)
@@ -291,6 +293,8 @@ declare
   left_early boolean := coalesce(p_left, false);
   won boolean := p_outcome = 'win' and not coalesce(p_left, false);
   today integer;
+  -- Same day as award_pass_xp's first-game bonus.
+  local_day date := (now() at time zone 'Asia/Ulaanbaatar')::date;
   coin_gain integer := 0;
   pass_gain integer := 0;
 begin
@@ -309,7 +313,7 @@ begin
   if not left_early then
     coin_gain := case when won then 30 else 10 end;
   end if;
-  select case when p.game_coins_day = current_date then p.game_coins_today else 0 end into today
+  select case when p.game_coins_day = local_day then p.game_coins_today else 0 end into today
   from public.profiles p where p.id = p_user_id for update;
   coin_gain := greatest(0, least(coin_gain, 500 - today));
 
@@ -322,7 +326,7 @@ begin
     current_win_streak = case when won then current_win_streak + 1 else 0 end,
     best_win_streak = greatest(best_win_streak, case when won then current_win_streak + 1 else 0 end),
     coins = coins + coin_gain,
-    game_coins_day = current_date,
+    game_coins_day = local_day,
     game_coins_today = today + coin_gain
   where id = p_user_id;
 

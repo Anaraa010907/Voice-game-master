@@ -302,7 +302,7 @@ export function readyNow(state: GameEngineState): number[] {
 }
 
 /** A living player is done with the current waiting step. Bots never hold anyone up. */
-export function markReady(state: GameEngineState, playerId: number): EngineResult {
+function markReady(state: GameEngineState, playerId: number): EngineResult {
   const step = waitStep(state);
   if (!step) return { state, error: 'Nothing to wait for now.' };
   if (!state.publicPlayers.some((player) => player.id === playerId && player.alive)) return { state, error: 'Eliminated players cannot act.' };
@@ -830,6 +830,29 @@ export function privateView(state: GameEngineState, playerId: number) {
 }
 export type PrivateGameView = NonNullable<ReturnType<typeof privateView>>;
 
+/** The parts of a game (full state or its public view) that say which timed step is open. */
+type StageFields = Pick<GameEngineState, 'phase' | 'round' | 'votesRevealed' | 'runoffCandidates'> & { trial: { accusedId: number } | null };
+
+/**
+ * Identifies the timed step the game is in: a new phase, round, runoff, trial or revealed ballot opens a
+ * new one, votes and night picks do not. The server restarts the phase deadline exactly when it changes,
+ * so a deadline always belongs to the step that was published with it.
+ */
+export function mafiaStageKey(state: StageFields): string {
+  return [state.phase, state.round, state.votesRevealed ? 1 : 0, state.runoffCandidates?.join(',') ?? '', state.trial?.accusedId ?? ''].join(':');
+}
+
+/**
+ * Whether a clock tick may end the current step. `published` is the public view whose deadline the tick
+ * saw: the deadline (and a host's skip of the step on screen) only applies while that step is still open,
+ * so a late or retried tick cannot end a step another tick has just opened.
+ */
+export function mafiaTickApplies(published: StageFields | null | undefined, state: GameEngineState, expired: boolean, hostSkip: boolean): boolean {
+  if (state.phase === 'Results' || !published || mafiaStageKey(published) !== mafiaStageKey(state)) return false;
+  const skippable = state.phase === 'Role Reveal' || state.phase === 'Morning' || state.phase === 'Discussion' || (state.phase === 'Voting' && state.votesRevealed);
+  return expired || (hostSkip && skippable);
+}
+
 export function runGameEngineSelfTests() {
   const players: EnginePlayer[] = [
     { id: 1, name: 'You', initials: 'YO', color: 'rose' },
@@ -1056,6 +1079,26 @@ export function runGameEngineSelfTests() {
   require(allReady(waiting), 'Everyone done ends the morning early.');
   require(!allReady({ ...waiting, phase: 'Discussion' }), 'The discussion starts with nobody done.');
   require(Boolean(markReady({ ...waiting, phase: 'Night' }, 1).error), 'Nobody can skip the Night by tapping done.');
+
+  // Clock ticks: an expired deadline only ends the step it was published with.
+  const discussion = openDiscussion(fixed({ 1: 'Citizen', 2: 'Mafia', 3: 'Doctor', 4: 'Detective' }));
+  const shown = publicView(discussion);
+  require(mafiaStageKey(shown) === mafiaStageKey(discussion), 'The public view and the state name the same step.');
+  require(mafiaTickApplies(shown, discussion, true, false), 'An expired deadline ends the step it belongs to.');
+  require(!mafiaTickApplies(shown, discussion, false, false), 'A tick before the deadline changes nothing.');
+  require(mafiaTickApplies(shown, discussion, false, true), 'The host may skip the discussion on screen.');
+  const voting = startVoting(discussion);
+  // A second phone's tick saw the discussion's deadline, but the first tick already opened the vote.
+  require(!mafiaTickApplies(shown, voting, true, false), 'A late tick cannot time out the vote that just opened.');
+  require(!mafiaTickApplies(shown, voting, true, true), 'A late host skip cannot skip the vote that just opened.');
+  require(mafiaTickApplies(publicView(voting), voting, true, false), "The vote's own deadline still ends it.");
+  require(!mafiaTickApplies(publicView(voting), voting, false, true), 'An open vote cannot be skipped by the host.');
+  let ballot = voting;
+  for (const [voter, choice] of [[1, 2], [2, 1], [3, 2], [4, 2]] as const) ballot = recordVote(ballot, voter, choice).state;
+  require(mafiaStageKey(ballot) === mafiaStageKey(voting), 'Votes do not open a new step.');
+  const trial = resolveVoting(ballot).state;
+  require(Boolean(trial.trial) && !mafiaTickApplies(publicView(ballot), trial, true, false), 'A late tick cannot end the trial that just opened.');
+  require(!mafiaTickApplies(publicView(trial), { ...trial, phase: 'Results' }, true, true), 'A finished game has no clock.');
 
   return 'Game engine self-tests passed.';
 }
