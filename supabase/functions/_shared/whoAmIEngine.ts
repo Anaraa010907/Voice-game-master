@@ -556,8 +556,9 @@ export const WHOAMI_PRESENCE_STALE_MS = 25_000;
 
 /**
  * Who is at the table, from each seat's last heartbeat (epoch ms): fresh = connected, older than
- * `staleMs` = away. Seats with no heartbeat on record (bots, players who left, older apps) are not
- * listed, so their flag is left as it is.
+ * `staleMs` = away. Seats with no heartbeat on record (bots, players who left) are not listed, so
+ * their flag is left as it is. The server seeds a heartbeat for every human seat at start, so an
+ * app that never sends heartbeats is marked away after `staleMs` and back on each of its moves.
  */
 export function whoAmIPresence(state: WhoAmIState, lastSeen: Record<number, number | null | undefined>, now: number, staleMs = WHOAMI_PRESENCE_STALE_MS): Record<number, boolean> {
   const presence: Record<number, boolean> = {};
