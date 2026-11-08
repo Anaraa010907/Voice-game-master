@@ -42,6 +42,10 @@ const mn = {
     ready: 'Бэлэн',
     notReady: 'Бэлэн биш',
     startGame: 'Тоглоом эхлүүлэх',
+    /** Lobby seat grid cue: seats (taken or empty) below the fold. */
+    moreSeats: (count: number) => `Доор ${count}`,
+    /** Lobby rules card cue: more rules text below. */
+    moreRules: () => 'Цааш нь',
     leaveRoom: 'Өрөөнөөс гарах',
     host: 'Эзэн',
     inLobby: 'Лоббид',

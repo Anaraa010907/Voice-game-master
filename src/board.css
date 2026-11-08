@@ -993,3 +993,119 @@ button.toggle::after,
   -webkit-mask-image: linear-gradient(180deg, #0003 0, #000 18px, #000 calc(100% - 34px), #0003 100%);
   mask-image: linear-gradient(180deg, #0003 0, #000 18px, #000 calc(100% - 34px), #0003 100%);
 }
+
+/* ================= Create-room form: 44 px fields that still fit a 340 px tall phone =================
+ * Native selects and inputs cannot take a pseudo-element hit area, so they are 44 px tall themselves.
+ * To pay for that the form packs tighter: the pickers (players, rounds, language) share one row, and
+ * once the room is private the password sits beside the switch that revealed it.
+ */
+.viewport .game-frame .room-form {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.viewport .game-frame .room-form > * {
+  grid-column: 1 / -1;
+}
+
+.viewport .game-frame .room-form-three > .room-pick {
+  grid-column: span 2;
+}
+
+.viewport .game-frame .room-form-two > .room-pick,
+.viewport .game-frame .room-form.is-private > :is(.private-setting, .password-field) {
+  grid-column: span 3;
+}
+
+.viewport .game-frame .room-form .form-field {
+  gap: 4px;
+}
+
+.viewport .game-frame .room-form .form-field > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.viewport .game-frame .room-form .form-field :is(input, select) {
+  height: 44px;
+}
+
+/* The theme's background shorthand had dropped the select arrow; a small gold chevron says "tap to pick". */
+.viewport .game-frame .room-form .form-field select {
+  padding-right: 24px;
+  background-image: linear-gradient(45deg, transparent 50%, #d2b073 50%), linear-gradient(135deg, #d2b073 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* Beside the password field the switch lines up with the input, not with its label. */
+.viewport .game-frame .room-form.is-private > .private-setting {
+  align-self: end;
+  min-height: 44px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+/* ================= Lobby seats (ScrollCue wrapper around .player-grid) ================= */
+.lobby-screen .lobby-seats {
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .lobby-screen .lobby-seats {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  .viewport .game-frame .lobby-screen .lobby-seats {
+    grid-row: 3 / 5;
+  }
+}
+
+/* ================= Mafia lobby rules card: the header stays, the roles and rules line scroll ================= */
+.viewport .game-frame .lobby-screen .lobby-rules.mafia-rules {
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: visible;
+}
+
+.lobby-rules-body {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.viewport .game-frame .mafia-rules .lobby-rules-body > p {
+  margin: 0;
+  color: #9d9389;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.mafia-rules .scroll-cue {
+  min-height: 36px;
+}
+
+.mafia-rules .scroll-cue-more {
+  bottom: 0;
+  min-height: 18px;
+  font-size: 9px;
+}
+
+/* Short landscape: as in the Who Am I lobby (whoami.css), the hint drops the "you are the host" lead-in,
+   and on the shortest phones it goes (each seat already says who is not ready, and Start stays disabled
+   until everyone is), so the rules card above it gets room to read. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .viewport .game-frame .lobby-mafia .lobby-hint-role {
+    display: none;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 360px) {
+  .viewport .game-frame .lobby-mafia .lobby-hint {
+    display: none;
+  }
+}

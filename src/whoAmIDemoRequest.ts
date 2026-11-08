@@ -9,7 +9,8 @@ import { supabaseConfigured } from './supabaseClient';
  */
 
 export type DemoPhase = 'reveal' | 'ask' | 'answer' | 'guess' | 'results';
-export type DemoRequest = { screen: 'hub' | 'create' | 'lobby' | 'game'; phase: DemoPhase; seat: number | null; auto: boolean; bar: boolean; players: number };
+/** `game` is Who Am I unless the URL has `&game=mafia` (create-room form and lobby only: the Mafia table itself needs the server). */
+export type DemoRequest = { screen: 'hub' | 'create' | 'lobby' | 'game'; phase: DemoPhase; seat: number | null; auto: boolean; bar: boolean; players: number; game: 'whoami' | 'mafia' };
 export const DEMO_PHASES: DemoPhase[] = ['reveal', 'ask', 'answer', 'guess', 'results'];
 /** Seats 1..players exist in the demo table: 6 by default, `&players=3..10` for other table sizes. */
 export const DEMO_SEAT_COUNT = 6;
@@ -28,5 +29,5 @@ export function demoRequest(): DemoRequest | null {
   const count = Number(params.get('players'));
   const players = Number.isInteger(count) && count >= 3 && count <= DEMO_MAX_SEATS ? count : DEMO_SEAT_COUNT;
   const seat = Number(params.get('seat'));
-  return { screen, phase, seat: Number.isInteger(seat) && seat >= 1 && seat <= players ? seat : null, auto: params.get('auto') === '1', bar: params.get('bar') !== '0', players };
+  return { screen, phase, seat: Number.isInteger(seat) && seat >= 1 && seat <= players ? seat : null, auto: params.get('auto') === '1', bar: params.get('bar') !== '0', players, game: params.get('game') === 'mafia' && (screen === 'create' || screen === 'lobby') ? 'mafia' : 'whoami' };
 }

@@ -24,6 +24,7 @@ import { GAMES, type GameType } from './games';
 import { MafiaRulesCard, MafiaRulesEditor } from './MafiaRules';
 import WhoAmIScreen, { WhoAmIWatch } from './WhoAmI';
 import { WhoAmIRulesCard, WhoAmIRulesEditor } from './WhoAmIRules';
+import { ScrollCue } from './ScrollCue';
 import { DEMO_ENABLED, demoRequest } from './whoAmIDemoRequest';
 import { DEFAULT_WHOAMI_ROUNDS, WHOAMI_ROUND_CHOICES } from './whoAmIEngine';
 import { motionReduced, setMotionReduced } from './motion';
@@ -63,7 +64,7 @@ export default function App() {
   const [profileError, setProfileError] = useState('');
   const [copied, setCopied] = useState(false);
   const [roomCode, setRoomCode] = useState<string | null>(null);
-  const [gameType, setGameType] = useState<GameType>(demo ? 'whoami' : 'mafia');
+  const [gameType, setGameType] = useState<GameType>(demo ? demo.game : 'mafia');
   // Which language pool the room list shows and new rooms join: the app language unless the player picks the other one.
   const [roomLang, setRoomLang] = useState<Lang>(LANG);
   const [notice, setNotice] = useState<{ text: string; tone: NoticeTone } | null>(null);
@@ -407,11 +408,11 @@ function CreateRoom({ gameType, startLanguage, onBack, onCreate }: { gameType: G
     }
   };
 
-  return <div className="inner-screen setup-screen"><TopBar title={t('ӨРӨӨ ҮҮСГЭХ', 'CREATE ROOM')} subtitle={t('ӨРӨӨНИЙ ТӨХИРГӨӨ', 'ROOM SETTINGS')} onBack={onBack} /><div className="setup-content"><div className="setup-heading"><div className="eyebrow left-eye">{t(`ТӨХИРГӨӨ СОНГОХ`, `CHOOSE YOUR SETTINGS`)}</div><h1>{t(`Өөрийнхөө `, `Build your `)}<i>{t(`өрөөг`, `own room`)}</i>{t(` бүтээ.`, `.`)}</h1><p><b className="setup-game-name">{game.title}</b>{t(` · Өрөөний кодыг найзууддаа илгээгээрэй. Дор хаяж ${game.minPlayers} хүн нэгдвэл тоглоом эхэлнэ.`, ` · Send the room code to your friends. The game starts once at least ${game.minPlayers} players join.`)}</p></div><form className="room-form" onSubmit={submit}>
+  return <div className="inner-screen setup-screen"><TopBar title={t('ӨРӨӨ ҮҮСГЭХ', 'CREATE ROOM')} subtitle={t('ӨРӨӨНИЙ ТӨХИРГӨӨ', 'ROOM SETTINGS')} onBack={onBack} /><div className="setup-content"><div className="setup-heading"><div className="eyebrow left-eye">{t(`ТӨХИРГӨӨ СОНГОХ`, `CHOOSE YOUR SETTINGS`)}</div><h1>{t(`Өөрийнхөө `, `Build your `)}<i>{t(`өрөөг`, `own room`)}</i>{t(` бүтээ.`, `.`)}</h1><p><b className="setup-game-name">{game.title}</b>{t(` · Өрөөний кодыг найзууддаа илгээгээрэй. Дор хаяж ${game.minPlayers} хүн нэгдвэл тоглоом эхэлнэ.`, ` · Send the room code to your friends. The game starts once at least ${game.minPlayers} players join.`)}</p></div><form className={`room-form ${gameType === 'whoami' ? 'room-form-three' : 'room-form-two'} ${isPublic ? '' : 'is-private'}`} onSubmit={submit}>
     <label className="form-field room-name-field"><span>{i18n.app.roomName.toUpperCase()}</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder={t('Өрөөний нэрээ оруулна уу', 'Enter a room name')} /></label>
-    <label className="form-field"><span>{i18n.app.maxPlayers.toUpperCase()}</span><select value={maxPlayers} onChange={(event) => setMaxPlayers(Number(event.target.value))}>{game.sizes.map((count) => <option key={count} value={count}>{t(`${count} тоглогч`, `${count} players`)}</option>)}</select></label>
-    {gameType === 'whoami' && <label className="form-field"><span>{i18n.whoAmI.rounds.toUpperCase()}</span><select value={rounds} onChange={(event) => setRounds(Number(event.target.value))}>{WHOAMI_ROUND_CHOICES.map((count) => <option key={count} value={count}>{i18n.whoAmI.roundsCount(count)}</option>)}</select></label>}
-    <label className="form-field"><span>{t(`ЯРИХ ХЭЛ`, `ROOM LANGUAGE`)}</span><select value={language} onChange={(event) => setLanguage(event.target.value as Lang)}>{ROOM_LANGS.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}</select></label>
+    <label className="form-field room-pick"><span>{i18n.app.maxPlayers.toUpperCase()}</span><select value={maxPlayers} onChange={(event) => setMaxPlayers(Number(event.target.value))}>{game.sizes.map((count) => <option key={count} value={count}>{t(`${count} тоглогч`, `${count} players`)}</option>)}</select></label>
+    {gameType === 'whoami' && <label className="form-field room-pick"><span>{i18n.whoAmI.rounds.toUpperCase()}</span><select value={rounds} onChange={(event) => setRounds(Number(event.target.value))}>{WHOAMI_ROUND_CHOICES.map((count) => <option key={count} value={count}>{i18n.whoAmI.roundsCount(count)}</option>)}</select></label>}
+    <label className="form-field room-pick"><span>{t(`ЯРИХ ХЭЛ`, `ROOM LANGUAGE`)}</span><select value={language} onChange={(event) => setLanguage(event.target.value as Lang)}>{ROOM_LANGS.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}</select></label>
     <div className="private-setting"><span><b>{t(`Нийтэд нээлттэй`, `Public room`)}</b><small>{isPublic ? t('Өрөөний жагсаалтад харагдана, хэн ч нэгдэнэ', 'Listed in the room list; anyone can join') : t('Зөвхөн кодоор нэгдэнэ, нууц үг тавьж болно', 'Join by code only; you can set a password')}</small></span><button type="button" role="switch" aria-checked={isPublic} aria-label={t('Нийтэд нээлттэй өрөө', 'Public room')} className={`toggle ${isPublic ? 'toggle-on' : ''}`} onClick={() => setIsPublic((value) => !value)}><i /></button></div>
     {!isPublic && <label className="form-field password-field"><span>{t(`ӨРӨӨНИЙ НУУЦ ҮГ `, `ROOM PASSWORD `)}<small>{t(`СОНГОЛТТОЙ`, `OPTIONAL`)}</small></span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} maxLength={32} placeholder={t('Нууц үггүй орж болно', 'Leave empty for no password')} autoComplete="new-password" /></label>}
     {error && <p className="form-error" role="alert">{error}</p>}
@@ -678,13 +679,14 @@ export function LobbyView({ room, seats, roomCode, userId, copied, busy, onCopy,
             <div className="room-code"><span>{i18n.app.roomCode.toUpperCase()}</span><strong>{roomCode}</strong><button aria-label={t('Өрөөний код хуулах', 'Copy room code')} title={t('Өрөөний код хуулах', 'Copy room code')} onClick={onCopy}>{copied ? <Check size={16} /> : <Clipboard size={16} />}</button></div>
           </div>
           <div className="lobby-toolbar"><span><Users size={14} />{t(` ТОГЛОГЧИД `, ` PLAYERS `)}<b>{String(seats.length).padStart(2, '0')}</b> <span className="muted">/ {room.max_players}</span></span><span className="room-visibility"><span className="room-lang-badge"><Languages size={10} />{` ${roomLangName(room.language).toUpperCase()}`}</span>{room.is_private ? t('ХУВИЙН · ЗӨВХӨН КОДООР', 'PRIVATE · CODE ONLY') : t('НИЙТЭД НЭЭЛТТЭЙ', 'PUBLIC')}</span></div>
-          <div className="player-grid">
+          {/* Taken seats and empty slots; on a short screen the grid scrolls and a cue counts what is below. */}
+          <ScrollCue className="player-grid" wrapClassName="lobby-seats" label={i18n.app.moreSeats}>
             {seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={seat.user_id === userId}
               onRemoveBot={isHost && seat.is_bot ? () => { void onRun('bot-remove', { seat: seat.seat }); } : undefined} busy={busy} onProfile={() => onProfileSeat(seat)} />)}
             {Array.from({ length: emptySlots }, (_, index) => isHost && botsAllowed
               ? <button type="button" className="invite-slot add-bot-slot" key={`slot-${index}`} disabled={busy} onClick={() => { void onRun('bot-add'); }}><Bot size={20} /><small>{t(`БОТ НЭМЭХ`, `ADD BOT`)}</small></button>
               : <div className="invite-slot" key={`slot-${index}`}><span>+</span><small>{t(`СУЛ СУУДАЛ`, `EMPTY SEAT`)}</small></div>)}
-          </div>
+          </ScrollCue>
           {whoAmI
             ? <WhoAmIRulesCard settings={room.settings} isHost={isHost} busy={busy} onEdit={() => setRulesOpen(true)} />
             : <MafiaRulesCard settings={room.settings} players={seats.length} isHost={isHost} busy={busy} onEdit={() => setRulesOpen(true)} />}
