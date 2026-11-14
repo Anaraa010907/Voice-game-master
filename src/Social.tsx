@@ -355,6 +355,8 @@ export function useLongPress(onLongPress: () => void, delay = 450) {
   const timer = useRef<number | null>(null);
   const fired = useRef(false);
   const clear = () => { if (timer.current !== null) window.clearTimeout(timer.current); timer.current = null; };
+  // A row that unmounts mid-press (a new phase) must not open the gift picker afterwards.
+  useEffect(() => () => { if (timer.current !== null) window.clearTimeout(timer.current); }, []);
   return {
     fired,
     handlers: {
