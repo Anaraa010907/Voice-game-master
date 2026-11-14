@@ -168,11 +168,15 @@ export function GiftLayer({ roomCode }: { roomCode: string }) {
   }, [showing]);
 
   if (!showing) return null;
-  const item = items.find((entry) => entry.key === showing.gift_key);
-  return <div className="gift-layer" aria-live="polite" key={showing.id}>
+  return <GiftPop key={showing.id} from={showing.from_name} to={showing.to_name} item={items.find((entry) => entry.key === showing.gift_key)} />;
+}
+
+/** One gift popping up over the table: the burst, the big icon and who gave it to whom (also used by the server-free demo). */
+export function GiftPop({ from, to, item }: { from: string; to: string; item?: Pick<ShopItem, 'icon' | 'name'> }) {
+  return <div className="gift-layer" aria-live="polite">
     <div className="gift-burst" aria-hidden="true">{Array.from({ length: 12 }, (_, index) => <i key={index} style={{ ['--i' as string]: index }} />)}</div>
     <div className="gift-big" aria-hidden="true">{item?.icon || '🎁'}</div>
-    <p className="gift-caption"><span><b>{showing.from_name}</b> → <b>{showing.to_name}</b></span><small>{item?.name ?? t('Бэлэг', 'A gift')}{t(` илгээлээ`, ` sent`)}</small></p>
+    <p className="gift-caption"><span><b>{from}</b> → <b>{to}</b></span><small>{item?.name ?? t('Бэлэг', 'A gift')}{t(` илгээлээ`, ` sent`)}</small></p>
   </div>;
 }
 
@@ -185,10 +189,13 @@ const GIFT_TABS: { key: GiftTab; label: string }[] = [{ key: 'gift', label: t('�
  * The gift grid. Looks (frames, nameplates, name borders, backdrops: given to a friend to keep) are offered only outside a game;
  * `onSend` gets the item so the caller decides how it is delivered.
  */
-export function GiftPicker({ targetName, allowCosmetics, busy, note, onBack, onSend }: {
+export function GiftPicker({ targetName, allowCosmetics, busy, note, onBack, onSend, items: given }: {
   targetName: string; allowCosmetics: boolean; busy: boolean; note: string; onBack?: () => void; onSend: (item: ShopItem) => void;
+  /** The catalogue to offer instead of the shop's (the server-free demo has no shop to load). */
+  items?: ShopItem[];
 }) {
-  const items = useShopItems();
+  const shop = useShopItems();
+  const items = given ?? shop;
   const { wallet } = useMyWallet();
   const free = useFreeShopping();
   const [tab, setTab] = useState<GiftTab>('gift');
@@ -230,14 +237,17 @@ export async function sendFriendGift(to: string, item: ShopItem) {
   return error ? failure(error) : '';
 }
 
-/** Tap a player: their profile, a gift for them (everyone sees it), a friend request or a report to the admin. */
-export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, notify }: {
-  seat: RoomSeat; roomCode: string; myUserId: string; inGame: boolean; onClose: () => void; notify: NotifyFn;
+/**
+ * Tap a player: their profile, a gift for them (everyone sees it), a friend request or a report to the admin.
+ * `startWith="gift"` opens straight on the gift picker (a long press on a Who Am I seat, or its gift button).
+ */
+export function PlayerCardModal({ seat, roomCode, myUserId, inGame, onClose, notify, startWith = 'card' }: {
+  seat: RoomSeat; roomCode: string; myUserId: string; inGame: boolean; onClose: () => void; notify: NotifyFn; startWith?: 'card' | 'gift';
 }) {
   const items = useShopItems();
   const [card, setCard] = useState<Card | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [view, setView] = useState<'card' | 'gift' | 'report'>('card');
+  const [view, setView] = useState<'card' | 'gift' | 'report'>(() => (startWith === 'gift' && seat.user_id !== myUserId && !seat.is_bot ? 'gift' : 'card'));
   const [reason, setReason] = useState(REPORT_REASONS[0]);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);

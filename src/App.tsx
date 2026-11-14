@@ -588,16 +588,21 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
   const { room, seats, loaded, missing, error, reload } = useRoom(roomCode);
   const [busy, setBusy] = useState(false);
   const [profileSeat, setProfileSeat] = useState<RoomSeat | null>(null);
+  const [profileView, setProfileView] = useState<'card' | 'gift'>('card');
   const mine = seats.find((seat) => seat.user_id === userId);
-  /** Opens a seated player's card by seat number (games) or seat row (lobby). */
-  const openProfile = useCallback((seatNumber: number) => {
+  /** Opens a seated player's card by seat number (games) or seat row (lobby); `gift` opens it on the gift picker. */
+  const openSeat = useCallback((seatNumber: number, view: 'card' | 'gift') => {
     const seat = seats.find((entry) => entry.seat === seatNumber);
-    if (seat) setProfileSeat(seat);
+    if (seat) { setProfileView(view); setProfileSeat(seat); }
   }, [seats]);
+  const openProfile = useCallback((seatNumber: number) => openSeat(seatNumber, 'card'), [openSeat]);
+  const openGift = useCallback((seatNumber: number) => openSeat(seatNumber, 'gift'), [openSeat]);
+  const openLobbySeat = useCallback((seat: RoomSeat) => { setProfileView('card'); setProfileSeat(seat); }, []);
   // Gifts pop up for the whole table; a tapped player's card sits on top of any screen in the room.
   const overlays = <>
     <GiftLayer roomCode={roomCode} />
-    {profileSeat && <PlayerCardModal seat={profileSeat} roomCode={roomCode} myUserId={userId} inGame={room?.status === 'playing'} notify={onNotice} onClose={() => setProfileSeat(null)} />}
+    {profileSeat && <PlayerCardModal key={`${profileSeat.user_id}:${profileView}`} seat={profileSeat} roomCode={roomCode} myUserId={userId} inGame={room?.status === 'playing'} notify={onNotice}
+      startWith={profileView} onClose={() => setProfileSeat(null)} />}
   </>;
 
   useEffect(() => {
@@ -630,14 +635,14 @@ function RoomScreen({ roomCode, userId, copied, onCopy, onLeft, onNotice, fullsc
   if (!room || !mine) return <div className="inner-screen"><TopBar title={t('ӨРӨӨ', 'ROOM')} subtitle={error ? t('АЛДАА', 'ERROR') : t('АЧААЛЖ БАЙНА', 'LOADING')} onBack={leave} /><div className="room-loading">{error ?? t('Өрөөнд холбогдож байна…', 'Connecting to the room…')}</div></div>;
 
   if (room.status !== 'lobby' && room.game_type === 'whoami') {
-    return <><WhoAmIScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => { void run('rematch'); }} onNotice={onNotice} onProfile={openProfile} />{overlays}</>;
+    return <><WhoAmIScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => { void run('rematch'); }} onNotice={onNotice} onProfile={openProfile} onGift={openGift} />{overlays}</>;
   }
   if (room.status !== 'lobby') {
     return <><GameScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={room.host_id === userId} seats={seats} onLeave={leave} onRematch={() => run('rematch')} onNotice={onNotice} fullscreen={fullscreen} onProfile={openProfile} />{overlays}</>;
   }
 
   return <LobbyView room={room} seats={seats} roomCode={roomCode} userId={userId} copied={copied} busy={busy} onCopy={onCopy} onLeave={leave} onRun={run}
-    onProfileSeat={setProfileSeat} onInvite={() => setInviteOpen(true)}>
+    onProfileSeat={openLobbySeat} onInvite={() => setInviteOpen(true)}>
     {overlays}
     {inviteOpen && <InviteFriendsModal roomCode={roomCode} friends={friends} onClose={() => setInviteOpen(false)} notify={onNotice} />}
   </LobbyView>;
@@ -735,7 +740,7 @@ function AdminWatch({ roomCode, userId, notify, fullscreen, onExit }: { roomCode
         <div className="player-grid">{seats.map((seat) => <SeatCard key={seat.user_id} seat={seat} isHost={seat.user_id === room.host_id} isMe={false} onProfile={() => undefined} />)}</div></div>
       {banner}</div>;
   }
-  if (room.game_type === 'whoami') return <><WhoAmIWatch roomCode={roomCode} roomName={room.name} userId={userId} onExit={onExit} />{banner}</>;
+  if (room.game_type === 'whoami') return <><WhoAmIWatch roomCode={roomCode} roomName={room.name} userId={userId} seats={seats} onExit={onExit} />{banner}</>;
   return <><GameScreen roomCode={roomCode} roomName={room.name} userId={userId} isHost={false} seats={seats} onLeave={onExit} onRematch={() => undefined} onNotice={notify} fullscreen={fullscreen} onProfile={() => undefined} watching={{ roles }} />{banner}</>;
 }
 

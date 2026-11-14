@@ -2215,6 +2215,9 @@
 .pcard-subhead { display: flex; align-items: center; gap: 8px; padding-right: 30px; }
 .pcard-subhead b { flex: 1; color: #f1e8da; font-size: 14px; }
 .viewport .game-frame .pcard-subhead .icon-button { width: 28px; height: 28px; min-height: 0; }
+/* The close and back buttons stay small but take a 44 px tap. */
+.viewport .game-frame .pcard-subhead .icon-button { position: relative; }
+.viewport .game-frame :is(.pcard-close, .pcard-subhead .icon-button)::after { content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
 
 .gift-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .viewport .game-frame .gift-grid button {
@@ -2688,6 +2691,9 @@
   box-shadow: 0 0 10px rgba(8, 9, 14, .6);
 }
 .viewport .game-frame .has-nameplate .game-player-target { filter: drop-shadow(0 0 3px #000) drop-shadow(0 0 3px #000); }
+/* A lobby seat's status pill stays slim, so a short name beside it is not cut ("ХҮЛЭЭЖ БАЙНА" on a 206 px seat). */
+.viewport .game-frame .lobby-screen .player-grid .compact-card.has-nameplate { column-gap: 6px; }
+.viewport .game-frame .lobby-screen .player-grid .compact-card.has-nameplate > .player-status { padding: 2px 5px; letter-spacing: .3px; white-space: nowrap; }
 .viewport .game-frame .profile-identity-row.has-nameplate::before { background-position: 0 0, right 40%; }
 
 .viewport .game-frame .plate-preview {

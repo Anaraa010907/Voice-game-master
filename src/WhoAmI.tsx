@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowLeft, Check, ChevronRight, CircleHelp, Clock3, Crown, Flag, HelpCircle, Mic, SkipForward, ThumbsDown, ThumbsUp, Trophy, X } from 'lucide-react';
-import Avatar from './Avatar';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { ArrowLeft, Check, ChevronRight, CircleHelp, Clock3, Crown, Flag, Gift, HelpCircle, Mic, SkipForward, ThumbsDown, ThumbsUp, Trophy, X } from 'lucide-react';
+import Avatar, { RowBorder, nameplate, rowBorderClass } from './Avatar';
 import { i18n } from './i18n';
 import { isEnglish } from './lang';
 import { MatchRewardBanner } from './MatchReward';
 import { callGame, useCountdown, useGame, type NotifyFn, type RoomSeat } from './multiplayer';
 import { ScrollCue } from './ScrollCue';
 import { playSfx } from './sfx';
+import { useLongPress } from './Social';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
 import { WHO_AM_I_PACK } from './whoAmIContent';
 import { WHOAMI_HEARTBEAT_MS } from './whoAmIEngine';
@@ -37,6 +38,29 @@ export function lastResultLine(result: WhoAmILastResult | null, players: WhoAmIP
   return w().lastPass[result.reason](name);
 }
 
+/**
+ * Each seat's shop looks, by seat number (the player id in the Who Am I views): avatar frame, nameplate and
+ * name border, from the seat's game_room_players row, as on Mafia seats. They are the same for every viewer and
+ * say nothing about anyone's identity.
+ */
+export type SeatLooks = Record<number, { frame?: string | null; plate?: string | null; border?: string | null }>;
+export const seatLooks = (seats: RoomSeat[]): SeatLooks =>
+  Object.fromEntries(seats.map((seat) => [seat.seat, { frame: seat.frame_key, plate: seat.nameplate_key, border: seat.border_key }]));
+
+/** What a seat's looks add to a row or card: the nameplate's class and picture, the name border's class. */
+function lookOf(looks: SeatLooks | undefined, id: number) {
+  const look = looks?.[id];
+  const plate = nameplate(look?.plate);
+  return { frame: look?.frame ?? null, border: look?.border ?? null, plateClass: plate.className, plateStyle: plate.style, borderClass: rowBorderClass(look?.border) };
+}
+
+/** Tap opens the player's card (profile, gift, friend); a long press goes straight to the gift picker when they can get one. */
+function usePlayerPress(id: number, onProfile?: (seat: number) => void, onGift?: (seat: number) => void) {
+  const press = useLongPress(() => (onGift ?? onProfile)?.(id));
+  const onClick = () => { if (press.fired.current) { press.fired.current = false; return; } onProfile?.(id); };
+  return onProfile || onGift ? { onClick, ...press.handlers } : {};
+}
+
 export type WhoAmITableProps = {
   game: WhoAmIPublicView;
   me: WhoAmIPrivateView;
@@ -48,6 +72,10 @@ export type WhoAmITableProps = {
   onLeave: () => void;
   onRematch: () => void;
   onProfile?: (seat: number) => void;
+  /** Opens the gift picker for a seat (long press on a player, or the gift button). Left out, there are no gifts (an admin watching). */
+  onGift?: (seat: number) => void;
+  /** Avatar frames, nameplates and name borders by seat. */
+  looks?: SeatLooks;
   /** Extra content under the results heading (the coin reward). */
   resultsExtra?: ReactNode;
   /** Small banner shown over the table (the demo mode uses it). */
@@ -59,9 +87,10 @@ export type WhoAmITableProps = {
  * the server (or to the local engine in the demo). The viewer's own identity is never in `me` while
  * they still guess; the server leaves it out.
  */
-export function WhoAmITable({ game, me, roomName, isHost, busy, secondsLeft, onAction, onLeave, onRematch, onProfile, resultsExtra, banner }: WhoAmITableProps) {
+export function WhoAmITable({ game, me, roomName, isHost, busy, secondsLeft, onAction, onLeave, onRematch, onProfile, onGift, looks, resultsExtra, banner }: WhoAmITableProps) {
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [giveUpOpen, setGiveUpOpen] = useState(false);
+  const [giftOpen, setGiftOpen] = useState(false);
   const [guessOpen, setGuessOpen] = useState(false);
   const [guessText, setGuessText] = useState('');
   const self = game.players.find((player) => player.id === me.viewerId);
@@ -69,12 +98,16 @@ export function WhoAmITable({ game, me, roomName, isHost, busy, secondsLeft, onA
   const iAmActive = game.activeId === me.viewerId;
   const iCanVote = game.voterIds.includes(me.viewerId);
   const identityOf = (player: WhoAmIPublicPlayer) => me.identities[player.id] ?? player.identity ?? null;
+  // Gifts go to the other people still at the table (the server refuses a gift to oneself or to an empty seat).
+  const giftable = onGift ? game.players.filter((player) => player.id !== me.viewerId && !player.bot && player.status !== 'left') : [];
+  const giftFor = (player: WhoAmIPublicPlayer) => (giftable.includes(player) ? onGift : undefined);
 
   // A fresh turn closes the guess form.
   useEffect(() => { setGuessOpen(false); setGuessText(''); }, [game.activeId, game.phase]);
 
   if (game.phase === 'results') {
-    return <WhoAmIResults game={game} me={me} roomName={roomName} isHost={isHost} onReplay={onRematch} onMenu={onLeave} extra={resultsExtra} banner={banner} />;
+    return <WhoAmIResults game={game} me={me} roomName={roomName} isHost={isHost} onReplay={onRematch} onMenu={onLeave} extra={resultsExtra} banner={banner}
+      looks={looks} onProfile={onProfile} giftFor={giftFor} />;
   }
 
   const sendGuess = (event: FormEvent<HTMLFormElement>) => {
@@ -96,7 +129,7 @@ export function WhoAmITable({ game, me, roomName, isHost, busy, secondsLeft, onA
         <p>{w().revealHint}</p>
       </div>
       <ScrollCue className={`whoami-reveal-grid count-${game.players.length}`} wrapClassName="whoami-reveal-scroll" label={w().morePlayers} focusKey={me.viewerId}>
-        {game.players.map((player) => <IdentityCard key={player.id} player={player} identity={identityOf(player)} isMe={player.id === me.viewerId} onProfile={onProfile} />)}
+        {game.players.map((player) => <IdentityCard key={player.id} player={player} identity={identityOf(player)} isMe={player.id === me.viewerId} looks={looks} onProfile={onProfile} onGift={giftFor(player)} />)}
       </ScrollCue>
       <div className="whoami-reveal-actions">
         {self?.ready
@@ -163,7 +196,7 @@ export function WhoAmITable({ game, me, roomName, isHost, busy, secondsLeft, onA
     panel = <section className="whoami-stage">
       <div className="whoami-spotlight">
         <span className="whoami-kicker">{turnLine}</span>
-        <IdentityCard player={active} identity={identityOf(active)} isMe={iAmActive} large onProfile={onProfile} />
+        <IdentityCard player={active} identity={identityOf(active)} isMe={iAmActive} large looks={looks} onProfile={onProfile} onGift={giftFor(active)} />
         <div className="whoami-counters"><span>{w().turnQuestions(game.turnQuestions, game.maxQuestionsPerTurn)}</span><span>{w().totalQuestions(active.questions)}</span></div>
       </div>
       <div className="whoami-actions">{actions}</div>
@@ -178,6 +211,7 @@ export function WhoAmITable({ game, me, roomName, isHost, busy, secondsLeft, onA
       <div className="whoami-top-actions">
         {isHost && game.phase !== 'reveal' && <button type="button" className="whoami-chip-button" disabled={busy} onClick={() => onAction({ type: 'hostSkip' })} title={w().hostSkip}><SkipForward size={13} /> {w().hostSkip}</button>}
         {self?.status === 'playing' && game.phase !== 'reveal' && <button type="button" className="whoami-chip-button" disabled={busy} onClick={() => setGiveUpOpen(true)}><Flag size={13} /> {w().giveUp}</button>}
+        {giftable.length > 0 && <button type="button" className="whoami-chip-button whoami-gift-button" onClick={() => setGiftOpen(true)} aria-label={w().sendGift} title={w().sendGift}><Gift size={13} /> <span>{w().gift}</span></button>}
         <button type="button" className="game-leave-button" onClick={() => setLeaveOpen(true)}><ArrowLeft size={14} /> {w().leave}</button>
       </div>
     </header>
@@ -189,11 +223,32 @@ export function WhoAmITable({ game, me, roomName, isHost, busy, secondsLeft, onA
       </div>}
       {game.phase !== 'reveal' && <ScrollCue as="aside" className="whoami-players" wrapClassName="whoami-players-scroll" ariaLabel={i18n.game.table} label={w().morePlayers} focusKey={game.activeId}>
         {game.players.map((player) => <PlayerRow key={player.id} player={player} identity={identityOf(player)} isMe={player.id === me.viewerId} isActive={player.id === game.activeId}
-          voted={game.votedIds.includes(player.id)} onProfile={onProfile} />)}
+          voted={game.votedIds.includes(player.id)} looks={looks} onProfile={onProfile} onGift={giftFor(player)} />)}
       </ScrollCue>}
     </div>
     {giveUpOpen && <Confirm title={w().giveUpTitle} body={w().giveUpBody} confirm={w().giveUp} onCancel={() => setGiveUpOpen(false)} onConfirm={() => { setGiveUpOpen(false); onAction({ type: 'giveUp' }); }} />}
     {leaveOpen && <Confirm title={w().leaveTitle} body={w().leaveBody} confirm={w().leave} onCancel={() => setLeaveOpen(false)} onConfirm={onLeave} />}
+    {giftOpen && onGift && <GiftTargets players={giftable} looks={looks} onClose={() => setGiftOpen(false)} onPick={(id) => { setGiftOpen(false); onGift(id); }} />}
+  </div>;
+}
+
+/** The gift button: who gets it. Picking a player opens the same gift picker as tapping them. */
+function GiftTargets({ players, looks, onPick, onClose }: { players: WhoAmIPublicPlayer[]; looks?: SeatLooks; onPick: (id: number) => void; onClose: () => void }) {
+  return <div className="game-modal-backdrop" onClick={onClose}>
+    <section className="game-modal whoami-gift-targets" role="dialog" aria-modal="true" aria-labelledby="whoami-gift-title" onClick={(event) => event.stopPropagation()}>
+      <button type="button" className="icon-button whoami-modal-close" onClick={onClose} aria-label={w().close}><X size={15} /></button>
+      <h2 id="whoami-gift-title"><Gift size={17} /> {w().giftTitle}</h2>
+      <p>{w().giftHint}</p>
+      <div className="whoami-gift-list">{players.map((player) => {
+        const look = lookOf(looks, player.id);
+        return <button type="button" key={player.id} className={`whoami-gift-target ${look.plateClass} ${look.borderClass}`} style={look.plateStyle} onClick={() => onPick(player.id)}>
+          <RowBorder borderKey={look.border} />
+          <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials} frame={look.frame} />
+          <b>{player.name}</b>
+          <Gift className="whoami-gift-target-icon" size={14} aria-hidden="true" />
+        </button>;
+      })}</div>
+    </section>
   </div>;
 }
 
@@ -210,11 +265,17 @@ function Confirm({ title, body, confirm, onCancel, onConfirm }: { title: string;
 }
 
 /** A player with the identity everyone else sees. Their own card shows only "?" and the category. */
-function IdentityCard({ player, identity, isMe, large = false, onProfile }: { player: WhoAmIPublicPlayer; identity: WhoAmIIdentity | null; isMe: boolean; large?: boolean; onProfile?: (seat: number) => void }) {
+function IdentityCard({ player, identity, isMe, large = false, looks, onProfile, onGift }: {
+  player: WhoAmIPublicPlayer; identity: WhoAmIIdentity | null; isMe: boolean; large?: boolean; looks?: SeatLooks; onProfile?: (seat: number) => void; onGift?: (seat: number) => void;
+}) {
   const category = categoryLabel(player.categoryId, player.categoryName);
-  return <button type="button" className={`whoami-card ${large ? 'is-large' : ''} ${isMe ? 'is-me' : ''} status-${player.status}`} onClick={() => onProfile?.(player.id)} data-cue-focus={(isMe && !large) || undefined}>
-    <span className="whoami-card-who">
-      <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}>{player.host && <i className="host-badge" title={w().host}><Crown size={9} /></i>}<VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
+  const look = lookOf(looks, player.id);
+  const press = usePlayerPress(player.id, onProfile, onGift);
+  // The name border goes round the whole card; the nameplate sits behind the name strip at its top.
+  return <button type="button" className={`whoami-card ${large ? 'is-large' : ''} ${isMe ? 'is-me' : ''} status-${player.status} ${look.borderClass}`} {...press} data-cue-focus={(isMe && !large) || undefined}>
+    <RowBorder borderKey={look.border} />
+    <span className={`whoami-card-who ${look.plateClass}`} style={look.plateStyle}>
+      <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials} frame={look.frame}>{player.host && <i className="host-badge" title={w().host}><Crown size={9} /></i>}<VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
       <b>{player.name}{isMe && <small>{w().you}</small>}</b>
     </span>
     <span className="whoami-card-identity">{identity ? identityName(identity) : <><i className="whoami-mystery">?</i><em>{w().hidden}</em></>}</span>
@@ -223,11 +284,16 @@ function IdentityCard({ player, identity, isMe, large = false, onProfile }: { pl
   </button>;
 }
 
-function PlayerRow({ player, identity, isMe, isActive, voted, onProfile }: { player: WhoAmIPublicPlayer; identity: WhoAmIIdentity | null; isMe: boolean; isActive: boolean; voted: boolean; onProfile?: (seat: number) => void }) {
+function PlayerRow({ player, identity, isMe, isActive, voted, looks, onProfile, onGift }: {
+  player: WhoAmIPublicPlayer; identity: WhoAmIIdentity | null; isMe: boolean; isActive: boolean; voted: boolean; looks?: SeatLooks; onProfile?: (seat: number) => void; onGift?: (seat: number) => void;
+}) {
   const category = categoryLabel(player.categoryId, player.categoryName);
+  const look = lookOf(looks, player.id);
+  const press = usePlayerPress(player.id, onProfile, onGift);
   // A known identity gets the whole second line (the category is in the tooltip); a hidden one shows its category.
-  return <button type="button" className={`whoami-player ${isActive ? 'is-active' : ''} ${isMe ? 'is-me' : ''} status-${player.status}`} onClick={() => onProfile?.(player.id)} title={category} data-cue-focus={isActive || undefined}>
-    <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}>{player.host && <i className="host-badge" title={w().host}><Crown size={9} /></i>}<VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
+  return <button type="button" className={`whoami-player ${isActive ? 'is-active' : ''} ${isMe ? 'is-me' : ''} status-${player.status} ${look.plateClass} ${look.borderClass}`} style={look.plateStyle} {...press} title={category} data-cue-focus={isActive || undefined}>
+    <RowBorder borderKey={look.border} />
+    <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials} frame={look.frame}>{player.host && <i className="host-badge" title={w().host}><Crown size={9} /></i>}<VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
     <span className="whoami-player-copy">
       <b>{player.name}{isMe && <small>{w().you}</small>}</b>
       {identity ? <span className="whoami-player-identity">{identityName(identity)}</span> : <span className="whoami-player-identity is-hidden">? · {category}</span>}
@@ -237,7 +303,10 @@ function PlayerRow({ player, identity, isMe, isActive, voted, onProfile }: { pla
   </button>;
 }
 
-function WhoAmIResults({ game, me, roomName, isHost, onReplay, onMenu, extra, banner }: { game: WhoAmIPublicView; me: WhoAmIPrivateView; roomName: string; isHost: boolean; onReplay: () => void; onMenu: () => void; extra?: ReactNode; banner?: ReactNode }) {
+function WhoAmIResults({ game, me, roomName, isHost, onReplay, onMenu, extra, banner, looks, onProfile, giftFor }: {
+  game: WhoAmIPublicView; me: WhoAmIPrivateView; roomName: string; isHost: boolean; onReplay: () => void; onMenu: () => void; extra?: ReactNode; banner?: ReactNode;
+  looks?: SeatLooks; onProfile?: (seat: number) => void; giftFor: (player: WhoAmIPublicPlayer) => ((seat: number) => void) | undefined;
+}) {
   const ranking = [...game.players].sort((a, b) => b.points - a.points || (a.place ?? 99) - (b.place ?? 99) || a.questions - b.questions || a.id - b.id);
   const winners = game.players.filter((player) => game.winners.includes(player.id));
   const iWon = game.winners.includes(me.viewerId);
@@ -250,15 +319,8 @@ function WhoAmIResults({ game, me, roomName, isHost, onReplay, onMenu, extra, ba
       {extra}
     </div>
     <ScrollCue as="ol" className="whoami-ranking" wrapClassName="whoami-ranking-scroll" label={w().morePlayers}>
-      {ranking.map((player, index) => <li key={player.id} className={`${game.winners.includes(player.id) ? 'is-winner' : ''} ${player.id === me.viewerId ? 'is-me' : ''}`}>
-        <span className="whoami-rank">{index + 1}</span>
-        <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials}><VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
-        <span className="whoami-ranking-copy">
-          <b>{player.name}{player.id === me.viewerId && <small>{w().you}</small>}{player.status !== 'playing' && <i className={`whoami-status is-${player.status}`}>{w().status[player.status]}</i>}</b>
-          <span><span className="whoami-ranking-identity">{player.identity ? identityName(player.identity) : '?'}</span> <small className="whoami-ranking-questions">· {w().questionsUsed(player.questions)}</small></span>
-        </span>
-        <span className="whoami-ranking-score"><b>{w().points(player.points)}</b><small>{w().breakdown(player.solveScore, player.votesCast)}</small></span>
-      </li>)}
+      {ranking.map((player, index) => <RankingRow key={player.id} player={player} place={index + 1} winner={game.winners.includes(player.id)} isMe={player.id === me.viewerId}
+        looks={looks} onProfile={onProfile} onGift={giftFor(player)} />)}
     </ScrollCue>
     <div className="whoami-results-actions">
       <button type="button" className="secondary-button" onClick={onMenu}><ArrowLeft size={14} /> {w().mainMenu}</button>
@@ -267,16 +329,36 @@ function WhoAmIResults({ game, me, roomName, isHost, onReplay, onMenu, extra, ba
   </main>;
 }
 
+/** A results row. The whole row is one tap target (profile, or a gift on a long press) over its text. */
+function RankingRow({ player, place, winner, isMe, looks, onProfile, onGift }: {
+  player: WhoAmIPublicPlayer; place: number; winner: boolean; isMe: boolean; looks?: SeatLooks; onProfile?: (seat: number) => void; onGift?: (seat: number) => void;
+}) {
+  const look = lookOf(looks, player.id);
+  const press = usePlayerPress(player.id, onProfile, onGift);
+  return <li className={`${winner ? 'is-winner' : ''} ${isMe ? 'is-me' : ''} ${look.plateClass} ${look.borderClass}`} style={look.plateStyle}>
+    <RowBorder borderKey={look.border} />
+    {onProfile && <button type="button" className="whoami-ranking-hit" aria-label={w().profile(player.name)} {...press} />}
+    <span className="whoami-rank">{place}</span>
+    <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials} frame={look.frame}><VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
+    <span className="whoami-ranking-copy">
+      <b>{player.name}{isMe && <small>{w().you}</small>}{player.status !== 'playing' && <i className={`whoami-status is-${player.status}`}>{w().status[player.status]}</i>}</b>
+      <span><span className="whoami-ranking-identity">{player.identity ? identityName(player.identity) : '?'}</span> <small className="whoami-ranking-questions">· {w().questionsUsed(player.questions)}</small></span>
+    </span>
+    <span className="whoami-ranking-score"><b>{w().points(player.points)}</b><small>{w().breakdown(player.solveScore, player.votesCast)}</small></span>
+  </li>;
+}
+
 /** The live Who Am I table for a seated player: server views, the phase clock, voice open for everyone. */
-export default function WhoAmIScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice, onProfile }: {
+export default function WhoAmIScreen({ roomCode, roomName, userId, isHost, seats, onLeave, onRematch, onNotice, onProfile, onGift }: {
   roomCode: string; roomName: string; userId: string; isHost: boolean; seats: RoomSeat[];
-  onLeave: () => void; onRematch: () => void; onNotice: NotifyFn; onProfile: (seat: number) => void;
+  onLeave: () => void; onRematch: () => void; onNotice: NotifyFn; onProfile: (seat: number) => void; onGift: (seat: number) => void;
 }) {
   const { publicView: game, privateView: me, deadline, reload } = useGame<WhoAmIPublicView, WhoAmIPrivateView>(roomCode, userId);
   const secondsLeft = useCountdown(deadline);
   const [busy, setBusy] = useState(false);
   const tickedFor = useRef<number | null>(null);
   const heardPhase = useRef<string | null>(null);
+  const looks = useMemo(() => seatLooks(seats), [seats]);
 
   useEffect(() => {
     const phase = game?.phase ?? null;
@@ -324,15 +406,16 @@ export default function WhoAmIScreen({ roomCode, roomName, userId, isHost, seats
 
   return <VoiceChatProvider roomCode={roomCode} userId={userId} seats={seats} phase={game.phase === 'results' ? 'results' : 'discussion'} alive isHost={isHost}>
     <WhoAmITable game={game} me={me} roomName={roomName} isHost={isHost} busy={busy} secondsLeft={secondsLeft} onAction={(action) => { void onAction(action); }}
-      onLeave={onLeave} onRematch={onRematch} onProfile={onProfile} resultsExtra={<MatchRewardBanner roomCode={roomCode} userId={userId} />} />
+      onLeave={onLeave} onRematch={onRematch} onProfile={onProfile} onGift={onGift} looks={looks} resultsExtra={<MatchRewardBanner roomCode={roomCode} userId={userId} />} />
   </VoiceChatProvider>;
 }
 
-/** An admin watching a Who Am I table: the public view only (hidden identities stay "?"), read only. */
-export function WhoAmIWatch({ roomCode, roomName, userId, onExit }: { roomCode: string; roomName: string; userId: string; onExit: () => void }) {
+/** An admin watching a Who Am I table: the public view only (hidden identities stay "?"), read only (no gifts). */
+export function WhoAmIWatch({ roomCode, roomName, userId, seats, onExit }: { roomCode: string; roomName: string; userId: string; seats: RoomSeat[]; onExit: () => void }) {
   const { publicView: game, deadline } = useGame<WhoAmIPublicView, WhoAmIPrivateView>(roomCode, userId);
   const secondsLeft = useCountdown(deadline);
+  const looks = useMemo(() => seatLooks(seats), [seats]);
   if (!game) return <div className="core-game"><div className="room-loading">{isEnglish ? 'Setting the table…' : 'Ширээ бэлдэж байна…'}</div></div>;
   return <WhoAmITable game={game} me={{ viewerId: 0, identities: {}, myVote: null }} roomName={roomName} isHost={false} busy secondsLeft={secondsLeft}
-    onAction={() => undefined} onLeave={onExit} onRematch={() => undefined} />;
+    onAction={() => undefined} onLeave={onExit} onRematch={() => undefined} looks={looks} />;
 }

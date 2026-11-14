@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState, type ComponentType } from 'react';
+import { X } from 'lucide-react';
 import type { LobbyViewProps } from './App';
 import { initialsOf } from './Avatar';
 import type { FullscreenState } from './fullscreen';
 import { i18n } from './i18n';
 import { isEnglish, t } from './lang';
 import type { NotifyFn, RoomInfo, RoomSeat } from './multiplayer';
+import { playSfx } from './sfx';
+import { GiftPicker, GiftPop, type ShopItem } from './Social';
 import { VoiceChatProvider } from './VoiceChat';
 import { DEMO_PHASES, DEMO_SEAT_COUNT, demoRequest, type DemoPhase, type DemoRequest } from './whoAmIDemoRequest';
-import { WhoAmITable } from './WhoAmI';
+import { WhoAmITable, seatLooks } from './WhoAmI';
 import { WHO_AM_I_PACK } from './whoAmIContent';
 import {
   activeWhoAmIPlayerId, applyWhoAmIAction, createSeededRandom, createWhoAmIGame, eligibleVoters, sanitizeWhoAmISettings, timeoutWhoAmI,
@@ -26,6 +29,9 @@ import {
  *   ?demo=game&phase=reveal|ask|answer|guess|results[&seat=3][&auto=1][&bar=0]
  *   any of the above with &players=3..10 for another table size (6 by default)
  *
+ * Seats wear shop looks (frames, nameplates, name borders) like real ones. Tapping a player, or the gift
+ * button, opens the real gift picker on a local catalogue; sending one pops it up here (nothing is bought).
+ *
  * Only in dev builds, or in any build that has no Supabase keys (so never on the live app). App.tsx
  * imports this file lazily behind DEMO_ENABLED, so keyed builds do not ship it (whoAmIDemoRequest.ts).
  */
@@ -39,6 +45,27 @@ const DEMO_COLORS = ['rose', 'violet', 'gold', 'teal', 'blue', 'plum', 'rose', '
 const ALL_DEMO_SEATS: WhoAmISeat[] = DEMO_NAMES.map((name, index) => ({ id: index + 1, name, initials: initialsOf(name), color: DEMO_COLORS[index], host: index === 0 }));
 /** The demo table: the first `players` seats (see whoAmIDemoRequest.ts). */
 const DEMO_SEATS = ALL_DEMO_SEATS.slice(0, demoRequest()?.players ?? DEMO_SEAT_COUNT);
+
+/** Shop looks per seat (keys from Avatar.tsx): painted, animated and plain frames, picture and plain plates, borders; seat 5 wears none. */
+const DEMO_LOOKS: Array<Pick<RoomSeat, 'frame_key' | 'nameplate_key' | 'border_key'>> = [
+  { frame_key: 'frame-gold-skull', nameplate_key: 'plate-royal-crown', border_key: 'border-gold' },
+  { frame_key: 'frame-ice', nameplate_key: 'plate-ice-crystal' },
+  { frame_key: 'frame-fire-dragon', border_key: 'border-neon' },
+  { frame_key: 'frame-khana', nameplate_key: 'plate-marble' },
+  {},
+  { frame_key: 'frame-butterfly', border_key: 'border-silver' },
+  { nameplate_key: 'plate-neon-alley', border_key: 'border-fire' },
+  { frame_key: 'frame-rose-night', nameplate_key: 'plate-paper' },
+  { frame_key: 'frame-silver', nameplate_key: 'plate-skull-king' },
+  { frame_key: 'frame-royal', border_key: 'border-royal' },
+];
+
+/** The shop's emoji gifts (as seeded in 20261028_shop_gifts_reports.sql), so the picker has something to show without a server. */
+const DEMO_GIFTS: ShopItem[] = ([
+  ['gift-rose', '🌹', 10, 'Сарнай', 'Rose'], ['gift-coffee', '☕', 20, 'Кофе', 'Coffee'], ['gift-clover', '🍀', 30, 'Азын навч', 'Lucky clover'],
+  ['gift-cake', '🎂', 50, 'Бялуу', 'Cake'], ['gift-hat', '🎩', 80, 'Мафи малгай', 'Mafia hat'], ['gift-diamond', '💎', 150, 'Алмаз', 'Diamond'],
+  ['gift-crown', '👑', 300, 'Титэм', 'Crown'], ['gift-car', '🏎️', 500, 'Спорт машин', 'Sports car'],
+] as const).map(([key, icon, price, mn, en], index) => ({ key, kind: 'gift', name: t(mn, en), description: '', icon, price, sort: index + 1, currency: 'coin', source: 'shop' }));
 
 const step = (state: WhoAmIState, id: number, action: WhoAmIAction) => applyWhoAmIAction(state, id, action).state;
 const asker = (state: WhoAmIState) => activeWhoAmIPlayerId(state)!;
@@ -111,6 +138,14 @@ export function WhoAmIDemo({ request, notify, lobby: Lobby }: DemoProps) {
   const [settings, setSettings] = useState<Record<string, unknown>>({ rounds: 5, categories: [], kidsSafe: false });
   const [mafiaSettings, setMafiaSettings] = useState<Record<string, unknown>>({});
   const [ready, setReady] = useState<Record<string, boolean>>({ 'demo-2': true, 'demo-3': true, 'demo-5': true });
+  const [giftTo, setGiftTo] = useState<number | null>(null);
+  const [gift, setGift] = useState<{ id: number; from: string; to: string; item: ShopItem } | null>(null);
+  useEffect(() => {
+    if (!gift) return;
+    playSfx('buy');
+    const timer = window.setTimeout(() => setGift(null), 3400);
+    return () => window.clearTimeout(timer);
+  }, [gift]);
 
   const stage = whoAmIStageKey(state);
   useEffect(() => {
@@ -151,7 +186,22 @@ export function WhoAmIDemo({ request, notify, lobby: Lobby }: DemoProps) {
     {mode !== 'lobby' && <button type="button" className={auto ? 'is-picked' : ''} onClick={() => setAuto((value) => !value)}>Auto {auto ? 'ON' : 'OFF'}</button>}
   </div>);
 
-  const seats: RoomSeat[] = useMemo(() => DEMO_SEATS.map((seat) => ({ user_id: `demo-${seat.id}`, seat: seat.id, display_name: seat.name, color: seat.color, ready: seat.id === 1 || ready[`demo-${seat.id}`] === true })), [ready]);
+  const seats: RoomSeat[] = useMemo(() => DEMO_SEATS.map((seat) => ({ user_id: `demo-${seat.id}`, seat: seat.id, display_name: seat.name, color: seat.color, ready: seat.id === 1 || ready[`demo-${seat.id}`] === true, ...DEMO_LOOKS[seat.id - 1] })), [ready]);
+  const looks = useMemo(() => seatLooks(seats), [seats]);
+
+  // The gift picker for a seat (never the viewer's own: the server refuses a gift to oneself), then the table's pop-up.
+  const openGift = (seat: number) => { if (seat !== viewer) setGiftTo(seat); };
+  const nameOf = (seat: number) => DEMO_SEATS.find((entry) => entry.id === seat)?.name ?? '?';
+  const gifts = <>
+    {giftTo !== null && <div className="game-modal-backdrop pcard-backdrop" onClick={() => setGiftTo(null)}>
+      <section className="game-modal pcard" role="dialog" aria-modal="true" aria-label={t(`${nameOf(giftTo)} — бэлэг`, `${nameOf(giftTo)} — gift`)} onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="icon-button pcard-close" onClick={() => setGiftTo(null)} aria-label={t('Хаах', 'Close')}><X size={15} /></button>
+        <GiftPicker targetName={nameOf(giftTo)} allowCosmetics={false} busy={false} items={DEMO_GIFTS} note={t('Бэлэг ширээн дээрх бүх хүнд харагдана.', 'Everyone at the table sees the gift.')}
+          onSend={(item) => { setGift({ id: Date.now(), from: nameOf(viewer), to: nameOf(giftTo), item }); setGiftTo(null); }} />
+      </section>
+    </div>}
+    {gift && <GiftPop key={gift.id} from={gift.from} to={gift.to} item={gift.item} />}
+  </>;
 
   if (mode === 'lobby') {
     const mafia = request.game === 'mafia';
@@ -169,7 +219,9 @@ export function WhoAmIDemo({ request, notify, lobby: Lobby }: DemoProps) {
     };
     return <>
       <Lobby room={room} seats={seats} roomCode={room.room_code} userId={`demo-${viewer}`} copied={false} busy={false} onCopy={() => undefined}
-        onLeave={() => notify(t('Туршилтын горим', 'Demo mode'))} onRun={onRun} onProfileSeat={() => undefined} onInvite={() => undefined} />
+        onLeave={() => notify(t('Туршилтын горим', 'Demo mode'))} onRun={onRun} onProfileSeat={(seat) => openGift(seat.seat)} onInvite={() => undefined}>
+        {gifts}
+      </Lobby>
       {bar}
     </>;
   }
@@ -182,7 +234,9 @@ export function WhoAmIDemo({ request, notify, lobby: Lobby }: DemoProps) {
 
   return <VoiceChatProvider roomCode="NIGHT-WHO1" userId={null} seats={seats} phase={state.phase === 'results' ? 'results' : 'discussion'} alive isHost={viewer === 1}>
     <WhoAmITable game={whoAmIPublicView(state)} me={whoAmIPrivateView(state, viewer)} roomName={isEnglish ? 'Guess Who I Am' : 'Хэн бэ би?'} isHost={viewer === 1} busy={false}
-      secondsLeft={seconds} onAction={onAction} onLeave={() => notify(t('Туршилтын горим', 'Demo mode'))} onRematch={() => choosePhase('reveal')} banner={bar} />
+      secondsLeft={seconds} onAction={onAction} onLeave={() => notify(t('Туршилтын горим', 'Demo mode'))} onRematch={() => choosePhase('reveal')} banner={bar}
+      looks={looks} onProfile={openGift} onGift={openGift} />
+    {gifts}
   </VoiceChatProvider>;
 }
 

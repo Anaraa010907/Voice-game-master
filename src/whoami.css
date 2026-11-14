@@ -1093,3 +1093,177 @@
 @media (orientation: landscape) and (max-height: 360px) {
   .whoami-reveal:not(.is-crowded) .whoami-card-identity { font-size: clamp(15px, min(5.4vh, 2.7vw), 22px); }
 }
+
+/* ---------- Shop looks on the table (as on Mafia seats) ----------
+ * Each seat wears its avatar frame, nameplate and name border (see Avatar.tsx). The nameplate sits behind a
+ * row (player list, results, gift list) or behind a card's name strip; the name border rings the row or card. */
+
+/* Painted frames drawn smaller so they stay in the 44 px rows; fewer particles in tight places. */
+.viewport .game-frame :is(.whoami-player, .whoami-card, .whoami-ranking li, .whoami-gift-target) .avatar-frame.is-painted { inset: -24%; }
+.viewport .game-frame :is(.whoami-player, .whoami-card, .whoami-ranking li, .whoami-gift-target) .avatar .avatar-frame > i.fx:nth-of-type(n+6) { display: none; }
+
+/* The plate is a layer inside the box, so nothing needs clipping: framed avatars and the host crown may reach past the edge. */
+.viewport .game-frame :is(.whoami-player, .whoami-ranking li, .whoami-card-who, .whoami-gift-target).has-nameplate { overflow: visible; }
+
+/* A card's name strip carries the plate: the full card width, the name on the plate's dark left. */
+.whoami-card-who.has-nameplate {
+  align-self: stretch;
+  justify-content: flex-start;
+  padding: 2px 7px;
+  border-radius: 8px;
+}
+
+.whoami-reveal .whoami-card-who.has-nameplate b { justify-content: flex-start; }
+
+/* Readable text over the picture; the score on the plate's bright right side gets a dark pill. */
+.viewport .game-frame .has-nameplate :is(.whoami-player-copy, .whoami-ranking-copy, .whoami-rank),
+.viewport .game-frame :is(.whoami-card-who, .whoami-gift-target).has-nameplate b { text-shadow: 0 1px 3px rgba(0, 0, 0, .95), 0 0 6px rgba(0, 0, 0, .7); }
+
+.viewport .game-frame :is(.whoami-player.has-nameplate .whoami-player-score, .whoami-ranking li.has-nameplate .whoami-ranking-score) {
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: rgba(8, 9, 14, .82);
+  box-shadow: 0 0 10px rgba(8, 9, 14, .6);
+}
+
+.viewport .game-frame .has-nameplate :is(.whoami-voted, .whoami-gift-target-icon) { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 2px #000); }
+/* Muted small text brightens on a plate (light plates such as marble or paper would swallow it). */
+.viewport .game-frame .has-nameplate :is(.whoami-ranking-questions, .whoami-player-identity.is-hidden) { color: #e2dacd; }
+
+/* The plate covers the row's own background and a name border hides its edge, so the player on turn and the
+   winners keep a gold line of their own: an outline, inside the ring when there is one. */
+.viewport .game-frame :is(.whoami-player.is-active, .whoami-ranking li.is-winner).has-nameplate:not(.has-row-border) { outline: 1px solid var(--wa-gold); outline-offset: -2px; }
+.viewport .game-frame :is(.whoami-player.is-active, .whoami-ranking li.is-winner).has-row-border { outline: 1.5px solid var(--wa-gold); outline-offset: -5px; }
+/* My own card keeps its dashed edge inside the ring. */
+.viewport .game-frame .whoami-card.is-me.has-row-border { outline: 1px dashed #b7a3d6aa; outline-offset: -5px; }
+
+/* ---------- Gifts ---------- */
+
+.whoami-gift-button svg { color: #f1d79a; }
+
+/* A results row is one tap target laid over its text (profile; a long press opens the gift picker). */
+.whoami-ranking li { position: relative; }
+
+.whoami-ranking-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  min-height: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+.whoami-ranking-hit:focus-visible { outline: 2px solid var(--wa-gold); outline-offset: -2px; }
+
+/* A long press opens the gift picker: no text selection or callout on the way. */
+:is(.whoami-card, .whoami-player) { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+
+/* Who gets the gift (the gift button in the top bar). */
+.viewport .game-frame .whoami-gift-targets {
+  position: relative;
+  width: min(560px, 94%);
+  max-height: calc(100% - 4px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+}
+
+.viewport .game-frame .whoami-gift-targets h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 40px;
+  font-size: 21px;
+  line-height: 1.1;
+}
+
+.whoami-gift-targets h2 svg { flex: none; color: #f1d79a; }
+
+.viewport .game-frame .whoami-gift-targets > p { margin: 0; font-size: 11px; line-height: 1.4; }
+
+.viewport .game-frame .whoami-modal-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  min-height: 0;
+}
+
+/* 44 px to tap, 30 px to see (so it stays clear of the hint line under the title). */
+.viewport .game-frame .whoami-modal-close::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+.whoami-gift-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px;
+}
+
+.viewport .game-frame .whoami-gift-target {
+  position: relative;
+  min-width: 0;
+  height: auto;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border: 1px solid #ffffff1f;
+  border-radius: 10px;
+  background: #14161d;
+  box-shadow: none;
+  color: #ece6dc;
+  text-align: left;
+}
+
+.viewport .game-frame .whoami-gift-target:active { transform: translateY(1px); }
+
+.whoami-gift-target .avatar {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  font-size: 11px;
+}
+
+.whoami-gift-target b {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.whoami-gift-target-icon { flex: none; color: #f1d79a; }
+
+@media (orientation: landscape) and (max-height: 420px) {
+  .viewport .game-frame .whoami-gift-targets { gap: 6px; padding: 12px 14px; }
+  .viewport .game-frame .whoami-gift-targets h2 { font-size: 19px; }
+}
+
+/* A reveal card is a sixth of a 740 px screen: a long name ("Тэмүүлэн") beside the avatar ran past the card's
+   edge. The strip packs tighter and, if a name still does not fit, it wraps inside the card instead. */
+.whoami-reveal .whoami-card-who { min-width: 0; gap: 5px; }
+.whoami-reveal .whoami-card-who b { min-width: 0; overflow-wrap: anywhere; }
+
+@media (orientation: landscape) and (max-height: 360px) {
+  .whoami-reveal:not(.is-crowded) .whoami-card-who b { font-size: 14px; }
+}
