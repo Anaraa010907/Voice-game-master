@@ -6,7 +6,7 @@ import { serverMessageInEnglish } from './serverText.ts';
 const mn = {
   app: {
     title: 'MAFIA: SHADOWS',
-    hubVoiceTitle: 'ДУУТ ТОГЛООМ',
+    hubMafiaTitle: 'МАФИ',
     subtitle: 'Гудамжны цуурай',
     localPrototype: 'Орон нутгийн прототип',
     cityOfSecrets: 'Нууцын хот',

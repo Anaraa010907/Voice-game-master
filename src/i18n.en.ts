@@ -4,7 +4,7 @@ import type { I18n } from './i18n.ts';
 export const en: I18n = {
   app: {
     title: 'MAFIA: SHADOWS',
-    hubVoiceTitle: 'VOICE GAME',
+    hubMafiaTitle: 'MAFIA',
     subtitle: 'Echoes of the street',
     localPrototype: 'Local prototype',
     cityOfSecrets: 'City of secrets',

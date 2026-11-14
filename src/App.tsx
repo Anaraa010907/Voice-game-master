@@ -450,7 +450,7 @@ function GameHub({ onBack, onChoose, onJoinCode }: { onBack: () => void; onChoos
   return <div className="inner-screen hub-screen"><TopBar title={t('ТОГЛООМ СОНГОНО УУ', 'CHOOSE A GAME')} subtitle={t('ТОГЛОХ', 'PLAY')} onBack={onBack} trailing={<button className="text-button hub-code-button" onClick={onJoinCode}><Radio size={14} />{t(` КОДООР НЭГДЭХ`, ` JOIN BY CODE`)}</button>} />
     <div className="hub-cards">
       <article className="hub-card hub-card-voice" style={{ '--hub-bg': "url('/assets/hub/voice-bg.jpg')" } as CSSProperties}>
-        <h2><span>{i18n.app.hubVoiceTitle}</span></h2>
+        <h2><span>{i18n.app.hubMafiaTitle}</span></h2>
         <button type="button" className="hub-play" onClick={() => onChoose('mafia')}>{t(`ТОГЛОХ `, `PLAY `)}<ChevronRight size={18} /></button>
         <p className="hub-card-meta"><b>{GAMES.mafia.title}</b>{t(`${GAMES.mafia.players} · Дуут чат, нууц дүр`, `${GAMES.mafia.players} · Voice chat, secret roles`)}</p>
       </article>
