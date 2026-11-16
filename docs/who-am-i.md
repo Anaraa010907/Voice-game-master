@@ -1,7 +1,7 @@
 # Би хэн бэ (Who Am I): тоглоомын тодорхойлолт
 
 Мафигийн хажууд нэмэгдэх хоёр дахь party тоглоом. Одоо байгаа өрөө, LiveKit дуу, профайл, `game` edge function-ийг дахин ашиглана.
-Код: `supabase/functions/_shared/whoAmIEngine.ts` (дүрэм), `supabase/functions/_shared/whoAmIContent.ts` (агуулга) — `src/whoAmIEngine.ts`, `src/whoAmIContent.ts` нь тэднийг re-export хийнэ; `src/whoAmIEngine.test.ts` (тест, `npm run test:whoami`), `src/WhoAmI.tsx` (дэлгэц), `src/WhoAmIRules.tsx` (лоббийн тохиргоо), `src/WhoAmIDemo.tsx` (сервергүй туршилт), `supabase/functions/game/index.ts` (сервер), `supabase/migrations/20261118_who_am_i.sql`.
+Код: `supabase/functions/_shared/whoAmIEngine.ts` (дүрэм), `supabase/functions/_shared/whoAmIContent.ts` (агуулга) — `src/whoAmIEngine.ts`, `src/whoAmIContent.ts` нь тэднийг re-export хийнэ; `src/whoAmIEngine.test.ts` (тест, `npm run test:whoami`), `src/WhoAmI.tsx` (дэлгэц), `src/WhoAmIRules.tsx` (лоббийн тохиргоо), `src/WhoAmIDemo.tsx` (сервергүй туршилт), `supabase/functions/game/index.ts` (сервер), `supabase/migrations/20261118_who_am_i.sql`, `supabase/migrations/20261120_whoami_content.sql` (өгөгдлийн сан дахь агуулга), `supabase/functions/_shared/whoAmICatalog.ts` (багц угсрах), `src/AdminWhoAmI.tsx` (админы хэсэг).
 
 ## 1. Дүрэм
 
@@ -102,12 +102,21 @@ reveal ──(бүгд бэлэн / 30с)──▶ ask ◀───────�
 - `game_public.view` = `whoAmIPublicView(state)`: зөвхөн таасан / бууж өгсөн хүний дүр, эсвэл results-д бүгд. Ангиллын нэр нийтэд.
 - `game_private.view` (хүн бүрт) = `whoAmIPrivateView(state, seat)`: бусдын дүр + өөрийн санал. **Өөрийн дүр `null`** (таах хүртэл).
 - Тест: 200 санамсаргүй тоглоом дээр алхам бүрт private view өөрийн дүрийг агуулахгүй гэдгийг шалгадаг.
+- **Зураг:** дүрийн зургийн URL (`image`) нь identity дотор явдаг тул нэртэй яг адил нууцлагдана: эзэн нь таах / бууж өгөх / тоглоом дуусах хүртэл өөрийн зургийг хэзээ ч авахгүй, бусад нь харна, results-д бүгд харна (`src/whoAmICatalog.test.ts`). Апп зургийг зөвхөн харах эрхтэй identity-ээс зурна.
 - Бичсэн таамаг 60 тэмдэгтээр хязгаарлагдана.
 
 ## 7. Агуулгын багц
 
-`WhoAmIPack = WhoAmICategory[]`, `WhoAmICategory = { id, name, nameEn, kidsSafe, entries }`, `WhoAmIEntry = { id, name, nameEn?, aliases? }`.
-`id` бүх багцад давхцахгүй, гарсны дараа хэзээ ч өөрчлөхгүй. Шинэ багц нэмэхэд `WHO_AM_I_PACK`-д ангилал нэмэхэд л болно.
+`WhoAmIPack = WhoAmICategory[]`, `WhoAmICategory = { id, name, nameEn, kidsSafe, entries }`, `WhoAmIEntry = { id, name, nameEn?, aliases?, image? }`.
+`id` бүх багцад давхцахгүй, гарсны дараа хэзээ ч өөрчлөхгүй.
+
+**Агуулга өгөгдлийн санд (`20261120_whoami_content.sql`).** Админ, модератор админы самбарын «Би хэн бэ» хэсэгт ангилал (нэмэх, нэр солих, хүүхдэд тохирох эсэх, нуух/харуулах, өөрсдийн нэмснийг устгах), ангилал доторх дүр (нэмэх, монгол/англи нэр, өөр нэрс, нуух/харуулах, устгах), дүр бүрийн зураг (утсан дээр ≤512px, ≤300 KB болгон шахаж `whoami/<entry-id>.<webp|jpg>` руу) удирдана.
+- Хүснэгт: `whoami_categories`, `whoami_entries` (доорх үндсэн багц `built_in = true`-ээр seed, `on conflict do nothing` тул дахин ажиллуулахад засвар хадгалагдана), `whoami_entry_terms` (нэр, англи нэр, өөр нэр бүрийн `normalizeGuess`-тэй ижил хэлбэр; primary key тул нэг бичлэг нэг л идэвхтэй дүрд — бичсэн таамаг хэзээ ч хоёрдмол биш).
+- Үндсэн мөрийг засаж, нууж болно, устгахгүй. Ажилтны мөрийг зөөлөн устгана (`deleted_at`), id дахин ашиглагдахгүй. Явж буй тоглоом тараасан дүрүүдийнхээ хуулбартай тул нуух, засах, устгах нь тоглоомд нөлөөлөхгүй.
+- Функц: `admin_whoami_list/add_category/update_category/set_category_active/delete_category/add_entry/update_entry/set_entry_active/delete_entry/set_entry_image` (`require_staff()`, бүгд `admin_actions`-д бичигдэнэ), `whoami_category_list()` (лоббийн тохиргоо, хэн ч), `whoami_game_pack()` (сервер, зөвхөн service_role).
+- **Багц угсрах дүрэм** (`_shared/whoAmICatalog.ts`): сервер тоглоом эхлэх, дүрэм хадгалах үед `whoami_game_pack()`-ийг нэг удаа уншина. **10-аас цөөн** идэвхтэй дүртэй ангиллыг алгасна (10 = хамгийн том ширээ, тиймээс ганц ангилал ч бүх суудлыг дүүргэнэ). Ашиглах боломжтой ангилал **2-оос цөөн** бол, эсвэл уншиж чадаагүй бол код дахь `WHO_AM_I_PACK` (доорх) руу бүхэлд нь буцна. Лоббийн ангиллын жагсаалт ч яг ийм дүрмээр.
+
+Үндсэн (built-in) багц:
 
 | id | Нэр | Тоо |
 |---|---|---|

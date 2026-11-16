@@ -73,16 +73,17 @@ const DEMO_TINTS: Record<string, [string, string, string]> = {
   animal: ['#3f6b45', '#122317', '♞'], figure: ['#7a5a2a', '#24180a', '♛'], profession: ['#355a7a', '#0e1b28', '⚒'], food: ['#8a4b2a', '#2a140a', '☕'],
   place: ['#2f6670', '#0b2226', '⌂'], object: ['#5d4a7a', '#1a1326', '✦'], character: ['#6a2f4f', '#220c18', '☾'], sport: ['#7a6a2a', '#262009', '⚑'],
 };
-function demoPicture(categoryId: string, name: string) {
+function demoPicture(categoryId: string, entryId: string, name: string) {
   const [from, to, glyph] = DEMO_TINTS[categoryId] ?? ['#555', '#111', '?'];
   const initials = name.split(/\s+/).slice(0, 2).map((word) => word[0] ?? '').join('').toUpperCase();
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${from}'/><stop offset='1' stop-color='${to}'/></linearGradient></defs>`
+  // The entry id makes each URL unique, as real picture URLs are (whoami/<entry-id>.webp).
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120' data-entry='${entryId}'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${from}'/><stop offset='1' stop-color='${to}'/></linearGradient></defs>`
     + `<rect width='120' height='120' fill='url(#g)'/><circle cx='96' cy='22' r='42' fill='#ffffff12'/><text x='60' y='62' font-size='46' text-anchor='middle' fill='#ffffffd0' font-family='serif'>${glyph}</text>`
     + `<text x='60' y='104' font-size='28' text-anchor='middle' fill='#fff7e0' font-family='sans-serif' font-weight='700'>${initials}</text></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 const DEMO_PACK: WhoAmIPack = demoRequest()?.images
-  ? WHO_AM_I_PACK.map((category) => ({ ...category, entries: category.entries.map((entry, index) => index % 3 === 2 ? entry : { ...entry, image: demoPicture(category.id, entry.name) }) }))
+  ? WHO_AM_I_PACK.map((category) => ({ ...category, entries: category.entries.map((entry, index) => index % 3 === 2 ? entry : { ...entry, image: demoPicture(category.id, entry.id, entry.name) }) }))
   : WHO_AM_I_PACK;
 
 const step = (state: WhoAmIState, id: number, action: WhoAmIAction) => applyWhoAmIAction(state, id, action).state;
