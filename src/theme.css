@@ -3634,3 +3634,54 @@
   .whoami-admin-preview { width: 72px; height: 72px; }
   .whoami-admin-picture small { grid-column: 1 / -1; }
 }
+
+/* ---------- Lobby seats on narrow landscape phones (≤ 800 px wide, ≤ 500 px tall) ----------
+ * A seat is ~200 px wide there: "ХҮЛЭЭЖ БАЙНА" beside the name cut "Оюунчимэг" / "Болдбаатар" to "Оюунчи…".
+ * The status moves under the name, so the name gets the seat's whole width (the card keeps its 48 px). */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 800px) {
+  .viewport .game-frame .lobby-screen .player-grid .compact-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-content: center;
+    column-gap: 8px;
+    row-gap: 1px;
+  }
+  .viewport .game-frame .lobby-screen .player-grid .compact-card > .avatar { grid-row: 1 / 3; align-self: center; }
+  .viewport .game-frame .lobby-screen .player-grid .compact-card .player-name { grid-column: 2; align-self: end; line-height: 1.15; }
+  .viewport .game-frame .lobby-screen .player-grid .compact-card > .player-status {
+    grid-column: 2; justify-self: start; align-self: start; margin: 0; font-size: 8.5px; line-height: 1.2; letter-spacing: .5px; white-space: nowrap;
+  }
+  .viewport .game-frame .lobby-screen .player-grid .compact-card.has-nameplate > .player-status { padding: 0 5px; }
+  .viewport .game-frame .lobby-screen .player-grid .player-card.is-bot .player-name { padding-right: 24px; }
+}
+
+/* ---------- Shop preview on short landscape phones ----------
+ * Stacked, a painted frame (112 px plus its 54 px wings above and below), the name, the text and the
+ * button needed ~360 px: CLOSE fell off a 340 px screen and sat on the edge of a 390 px one. Here the look
+ * goes on the left and the text with a full-size CLOSE on the right, and the dialog scrolls if it must. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .viewport .game-frame .shop-preview {
+    width: min(600px, 94%);
+    max-height: calc(100% - 16px);
+    overflow-y: auto;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    column-gap: 20px;
+    row-gap: 6px;
+    align-content: center;
+    justify-items: start;
+    text-align: left;
+  }
+  .viewport .game-frame .shop-preview > :first-child { grid-column: 1; grid-row: 1 / span 3; justify-self: center; align-self: center; }
+  .viewport .game-frame .shop-preview > :is(h2, p, .modal-actions) { grid-column: 2; margin: 0; }
+  .viewport .game-frame .shop-preview > h2 { align-self: end; }
+  .viewport .game-frame .shop-preview > .modal-actions { align-self: start; justify-content: flex-start; margin-top: 6px; }
+  .viewport .game-frame .shop-preview > .modal-actions > button { min-height: 44px; padding: 0 22px; }
+  .viewport .game-frame .shop-preview .shop-avatar.is-preview { width: 104px; height: 104px; margin: 14px; }
+  .viewport .game-frame .shop-preview .shop-avatar.is-preview.has-frame { margin: 22px; }
+  .viewport .game-frame .shop-preview .shop-avatar.is-preview:has(> .is-painted) { margin: 46px 40px; }
+  .viewport .game-frame .shop-preview .gift-preview { width: 150px; height: 130px; }
+  .viewport .game-frame .shop-preview .plate-preview.is-large { width: min(300px, 46vw); margin: 0; }
+  .viewport .game-frame .shop-preview .backdrop-preview.is-large { margin: 0; }
+}
