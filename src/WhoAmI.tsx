@@ -286,8 +286,10 @@ function IdentityCard({ player, identity, isMe, large = false, looks, onProfile,
   const look = lookOf(looks, player.id);
   const press = usePlayerPress(player.id, onProfile, onGift);
   const pictured = Boolean(identity?.image);
+  // A word of 9+ letters ("Вольфганг") is wider than a sixth of the screen at the card's size: one size down.
+  const longWord = Boolean(identity) && Math.max(...identityName(identity!).split(/\s+/).map((word) => word.length)) >= 9;
   // The name border goes round the whole card; the nameplate sits behind the name strip at its top.
-  return <button type="button" className={`whoami-card ${large ? 'is-large' : ''} ${isMe ? 'is-me' : ''} ${pictured ? 'has-picture' : ''} status-${player.status} ${look.borderClass}`} {...press} data-cue-focus={(isMe && !large) || undefined}>
+  return <button type="button" className={`whoami-card ${large ? 'is-large' : ''} ${isMe ? 'is-me' : ''} ${pictured ? 'has-picture' : ''} ${longWord ? 'has-long-word' : ''} status-${player.status} ${look.borderClass}`} {...press} data-cue-focus={(isMe && !large) || undefined}>
     <RowBorder borderKey={look.border} />
     <span className={`whoami-card-who ${look.plateClass}`} style={look.plateStyle}>
       <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials} frame={look.frame}>{player.host && <i className="host-badge" title={w().host}><Crown size={9} /></i>}<VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
