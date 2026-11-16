@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
-import { botAcceptsTrade, botBid, boardBotToMove, mafiaBotsAct, monopolyBotStep, nextBotName } from '../supabase/functions/_shared/bots.ts';
+import { mafiaBotsAct, nextBotName } from '../supabase/functions/_shared/bots.ts';
 import {
   allNightActionsSubmitted, allVerdictsSubmitted, allVotesSubmitted, createInitialGame, finishDay, openDiscussion, recordVote, removePlayer,
   publicView, resolveNight, resolveTrial, resolveVoting, sanitizeMafiaSettings, startNight, startVoting, type GameEngineState,
 } from '../supabase/functions/_shared/gameEngine.ts';
-import { actingPlayerId, applyMonopolyAction, autoPlay, createMonopolyGame, currentPlayerId, type MonopolyState } from '../supabase/functions/_shared/monopolyEngine.ts';
 
 // A small seeded random source so every run plays the same games.
 function seeded(seed: number) {
@@ -71,84 +70,6 @@ for (const [seed, count, settings] of [[21, 12, undefined], [8, 10, undefined], 
     if (!player.alive) continue;
     assert.equal(state.privatePlayers[player.id].vote.submitted, player.bot === true, 'Only bots vote automatically.');
   }
-}
-
-// Board game: bots play to the end; they buy, bid at auctions, trade and build along the way.
-{
-  let auctions = 0;
-  let trades = 0;
-  let buildings = 0;
-  for (const [seed, count] of [[5, 3], [11, 3], [2024, 4], [77, 6]]) {
-    const random = seeded(seed);
-    let state = createMonopolyGame(Array.from({ length: count }, (_, index) => ({ id: index + 1, name: `Бот ${index + 1}`, initials: 'БО', color: 'rose', bot: true })), random);
-    let steps = 0;
-    let bought = 0;
-    while (state.phase !== 'finished' && steps < 5000) {
-      assert.ok(boardBotToMove(state), 'A bot is always to move.');
-      const next = monopolyBotStep(state, random);
-      assert.notEqual(next, state, 'Every bot step changes the game.');
-      if (next.phase === 'auction' && state.phase !== 'auction') auctions += 1;
-      if (state.trade && !next.trade && next.log[next.log.length - 1].includes('⇄')) trades += 1;
-      buildings = Math.max(buildings, next.tiles.reduce((total, tile) => total + tile.houses, 0));
-      bought = Math.max(bought, next.tiles.filter((tile) => tile.owner !== null).length);
-      assert.ok(next.players.every((player) => player.money >= 0), 'No negative money.');
-      state = next;
-      steps += 1;
-    }
-    assert.equal(state.phase, 'finished', `Bot-only board game ${seed} finishes.`);
-    assert.ok(bought > 3, 'Bots buy property.');
-  }
-  assert.ok(auctions > 0, 'Bots hold auctions for deeds they turn down.');
-  assert.ok(trades > 0, 'Bots trade with each other.');
-  assert.ok(buildings > 0, 'Bots build houses.');
-}
-
-// Board game: with no round limit, bots play on until only one is left.
-for (const seed of [5, 2024]) {
-  const random = seeded(seed);
-  let state = createMonopolyGame(Array.from({ length: 3 }, (_, index) => ({ id: index + 1, name: `Бот ${index + 1}`, initials: 'БО', color: 'rose', bot: true })), random, { rounds: null });
-  for (let steps = 0; steps < 20000 && state.phase !== 'finished'; steps += 1) state = monopolyBotStep(state, random);
-  assert.equal(state.phase, 'finished', `A game without a round limit ends by bankruptcy (seed ${seed}).`);
-  assert.equal(state.players.filter((player) => !player.bankrupt).length, 1, 'Exactly one player is left.');
-}
-
-// Board game: a bot answers a person's offer on its own merits, and bids only to its ceiling.
-{
-  const people = [
-    { id: 1, name: 'Хүн', initials: 'ХҮ', color: 'rose' },
-    { id: 2, name: 'Бот', initials: 'БО', color: 'teal', bot: true },
-  ];
-  let base: MonopolyState = createMonopolyGame(people, () => 0.99);
-  base = { ...base, tiles: base.tiles.map((tile, index) => index === 1 ? { ...tile, owner: 1 } : index === 3 || index === 6 ? { ...tile, owner: 2 } : tile) };
-  const offer = (give: number[], get: number[], giveCash: number) => ({ from: 1, to: 2, give, get, giveCash, getCash: 0, giveCards: 0, getCards: 0 });
-  assert.equal(botAcceptsTrade(base, 2, offer([], [3], 100)), false, 'A bot will not sell a rival the deed that completes their set at its price.');
-  assert.equal(botAcceptsTrade(base, 2, offer([], [3], 400)), true, 'A large enough premium buys it.');
-  assert.equal(botAcceptsTrade(base, 2, offer([1], [6], 0)), false, 'A bot values what it gives up by its own plans.');
-  assert.equal(botAcceptsTrade(base, 2, offer([1], [6], 100)), true, 'Its own set-completer plus cash is a yes.');
-  const proposed = applyMonopolyAction(base, 1, { type: 'propose', offer: { to: 2, give: [], get: [3], giveCash: 50, getCash: 0, giveCards: 0, getCards: 0 } });
-  assert.ok(!proposed.error && boardBotToMove(proposed.state), 'The bot has to answer the offer.');
-  const answered = monopolyBotStep(proposed.state, seeded(1));
-  assert.ok(!answered.trade && answered.tiles[3].owner === 2, 'The bot turns down a lowball offer.');
-
-  const auction: MonopolyState = { ...base, phase: 'auction', auction: { tile: 31, bidders: [2, 1], turn: 0, highBid: 0, highBidder: null } };
-  const bot = auction.players.find((player) => player.id === 2)!;
-  assert.equal(botBid(auction, bot), 40, 'A bot opens at a tenth of the price.');
-  assert.equal(botBid({ ...auction, auction: { ...auction.auction!, highBid: 480, highBidder: 1 } }, bot), null, 'A bot passes above its ceiling.');
-  assert.equal(actingPlayerId(monopolyBotStep(auction, seeded(1))), 1, 'After its bid the auction moves to the person.');
-}
-
-// Regression: a game frozen on a bankrupt player's turn moves on at the next tick.
-{
-  const base = createMonopolyGame([
-    { id: 1, name: 'А', initials: 'А', color: 'rose' },
-    { id: 2, name: 'Б', initials: 'Б', color: 'teal' },
-    { id: 3, name: 'В', initials: 'В', color: 'gold' },
-  ], seeded(8));
-  const stuckId = currentPlayerId(base);
-  const frozen = { ...base, phase: 'end' as const, players: base.players.map((player) => player.id === stuckId ? { ...player, bankrupt: true, money: 0 } : player) };
-  const moved = autoPlay(frozen, seeded(8));
-  assert.notEqual(currentPlayerId(moved), stuckId, 'The turn leaves the bankrupt player.');
-  assert.equal(moved.phase, 'roll', 'The next player rolls.');
 }
 
 // A player who leaves while everyone else has voted no longer holds the ballot open.

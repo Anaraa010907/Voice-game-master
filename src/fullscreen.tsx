@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { t } from './lang';
 import { Capacitor } from '@capacitor/core';
 import { Maximize, Minimize } from 'lucide-react';
 
@@ -87,6 +88,6 @@ export type FullscreenState = ReturnType<typeof useFullscreen>;
 
 export function FullscreenToggle({ fullscreen }: { fullscreen: FullscreenState }) {
   if (!fullscreen.supported) return null;
-  return <button type="button" className="fullscreen-toggle" onClick={fullscreen.toggle} aria-pressed={fullscreen.active}>{fullscreen.active ? <Minimize size={14} /> : <Maximize size={14} />}{fullscreen.active ? 'ЖИЖИГРҮҮЛЭХ' : 'БҮТЭН ДЭЛГЭЦ'}</button>;
+  return <button type="button" className="fullscreen-toggle" onClick={fullscreen.toggle} aria-pressed={fullscreen.active}>{fullscreen.active ? <Minimize size={14} /> : <Maximize size={14} />}{fullscreen.active ? t('ЖИЖИГРҮҮЛЭХ', 'EXIT FULLSCREEN') : t('БҮТЭН ДЭЛГЭЦ', 'FULLSCREEN')}</button>;
 }
 

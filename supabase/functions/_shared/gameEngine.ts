@@ -132,8 +132,13 @@ export type GameEngineState = {
   history?: HistoryEntry[];
   /** Room rules for this match (older saved games: classic). */
   settings?: MafiaSettings;
-  /** Role Reveal: players who tapped "ready". The Night starts once every living person has. */
+  /**
+   * Players who tapped "done" in the current waiting step (role reveal, morning report, discussion,
+   * revealed ballot). Once every living person has, the step ends early. `readyStep` names the step
+   * the list belongs to, so it empties itself when the game moves on.
+   */
   readyIds?: number[];
+  readyStep?: string;
   winner: WinningTeam;
 };
 
@@ -237,9 +242,10 @@ export function createInitialGame(
       team: roleTeams[role],
       info: {
         mafiaTeammateIds: isMafiaMember(role) ? mafiaIds.filter((id) => id !== player.id) : [],
-        // "Мафийн гишүүд" on the card: the Mafia and their Don. The Bad Informant stays hidden so the
-        // Mafia side keeps one unknown piece even after the Informant speaks up.
-        informantMafiaIds: role === 'Good Informant' ? mafiaIds : [],
+        // Both informants learn who the Mafia and their Don are: the Good Informant to expose them, the
+        // Bad Informant to know whom to help. The Mafia never learn the Bad Informant, so the Mafia
+        // side keeps one hidden piece even after the Good Informant speaks up.
+        informantMafiaIds: role === 'Good Informant' || role === 'Bad Informant' ? mafiaIds : [],
         badInformantObjective: role === 'Bad Informant' ? 'Help the Mafia survive and mislead the citizens.' : '',
         investigationResult: '',
         protectionResult: '',
@@ -274,18 +280,51 @@ export function createInitialGame(
   };
 }
 
-/** Role Reveal: a player has read their card. Bots are always ready. */
+/**
+ * The steps that only wait for people (nobody has to act): reading the role card, the morning
+ * report, the discussion and the revealed ballot. Each can end early once everyone is done.
+ */
+export function waitStep(state: Pick<GameEngineState, 'phase' | 'round' | 'votesRevealed'>): string | null {
+  if (state.phase === 'Role Reveal') return 'reveal';
+  if (state.phase === 'Morning') return `morning-${state.round}`;
+  if (state.phase === 'Discussion') return `discussion-${state.round}`;
+  if (state.phase === 'Voting' && state.votesRevealed) return `ballot-${state.round}`;
+  return null;
+}
+
+/** Who is done with the current waiting step. */
+export function readyNow(state: GameEngineState): number[] {
+  const step = waitStep(state);
+  if (!step) return [];
+  // Games saved before readyStep existed only ever waited at the role reveal.
+  if (state.readyStep === step || (state.readyStep === undefined && step === 'reveal')) return state.readyIds ?? [];
+  return [];
+}
+
+/** A living player is done with the current waiting step. Bots never hold anyone up. */
+function markReady(state: GameEngineState, playerId: number): EngineResult {
+  const step = waitStep(state);
+  if (!step) return { state, error: 'Nothing to wait for now.' };
+  if (!state.publicPlayers.some((player) => player.id === playerId && player.alive)) return { state, error: 'Eliminated players cannot act.' };
+  const ready = readyNow(state);
+  if (ready.includes(playerId)) return { state };
+  return { state: { ...state, readyIds: [...ready, playerId], readyStep: step } };
+}
+
+export function allReady(state: GameEngineState): boolean {
+  if (!waitStep(state)) return false;
+  const ready = readyNow(state);
+  return state.publicPlayers.every((player) => !player.alive || player.bot || ready.includes(player.id));
+}
+
+/** Role Reveal: a player has read their card. */
 export function markRevealReady(state: GameEngineState, playerId: number): EngineResult {
   if (state.phase !== 'Role Reveal') return { state, error: 'The Night has already begun.' };
-  if (!state.publicPlayers.some((player) => player.id === playerId && player.alive)) return { state, error: 'Eliminated players cannot act.' };
-  const ready = state.readyIds ?? [];
-  if (ready.includes(playerId)) return { state };
-  return { state: { ...state, readyIds: [...ready, playerId] } };
+  return markReady(state, playerId);
 }
 
 export function allRevealReady(state: GameEngineState): boolean {
-  const ready = state.readyIds ?? [];
-  return state.phase === 'Role Reveal' && state.publicPlayers.every((player) => !player.alive || player.bot || ready.includes(player.id));
+  return state.phase === 'Role Reveal' && allReady(state);
 }
 
 export function getWinner(state: Pick<GameEngineState, 'publicPlayers' | 'privatePlayers'>): WinningTeam {
@@ -736,7 +775,7 @@ export function publicView(state: GameEngineState) {
       ? state.publicPlayers.map((player) => ({ ...player, voteStatus: player.voteStatus === 'revealed' ? 'hidden' as const : player.voteStatus, voteTargetId: null }))
       : state.publicPlayers,
     settings: state.settings ?? DEFAULT_MAFIA_SETTINGS,
-    readyIds: state.phase === 'Role Reveal' ? state.readyIds ?? [] : [],
+    readyIds: readyNow(state),
     morningReport: state.morningReport,
     publicEventLog: state.publicEventLog,
     voteCounts: state.votesRevealed || state.trial ? state.voteCounts : {},
@@ -779,7 +818,8 @@ export function privateView(state: GameEngineState, playerId: number) {
     lastProtectedId: secret.lastProtectedId,
     knownAlignment: secret.knownAlignment,
     shotgunSpent: secret.shotgunSpent,
-    readyForNight: (state.readyIds ?? []).includes(playerId),
+    /** Done with the current waiting step (the name dates from when only the role reveal waited). */
+    readyForNight: readyNow(state).includes(playerId),
     /** Night only, for the Mafia: which target each known teammate has locked (null = not yet). */
     teamTargets: state.phase === 'Night' && nightRoleOf(state, playerId) === 'Mafia'
       ? Object.fromEntries(secret.info.mafiaTeammateIds
@@ -789,6 +829,29 @@ export function privateView(state: GameEngineState, playerId: number) {
   };
 }
 export type PrivateGameView = NonNullable<ReturnType<typeof privateView>>;
+
+/** The parts of a game (full state or its public view) that say which timed step is open. */
+type StageFields = Pick<GameEngineState, 'phase' | 'round' | 'votesRevealed' | 'runoffCandidates'> & { trial: { accusedId: number } | null };
+
+/**
+ * Identifies the timed step the game is in: a new phase, round, runoff, trial or revealed ballot opens a
+ * new one, votes and night picks do not. The server restarts the phase deadline exactly when it changes,
+ * so a deadline always belongs to the step that was published with it.
+ */
+export function mafiaStageKey(state: StageFields): string {
+  return [state.phase, state.round, state.votesRevealed ? 1 : 0, state.runoffCandidates?.join(',') ?? '', state.trial?.accusedId ?? ''].join(':');
+}
+
+/**
+ * Whether a clock tick may end the current step. `published` is the public view whose deadline the tick
+ * saw: the deadline (and a host's skip of the step on screen) only applies while that step is still open,
+ * so a late or retried tick cannot end a step another tick has just opened.
+ */
+export function mafiaTickApplies(published: StageFields | null | undefined, state: GameEngineState, expired: boolean, hostSkip: boolean): boolean {
+  if (state.phase === 'Results' || !published || mafiaStageKey(published) !== mafiaStageKey(state)) return false;
+  const skippable = state.phase === 'Role Reveal' || state.phase === 'Morning' || state.phase === 'Discussion' || (state.phase === 'Voting' && state.votesRevealed);
+  return expired || (hostSkip && skippable);
+}
 
 export function runGameEngineSelfTests() {
   const players: EnginePlayer[] = [
@@ -853,6 +916,7 @@ export function runGameEngineSelfTests() {
   require(!('role' in state.publicPlayers[1]), 'Public player data does not contain secret roles.');
   require(publicView(state).finalRoles === null, 'Roles stay hidden in the public view until the game ends.');
   require(state.privatePlayers[3].info.badInformantObjective.length > 0, 'Bad Informant receives a private objective.');
+  require(state.privatePlayers[3].info.informantMafiaIds.includes(2) && !state.privatePlayers[3].info.informantMafiaIds.includes(3), 'Bad Informant learns the Mafia members it helps.');
   require(!state.privatePlayers[2].info.mafiaTeammateIds.includes(3), 'Bad Informant identity is not automatically revealed to Mafia teammates.');
 
   state = startNight(fixed({ 1: 'Mafia', 2: 'Mafia', 3: 'Citizen', 4: 'Doctor' }));
@@ -1004,6 +1068,37 @@ export function runGameEngineSelfTests() {
   require(!allRevealReady(state), 'The Night waits for people who have not read their card.');
   for (const id of [1, 2, 3]) state = markRevealReady(state, id).state;
   require(allRevealReady(state) && privateView(state, 1)?.readyForNight === true, 'Everyone ready lets the Night start.');
+  // The same "done" works in the morning, the discussion and after the ballot, and resets each step.
+  const morning = { ...state, phase: 'Morning' as const, round: 2 };
+  require(!allReady(morning) && readyNow(morning).length === 0, 'Readiness does not carry over to the next step.');
+  let waiting: GameEngineState = morning;
+  for (const id of state.publicPlayers.filter((player) => player.alive && !player.bot).map((player) => player.id)) {
+    require(!allReady(waiting), 'The morning waits until everyone is done.');
+    waiting = markReady(waiting, id).state;
+  }
+  require(allReady(waiting), 'Everyone done ends the morning early.');
+  require(!allReady({ ...waiting, phase: 'Discussion' }), 'The discussion starts with nobody done.');
+  require(Boolean(markReady({ ...waiting, phase: 'Night' }, 1).error), 'Nobody can skip the Night by tapping done.');
+
+  // Clock ticks: an expired deadline only ends the step it was published with.
+  const discussion = openDiscussion(fixed({ 1: 'Citizen', 2: 'Mafia', 3: 'Doctor', 4: 'Detective' }));
+  const shown = publicView(discussion);
+  require(mafiaStageKey(shown) === mafiaStageKey(discussion), 'The public view and the state name the same step.');
+  require(mafiaTickApplies(shown, discussion, true, false), 'An expired deadline ends the step it belongs to.');
+  require(!mafiaTickApplies(shown, discussion, false, false), 'A tick before the deadline changes nothing.');
+  require(mafiaTickApplies(shown, discussion, false, true), 'The host may skip the discussion on screen.');
+  const voting = startVoting(discussion);
+  // A second phone's tick saw the discussion's deadline, but the first tick already opened the vote.
+  require(!mafiaTickApplies(shown, voting, true, false), 'A late tick cannot time out the vote that just opened.');
+  require(!mafiaTickApplies(shown, voting, true, true), 'A late host skip cannot skip the vote that just opened.');
+  require(mafiaTickApplies(publicView(voting), voting, true, false), "The vote's own deadline still ends it.");
+  require(!mafiaTickApplies(publicView(voting), voting, false, true), 'An open vote cannot be skipped by the host.');
+  let ballot = voting;
+  for (const [voter, choice] of [[1, 2], [2, 1], [3, 2], [4, 2]] as const) ballot = recordVote(ballot, voter, choice).state;
+  require(mafiaStageKey(ballot) === mafiaStageKey(voting), 'Votes do not open a new step.');
+  const trial = resolveVoting(ballot).state;
+  require(Boolean(trial.trial) && !mafiaTickApplies(publicView(ballot), trial, true, false), 'A late tick cannot end the trial that just opened.');
+  require(!mafiaTickApplies(publicView(trial), { ...trial, phase: 'Results' }, true, true), 'A finished game has no clock.');
 
   return 'Game engine self-tests passed.';
 }

@@ -6,6 +6,7 @@ import './account.css';
 import './responsive.css';
 import './fullscreen.css';
 import './board.css';
+import './whoami.css';
 import './theme.css';
 import { installBackgrounds } from './backgrounds';
 import { applyMotionSetting } from './motion';

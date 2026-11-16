@@ -5,6 +5,7 @@ import { supabase, supabaseConfigured } from './supabaseClient';
 import { invokeFunction } from './multiplayer';
 import { i18n } from './i18n';
 
+import { t } from './lang';
 const tokenUrl = supabaseConfigured;
 
 type GhostState = 'idle' | 'connecting' | 'connected';
@@ -13,8 +14,8 @@ type GhostMember = { identity: string; name: string; speaking: boolean };
 type SideChannel = 'ghost' | 'mafia';
 
 const COPY: Record<SideChannel, { title: string; note: string; idle: string; label: string }> = {
-  ghost: { title: 'ҮХЭГСДИЙН СУВАГ', note: 'Амьд тоглогчид сонсохгүй', idle: 'Хасагдсан тоглогчид энд хоорондоо ярьж, тоглолтыг хамт ажиглана.', label: 'Үхэгсдийн суваг' },
-  mafia: { title: 'МАФИЙН ШИВНЭЭ', note: 'Зөвхөн мафиуд сонсоно', idle: 'Хамтрагчтайгаа хэнийг онилохоо шөнөдөө нууцаар ярилц. Өглөө болоход суваг хаагдана.', label: 'Мафийн шивнээ' },
+  ghost: { title: t('ҮХЭГСДИЙН СУВАГ', 'GHOST CHANNEL'), note: t('Амьд тоглогчид сонсохгүй', 'Living players can’t hear'), idle: t('Хасагдсан тоглогчид энд хоорондоо ярьж, тоглолтыг хамт ажиглана.', 'Eliminated players talk here and watch the match together.'), label: t('Үхэгсдийн суваг', 'Ghost channel') },
+  mafia: { title: t('МАФИЙН ШИВНЭЭ', 'MAFIA WHISPER'), note: t('Зөвхөн мафиуд сонсоно', 'Only the Mafia can hear'), idle: t('Хамтрагчтайгаа хэнийг онилохоо шөнөдөө нууцаар ярилц. Өглөө болоход суваг хаагдана.', 'Plan tonight’s target with your partners in secret. The channel closes at morning.'), label: t('Мафийн шивнээ', 'Mafia whisper') },
 };
 
 /**
@@ -136,12 +137,12 @@ export default function GhostVoice({ roomCode, userId, channel = 'ghost' }: { ro
   return <section className={`ghost-voice channel-${channel}`} aria-label={copy.label}>
     <header>{channel === 'mafia' ? <Skull size={15} /> : <Ghost size={15} />}<b>{copy.title}</b><small>{copy.note}</small></header>
     {state === 'connected'
-      ? <div className="ghost-members">{members.map((member) => <span key={member.identity} className={member.speaking ? 'is-speaking' : ''}>{member.name}{member.identity === userId ? ' (чи)' : ''}</span>)}</div>
+      ? <div className="ghost-members">{members.map((member) => <span key={member.identity} className={member.speaking ? 'is-speaking' : ''}>{member.name}{member.identity === userId ? t(' (чи)', ' (you)') : ''}</span>)}</div>
       : <p>{copy.idle}</p>}
     <div className="ghost-actions">
       {state === 'connected'
-        ? <><button type="button" className={`secondary-button ${micOn ? 'is-ready' : ''}`} onClick={() => void toggleMic()}>{micOn ? <Mic size={14} /> : <MicOff size={14} />}{micOn ? 'МИКРОФОН АСААЛТТАЙ' : 'МИКРОФОН АСААХ'}</button><button type="button" className="text-button" onClick={() => void leave()}>ГАРАХ</button></>
-        : <button type="button" className="primary-button" disabled={state === 'connecting' || !tokenUrl} onClick={() => void join()}>{state === 'connecting' ? <LoaderCircle size={14} className="voice-spinner" /> : <Headphones size={14} />}{state === 'connecting' ? 'ХОЛБОГДОЖ БАЙНА…' : 'СУВАГТ НЭГДЭХ'}</button>}
+        ? <><button type="button" className={`secondary-button ${micOn ? 'is-ready' : ''}`} onClick={() => void toggleMic()}>{micOn ? <Mic size={14} /> : <MicOff size={14} />}{micOn ? t('МИКРОФОН АСААЛТТАЙ', 'MIC ON') : t('МИКРОФОН АСААХ', 'TURN MIC ON')}</button><button type="button" className="text-button" onClick={() => void leave()}>{t(`ГАРАХ`, `LEAVE`)}</button></>
+        : <button type="button" className="primary-button" disabled={state === 'connecting' || !tokenUrl} onClick={() => void join()}>{state === 'connecting' ? <LoaderCircle size={14} className="voice-spinner" /> : <Headphones size={14} />}{state === 'connecting' ? t('ХОЛБОГДОЖ БАЙНА…', 'CONNECTING…') : t('СУВАГТ НЭГДЭХ', 'JOIN CHANNEL')}</button>}
     </div>
     {error && <p className="voice-error">{error}</p>}
   </section>;

@@ -36,6 +36,27 @@
 
         </activity>
 
+        <!-- Facebook sign-in through the Facebook app installed on the phone. -->
+        <meta-data android:name="com.facebook.sdk.ApplicationId" android:value="@string/facebook_app_id" />
+        <meta-data android:name="com.facebook.sdk.ClientToken" android:value="@string/facebook_client_token" />
+        <!-- Sign-in only: no automatic app events, advertising ID or extra app details sent to Meta. -->
+        <meta-data android:name="com.facebook.sdk.AutoLogAppEventsEnabled" android:value="false" />
+        <meta-data android:name="com.facebook.sdk.AdvertiserIDCollectionEnabled" android:value="false" />
+        <meta-data android:name="com.facebook.sdk.AutoLogMetaDataEnabled" android:value="false" />
+        <meta-data android:name="com.facebook.sdk.AutoLogProductImprovementEnabled" android:value="false" />
+
+        <!-- Back from the Custom Tab sign-in when the Facebook app is not installed. -->
+        <activity
+            android:name="com.facebook.CustomTabActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="@string/fb_login_protocol_scheme" />
+            </intent-filter>
+        </activity>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -50,4 +71,9 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Lets the app see the Facebook app (Android 11+ package visibility). -->
+    <queries>
+        <package android:name="com.facebook.katana" />
+    </queries>
 </manifest>

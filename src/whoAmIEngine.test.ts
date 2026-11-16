@@ -1,0 +1,351 @@
+import {
+  BASE_POINTS, MAX_QUESTIONS_PER_TURN, MIN_SOLVE_POINTS, PLACE_BONUS, POINTS_PER_QUESTION, POINTS_PER_VOTE,
+  activeWhoAmIPlayerId, applyWhoAmIAction, createSeededRandom, createWhoAmIGame, eligibleVoters, guessMatches,
+  WHOAMI_HEARTBEAT_MS, WHOAMI_PRESENCE_STALE_MS, applyWhoAmIPresence, identityPool, normalizeGuess, removeWhoAmIPlayer, sanitizeWhoAmISettings, setWhoAmIConnected, solvePoints,
+  timeoutWhoAmI, whoAmIBotStep, whoAmIBotToMove, whoAmIDeadlineSeconds, whoAmIPresence, whoAmIPrivateView, whoAmIPublicView, whoAmIRanking, whoAmIStageKey,
+} from './whoAmIEngine.ts';
+import type { WhoAmIAction, WhoAmISeat, WhoAmIState } from './whoAmIEngine.ts';
+import { WHO_AM_I_PACK } from './whoAmIContent.ts';
+
+let passed = 0;
+const require = (condition: boolean, message: string) => {
+  if (!condition) throw new Error(`Who Am I self-test failed: ${message}`);
+  passed += 1;
+};
+const seats = (count: number, extra: Partial<WhoAmISeat> = {}): WhoAmISeat[] =>
+  ['Бат', 'Сараа', 'Тэмүүлэн', 'Номин', 'Ганаа', 'Хулан', 'Мөнх', 'Ариун', 'Энх', 'Оюун'].slice(0, count)
+    .map((name, index) => ({ id: index + 1, name, initials: name.slice(0, 2).toUpperCase(), color: 'teal', host: index === 0, ...extra }));
+const act = (state: WhoAmIState, id: number, action: WhoAmIAction) => {
+  const result = applyWhoAmIAction(state, id, action);
+  if (result.error) throw new Error(`Who Am I self-test failed: unexpected error "${result.error}" for ${action.type} by ${id}`);
+  return result.state;
+};
+const rejects = (state: WhoAmIState, id: number, action: WhoAmIAction) => Boolean(applyWhoAmIAction(state, id, action).error);
+const everyoneReady = (state: WhoAmIState) => state.players.reduce((value, entry) => entry.ready ? value : act(value, entry.id, { type: 'ready' }), state);
+const active = (state: WhoAmIState) => activeWhoAmIPlayerId(state)!;
+/** Everyone except the active player answers with the given votes, in seat order. */
+const answer = (state: WhoAmIState, votes: Array<'yes' | 'no' | 'unknown'>) => {
+  let next = act(state, active(state), { type: 'asked' });
+  eligibleVoters(next).forEach((id, index) => { if (next.phase === 'answer' && votes[index]) next = act(next, id, { type: 'answer', vote: votes[index] }); });
+  return next;
+};
+const judge = (state: WhoAmIState, verdicts: Array<'correct' | 'wrong'>, text?: string) => {
+  let next = act(state, active(state), { type: 'guess', text });
+  eligibleVoters(next).forEach((id, index) => { if (next.phase === 'guess' && verdicts[index]) next = act(next, id, { type: 'judge', verdict: verdicts[index] }); });
+  return next;
+};
+const fresh = (count = 4, seed = 7) => everyoneReady(createWhoAmIGame(seats(count), WHO_AM_I_PACK, createSeededRandom(seed)));
+
+// --- Content pack ------------------------------------------------------------------------------
+const ids = WHO_AM_I_PACK.flatMap((category) => category.entries.map((entry) => entry.id));
+require(new Set(ids).size === ids.length, 'Entry ids are unique across the pack.');
+require(new Set(WHO_AM_I_PACK.map((category) => category.id)).size === WHO_AM_I_PACK.length, 'Category ids are unique.');
+for (const category of WHO_AM_I_PACK) {
+  require(category.entries.length >= 25, `${category.id} has at least 25 entries (${category.entries.length}).`);
+  require(category.entries.every((entry) => entry.name.trim() && entry.id.startsWith(category.id === 'profession' ? 'job-' : `${category.id}-`)), `${category.id} entries have names and prefixed ids.`);
+  const names = category.entries.map((entry) => normalizeGuess(entry.name));
+  require(new Set(names).size === names.length, `${category.id} has no duplicate names.`);
+}
+const allNames = WHO_AM_I_PACK.flatMap((category) => category.entries.map((entry) => normalizeGuess(entry.name)));
+require(new Set(allNames).size === allNames.length, 'No name appears twice in the pack.');
+
+// --- Helpers -------------------------------------------------------------------------------------
+require(normalizeGuess('  Хөвсгөл   НУУР! ') === 'ховсгол нуур', 'Guesses are normalised (case, ө, punctuation, spaces).');
+require(solvePoints(0, 1) === BASE_POINTS + PLACE_BONUS[0], 'Instant first solve scores base + 1st bonus.');
+require(solvePoints(4, 2) === BASE_POINTS - 4 * POINTS_PER_QUESTION + PLACE_BONUS[1], '4 questions, 2nd place.');
+require(solvePoints(40, 5) === MIN_SOLVE_POINTS, 'Points never drop below the minimum.');
+require(sanitizeWhoAmISettings({ rounds: 99, categories: ['animal', 'nope', 3], kidsSafe: 'yes' }, WHO_AM_I_PACK).rounds === 5, 'Unknown round counts fall back to the default.');
+require(sanitizeWhoAmISettings({ rounds: 8, categories: ['animal', 'nope', 'animal'] }, WHO_AM_I_PACK).categories.join() === 'animal', 'Unknown and duplicate categories are dropped.');
+require(identityPool(WHO_AM_I_PACK, { rounds: 5, categories: ['food'], kidsSafe: false }).every((entry) => entry.categoryId === 'food'), 'Category filter works.');
+
+// --- Setup, determinism and secrecy ------------------------------------------------------------
+let threw = false;
+try { createWhoAmIGame(seats(2), WHO_AM_I_PACK, createSeededRandom(1)); } catch { threw = true; }
+require(threw, 'Fewer than 3 players cannot start.');
+const a = createWhoAmIGame(seats(6), WHO_AM_I_PACK, createSeededRandom(42));
+const b = createWhoAmIGame(seats(6), WHO_AM_I_PACK, createSeededRandom(42));
+const c = createWhoAmIGame(seats(6), WHO_AM_I_PACK, createSeededRandom(43));
+require(JSON.stringify(a) === JSON.stringify(b), 'The same seed deals the same game.');
+require(JSON.stringify(a.identities) !== JSON.stringify(c.identities), 'A different seed deals a different game.');
+require(new Set(Object.values(a.identities).map((entry) => entry.entryId)).size === 6, 'Every player gets a different identity.');
+require(a.phase === 'reveal' && activeWhoAmIPlayerId(a) === null && whoAmIDeadlineSeconds(a) === 30, 'Game opens on the reveal screen with a 30 s timer.');
+for (const viewer of a.players) {
+  const view = whoAmIPrivateView(a, viewer.id);
+  require(view.identities[viewer.id] === null, `Seat ${viewer.id} cannot see their own identity.`);
+  require(!JSON.stringify(view).includes(a.identities[viewer.id].entryId), `Seat ${viewer.id}'s private view never contains their entry id.`);
+  require(a.players.every((other) => other.id === viewer.id || view.identities[other.id]?.entryId === a.identities[other.id].entryId), `Seat ${viewer.id} sees everyone else.`);
+}
+const publicA = JSON.stringify(whoAmIPublicView(a));
+require(Object.values(a.identities).every((entry) => !publicA.includes(entry.entryId)), 'The public view leaks no identity.');
+
+// --- Reveal → play -------------------------------------------------------------------------------
+let state = createWhoAmIGame(seats(4), WHO_AM_I_PACK, createSeededRandom(7));
+state = act(state, 1, { type: 'ready' });
+require(state.phase === 'reveal', 'One ready player does not start the game.');
+require(timeoutWhoAmI(state).phase === 'ask', 'The reveal timer starts the game anyway.');
+state = everyoneReady(state);
+require(state.phase === 'ask' && state.round === 1 && active(state) === state.order[0], 'All ready → round 1, first player in order asks.');
+const first = active(state);
+const other = state.order[1];
+require(rejects(state, other, { type: 'asked' }), 'Only the active player may ask.');
+require(rejects(state, first, { type: 'answer', vote: 'yes' }), 'Answering outside the answer phase is refused.');
+
+// --- Answers -------------------------------------------------------------------------------------
+state = answer(state, ['yes', 'yes', 'no']);
+require(state.phase === 'ask' && active(state) === first && state.turnQuestions === 1, 'Majority Тийм keeps the turn.');
+require(state.lastResult?.kind === 'answer' && state.lastResult.result === 'yes' && state.lastResult.yes === 2, 'The tally is recorded.');
+let check = act(state, first, { type: 'asked' });
+require(rejects(check, first, { type: 'answer', vote: 'yes' }), 'The asker cannot answer their own question.');
+state = answer(state, ['yes', 'no', 'unknown']);
+require(state.phase === 'ask' && active(state) === first && state.lastResult?.kind === 'answer' && state.lastResult.result === 'unknown', 'A tie counts as Мэдэхгүй and keeps the turn.');
+state = answer(state, ['unknown', 'unknown', 'unknown']);
+require(active(state) === first && state.players.find((p) => p.id === first)!.questions === 3, 'All Мэдэхгүй keeps the turn; every answer uses a question.');
+state = answer(state, ['no', 'no', 'yes']);
+require(active(state) === other && state.turnQuestions === 0, 'Majority Үгүй passes the turn.');
+
+// Disconnected voters do not block a vote.
+check = act(state, other, { type: 'asked' });
+const [v1, v2, v3] = eligibleVoters(check);
+check = act(act(check, v1, { type: 'answer', vote: 'no' }), v2, { type: 'answer', vote: 'no' });
+require(check.phase === 'answer', 'The vote waits for the last voter.');
+check = setWhoAmIConnected(check, v3, false);
+require(active(check) !== other, 'When the last voter drops, the vote closes (2 Үгүй → turn passes).');
+check = act(state, other, { type: 'asked' });
+require(timeoutWhoAmI(check).lastResult?.kind === 'answer', 'The answer timer closes the vote with the votes so far.');
+
+// --- Guesses -------------------------------------------------------------------------------------
+const secretOther = state.identities[other];
+const typed = judge(state, [], secretOther.name.toUpperCase().replace(/ө/gi, 'о'));
+require(typed.players.find((p) => p.id === other)!.status === 'solved', 'A typed guess matching the name (case/ө-folded) solves at once.');
+require(guessMatches(secretOther, secretOther.nameEn ?? secretOther.name), 'The English name is accepted too.');
+const otherQuestions = state.players.find((p) => p.id === other)!.questions;
+const typedSolver = typed.players.find((p) => p.id === other)!;
+const otherBefore = state.players.find((p) => p.id === other)!;
+require(typedSolver.solveScore === solvePoints(otherQuestions, 1) && typedSolver.points === otherBefore.points + typedSolver.solveScore, 'Solver scores by the formula with the 1st-place bonus, on top of their vote points.');
+require(typed.players.every((p) => p.id === other || p.votesCast === state.players.find((q) => q.id === p.id)!.votesCast), 'A typed guess that matches at once has no ballot and pays no voter.');
+require(typed.finishOrder[0] === other && active(typed) !== other, 'The solver is recorded and the turn moves on.');
+require(whoAmIPublicView(typed).players.find((p) => p.id === other)!.identity?.entryId === secretOther.entryId, 'A solved identity becomes public.');
+require(whoAmIPrivateView(typed, other).identities[other]?.entryId === secretOther.entryId, 'The solver now sees their own identity.');
+
+let wrong = judge(state, ['wrong', 'correct']);
+require(wrong.phase === 'guess', 'The judging vote waits for the third voter.');
+wrong = timeoutWhoAmI(wrong);
+require(wrong.lastResult?.kind === 'guess' && !wrong.lastResult.correct, 'A judging tie counts as wrong.');
+require(active(wrong) !== other && wrong.players.find((p) => p.id === other)!.questions === otherQuestions + 1, 'A wrong guess uses a question and passes the turn.');
+const voiced = judge(state, ['correct', 'correct', 'wrong']);
+require(voiced.players.find((p) => p.id === other)!.status === 'solved', 'A spoken guess confirmed by the majority solves.');
+require(rejects(act(state, other, { type: 'guess' }), other, { type: 'judge', verdict: 'correct' }), 'The guesser cannot judge their own guess.');
+
+// --- Vote points ---------------------------------------------------------------------------------
+{
+  let game = fresh(4, 31);
+  const asker = active(game);
+  const voters = eligibleVoters(act(game, asker, { type: 'asked' }));
+  game = answer(game, ['yes', 'no', 'unknown']);
+  require(voters.every((id) => game.players.find((p) => p.id === id)!.votesCast === 1 && game.players.find((p) => p.id === id)!.points === POINTS_PER_VOTE),
+    'Every answer (Тийм, Үгүй and Мэдэхгүй alike) earns its voter 1 point.');
+  require(game.players.find((p) => p.id === asker)!.points === 0, 'The asker earns nothing for their own question.');
+
+  // Changing a vote before the ballot closes still pays once.
+  let changed = act(game, asker, { type: 'asked' });
+  changed = act(act(changed, voters[0], { type: 'answer', vote: 'yes' }), voters[0], { type: 'answer', vote: 'no' });
+  changed = timeoutWhoAmI(changed);
+  require(changed.players.find((p) => p.id === voters[0])!.votesCast === 2, 'A changed vote counts once.');
+  require(changed.players.find((p) => p.id === voters[1])!.votesCast === 1, 'A voter who did not press when time ran out earns nothing.');
+
+  // Judging pays too, whatever the verdict.
+  const judged = judge(game, ['correct', 'wrong', 'wrong']);
+  require(voters.every((id) => judged.players.find((p) => p.id === id)!.votesCast === 2), 'Every Зөв / Буруу judgement earns its voter 1 point.');
+
+  // A voter who drops before the close is not paid; a player who gave up still earns by answering.
+  let dropped = act(game, asker, { type: 'asked' });
+  dropped = act(dropped, voters[0], { type: 'answer', vote: 'yes' });
+  dropped = setWhoAmIConnected(dropped, voters[0], false);
+  dropped = timeoutWhoAmI(dropped);
+  require(dropped.players.find((p) => p.id === voters[0])!.votesCast === 1, 'A vote removed by a disconnect pays nothing.');
+  let quitter = act(game, voters[2], { type: 'giveUp' });
+  quitter = answer(quitter, ['yes', 'yes', 'yes']);
+  require(quitter.players.find((p) => p.id === voters[2])!.votesCast === 2, 'A player who gave up still earns points by answering.');
+
+  // With nobody solving, the busiest voter wins on vote points alone.
+  let voteOnly = everyoneReady(createWhoAmIGame(seats(3), WHO_AM_I_PACK, createSeededRandom(4), { rounds: 3, categories: [], kidsSafe: false }));
+  const lazy = voteOnly.order[0];
+  const keen = voteOnly.order[1];
+  voteOnly = act(voteOnly, active(voteOnly), { type: 'asked' });
+  voteOnly = act(voteOnly, keen, { type: 'answer', vote: 'no' });
+  voteOnly = timeoutWhoAmI(voteOnly);
+  while (voteOnly.phase !== 'results') voteOnly = timeoutWhoAmI(voteOnly);
+  require(voteOnly.winners.join() === String(keen) && whoAmIRanking(voteOnly)[0].id === keen, 'The highest total wins even without a solve.');
+  require(voteOnly.players.find((p) => p.id === lazy)!.points === 0, 'No votes, no solve → 0 points.');
+}
+
+// --- Stage key (timer restarts) -------------------------------------------------------------------
+{
+  const game = fresh(4, 41);
+  const asking = act(game, active(game), { type: 'asked' });
+  require(whoAmIStageKey(asking) !== whoAmIStageKey(game), 'Opening a question restarts the timer.');
+  const voted = act(asking, eligibleVoters(asking)[0], { type: 'answer', vote: 'yes' });
+  require(whoAmIStageKey(voted) === whoAmIStageKey(asking) && voted.step !== asking.step, 'A vote does not restart the timer.');
+  require(whoAmIStageKey(answer(game, ['yes', 'yes', 'yes'])) !== whoAmIStageKey(game), 'Back to asking after Тийм restarts the timer.');
+}
+
+// --- Turn limit, pass, timeout -------------------------------------------------------------------
+let limit = fresh(3, 11);
+const limited = active(limit);
+for (let index = 0; index < MAX_QUESTIONS_PER_TURN; index += 1) limit = answer(limit, ['yes', 'yes']);
+require(active(limit) !== limited && limit.lastResult?.kind === 'pass' && limit.lastResult.reason === 'limit', `The turn passes after ${MAX_QUESTIONS_PER_TURN} questions.`);
+const passing = fresh(3, 12);
+require(active(act(passing, active(passing), { type: 'pass' })) !== active(passing), 'A player may pass their turn.');
+require(active(timeoutWhoAmI(passing)) !== active(passing), 'The ask timer passes the turn.');
+require(rejects(passing, passing.order[1], { type: 'hostSkip' }) || passing.order[1] === 1, 'Only the host may skip.');
+require(active(act(passing, 1, { type: 'hostSkip' })) !== active(passing), 'The host can skip a stuck turn.');
+
+// --- Rounds and the end --------------------------------------------------------------------------
+let rounds = everyoneReady(createWhoAmIGame(seats(3), WHO_AM_I_PACK, createSeededRandom(3), { rounds: 3, categories: [], kidsSafe: false }));
+for (let index = 0; index < 9; index += 1) rounds = timeoutWhoAmI(rounds);
+require(rounds.phase === 'results' && rounds.round === 3, 'After 3 rounds of 3 turns the game ends.');
+require(rounds.winners.length === 0 && rounds.players.every((p) => p.points === 0), 'Nobody solved → no winner, everyone 0.');
+require(Object.values(rounds.identities).every((entry) => JSON.stringify(whoAmIPublicView(rounds)).includes(entry.entryId)), 'Results reveal every identity.');
+require(whoAmIDeadlineSeconds(rounds) === null && rejects(rounds, 1, { type: 'pass' }), 'No timer and no actions after the end.');
+
+let race = fresh(3, 21);
+const order = [...race.order];
+race = judge(race, ['correct', 'correct']); // first player, 0 questions
+race = answer(race, ['yes', 'yes']);
+race = judge(race, ['correct', 'correct']); // second player, 1 question
+require(race.phase === 'ask' && active(race) === order[2], 'The last guesser keeps playing alone.');
+race = answer(race, ['no', 'no']);
+require(active(race) === order[2] && race.round === 2, 'With one guesser left, every turn is theirs (rounds still count).');
+race = judge(race, ['correct', 'correct']); // third player, 1 question
+require(race.phase === 'results', 'Everyone solved → results.');
+const points = order.map((id) => race.players.find((p) => p.id === id)!.solveScore);
+require(points.join() === [solvePoints(0, 1), solvePoints(1, 2), solvePoints(1, 3)].join(), `Solve points by order: ${points.join(', ')}.`);
+require(race.players.every((p) => p.points === p.solveScore + p.votesCast * POINTS_PER_VOTE), 'Totals are solve points plus vote points.');
+require(race.winners.join() === String(order[0]) && whoAmIRanking(race)[0].id === order[0], 'The fastest solver wins and tops the ranking.');
+
+// --- Give up, leave, disconnect, bots ------------------------------------------------------------
+let quit = fresh(4, 5);
+const quitter = active(quit);
+quit = act(quit, quitter, { type: 'giveUp' });
+require(quit.players.find((p) => p.id === quitter)!.status === 'gaveUp' && active(quit) !== quitter, 'Giving up reveals and passes the turn.');
+require(eligibleVoters(quit).includes(quitter) || active(quit) === quitter, 'A player who gave up still answers.');
+require(whoAmIPrivateView(quit, quitter).identities[quitter] !== null, 'A player who gave up sees their identity.');
+
+let leave = fresh(4, 6);
+const leaver = active(leave);
+leave = removeWhoAmIPlayer(leave, leaver);
+require(active(leave) !== leaver && leave.phase === 'ask', 'When the active player leaves, the turn passes.');
+require(whoAmIPublicView(leave).players.find((p) => p.id === leaver)!.identity === null, 'A leaver\'s identity stays hidden publicly.');
+leave = removeWhoAmIPlayer(removeWhoAmIPlayer(leave, leave.order.find((id) => id !== leaver)!), leave.order.filter((id) => id !== leaver)[1]);
+require(leave.phase === 'results', 'Fewer than 2 players left ends the game.');
+
+let runaway = fresh(4, 9);
+const leader = active(runaway);
+runaway = act(runaway, leader, { type: 'guess', text: runaway.identities[leader].name });
+require(runaway.players.find((p) => p.id === leader)!.status === 'solved', 'A typed exact name solves at once.');
+runaway = removeWhoAmIPlayer(runaway, leader);
+for (const p of runaway.players.filter((value) => value.status === 'playing')) runaway = act(runaway, p.id, { type: 'giveUp' });
+require(runaway.phase === 'results' && !runaway.winners.includes(leader), 'A leader who left the game cannot win it.');
+
+let away = fresh(4, 8);
+const absent = away.order[1];
+away = setWhoAmIConnected(away, absent, false);
+away = act(away, active(away), { type: 'pass' });
+require(active(away) === away.order[2], 'A disconnected player\'s turn is skipped.');
+require(!eligibleVoters(away).includes(absent), 'A disconnected player does not vote.');
+away = setWhoAmIConnected(away, absent, true);
+require(eligibleVoters(away).includes(absent), 'Reconnecting restores voting.');
+
+// --- Presence from heartbeats (what the server applies on every tick) ------------------------------
+{
+  const now = 1_000_000;
+  let table = fresh(4, 8);
+  table = act(table, active(table), { type: 'asked' });
+  const [stays, drops] = eligibleVoters(table);
+  const others = eligibleVoters(table).filter((id) => id !== drops);
+  const beats: Record<number, number> = Object.fromEntries(table.players.map((p) => [p.id, now - 1000]));
+  require(applyWhoAmIPresence(table, whoAmIPresence(table, beats, now)) === table, 'Fresh heartbeats everywhere change nothing (same object).');
+  for (const id of others) table = act(table, id, { type: 'answer', vote: 'yes' });
+  require(table.phase === 'answer', 'The vote waits on the one voter who has not pressed.');
+  require(2 * WHOAMI_HEARTBEAT_MS + 3000 < WHOAMI_PRESENCE_STALE_MS, 'One lost heartbeat (plus a few seconds of latency) never marks a seat away.');
+  require(whoAmIPresence(table, { ...beats, [drops]: now - 2 * WHOAMI_HEARTBEAT_MS - 3000 }, now)[drops] === true, 'A seat that missed one report is still at the table.');
+  const stale = { ...beats, [drops]: now - WHOAMI_PRESENCE_STALE_MS - 1 };
+  const presence = whoAmIPresence(table, stale, now);
+  require(presence[drops] === false && presence[stays] === true, 'A heartbeat older than the grace time counts as away.');
+  const closed = applyWhoAmIPresence(table, presence);
+  require(closed.phase !== 'answer' && closed.lastResult?.kind === 'answer' && closed.lastResult.result === 'yes', 'A voter who dropped stops holding up the vote: it closes at once.');
+  require(closed.players.find((p) => p.id === drops)!.connected === false, 'The dropped seat is marked away.');
+  require(applyWhoAmIPresence(closed, presence) === closed, 'Applying the same presence again changes nothing.');
+  const back = applyWhoAmIPresence(closed, whoAmIPresence(closed, { ...stale, [drops]: now }, now + 10));
+  require(back.players.find((p) => p.id === drops)!.connected === true, 'A fresh heartbeat brings the seat back.');
+  require(Object.keys(whoAmIPresence(table, {}, now)).length === 0, 'Seats with no heartbeat on record are left as they are.');
+  // Someone back mid-vote is counted before anyone is dropped, so they get to vote.
+  let mid = act(back, active(back), { type: 'asked' });
+  mid = setWhoAmIConnected(mid, drops, false);
+  const voters = eligibleVoters(mid);
+  for (const id of voters.slice(1)) mid = act(mid, id, { type: 'answer', vote: 'no' });
+  const swap = applyWhoAmIPresence(mid, { [drops]: true, [voters[0]]: false });
+  require(swap.phase === 'answer' && eligibleVoters(swap).includes(drops) && !eligibleVoters(swap).includes(voters[0]), 'A returning voter keeps the vote open for their button.');
+  // The reveal no longer waits for a phone that never reported in.
+  let reveal = createWhoAmIGame(seats(3), WHO_AM_I_PACK, createSeededRandom(4));
+  reveal = act(act(reveal, 1, { type: 'ready' }), 2, { type: 'ready' });
+  require(reveal.phase === 'reveal', 'The reveal waits for the third player.');
+  reveal = applyWhoAmIPresence(reveal, whoAmIPresence(reveal, { 1: now, 2: now, 3: now - WHOAMI_PRESENCE_STALE_MS - 5 }, now));
+  require(reveal.phase === 'ask', 'An absent player does not hold up the start.');
+}
+
+let bots = createWhoAmIGame([...seats(3), { id: 9, name: 'Болд (бот)', initials: 'БО', color: 'gold', bot: true }], WHO_AM_I_PACK, createSeededRandom(2));
+require(bots.players.find((p) => p.id === 9)!.ready, 'Bots are ready at once.');
+bots = everyoneReady(bots);
+require(!eligibleVoters(bots).includes(9), 'Bots never vote.');
+let botTurns = 0;
+for (let index = 0; index < 6; index += 1) { if (whoAmIBotToMove(bots)) botTurns += 1; bots = timeoutWhoAmI(bots); }
+require(botTurns === 0, 'Bots are skipped while humans can play.');
+for (const human of [1, 2, 3]) if (bots.phase !== 'results') bots = act(bots, human, { type: 'giveUp' });
+require(bots.phase === 'ask' && whoAmIBotToMove(bots), 'With only a bot still guessing, the bot gets the turn.');
+let botGuard = 0;
+while (bots.phase !== 'results' && botGuard < 50) { bots = whoAmIBotStep(bots); botGuard += 1; }
+require(bots.phase === 'results', 'A bot passes every turn until the round limit ends the game.');
+
+// --- Random play: invariants over many seeds -----------------------------------------------------
+for (let seed = 1; seed <= 200; seed += 1) {
+  const random = createSeededRandom(seed * 7919);
+  let game = createWhoAmIGame(seats(3 + (seed % 8)), WHO_AM_I_PACK, random, { rounds: 3, categories: [], kidsSafe: seed % 2 === 0 });
+  let steps = 0;
+  while (game.phase !== 'results' && steps < 2000) {
+    steps += 1;
+    const roll = random();
+    const ids = game.players.filter((p) => p.status !== 'left').map((p) => p.id);
+    const someone = ids[Math.floor(random() * ids.length)];
+    if (roll < 0.03) game = setWhoAmIConnected(game, someone, random() < 0.5);
+    else if (roll < 0.04) game = removeWhoAmIPlayer(game, someone);
+    else if (roll < 0.1) game = timeoutWhoAmI(game);
+    else {
+      const turn = activeWhoAmIPlayerId(game);
+      const action: WhoAmIAction = game.phase === 'reveal' ? { type: 'ready' }
+        : game.phase === 'ask' ? (random() < 0.25 ? { type: 'guess', text: random() < 0.3 ? game.identities[turn!].name : null } : random() < 0.05 ? { type: 'giveUp' } : { type: 'asked' })
+          : game.phase === 'answer' ? { type: 'answer', vote: (['yes', 'no', 'unknown'] as const)[Math.floor(random() * 3)] }
+            : { type: 'judge', verdict: random() < 0.5 ? 'correct' : 'wrong' };
+      const actor = game.phase === 'ask' ? turn! : someone;
+      game = whoAmIBotStep(applyWhoAmIAction(game, actor, action).state);
+    }
+    for (const viewer of game.players) {
+      const own = whoAmIPrivateView(game, viewer.id).identities[viewer.id];
+      if (game.phase !== 'results' && viewer.status === 'playing' && own !== null) throw new Error(`Seed ${seed}: seat ${viewer.id} saw their own identity.`);
+    }
+    if (game.round > game.maxRounds) throw new Error(`Seed ${seed}: round ${game.round} past the limit.`);
+  }
+  if (game.phase !== 'results') throw new Error(`Seed ${seed}: game did not end in ${steps} steps.`);
+  const solved = game.players.filter((p) => p.place !== null);
+  if (solved.some((p) => p.solveScore !== solvePoints(p.questions, p.place!))) throw new Error(`Seed ${seed}: solve points do not match the formula.`);
+  if (game.players.some((p) => p.place === null && p.solveScore !== 0)) throw new Error(`Seed ${seed}: a non-solver got solve points.`);
+  if (game.players.some((p) => p.points !== p.solveScore + p.votesCast * POINTS_PER_VOTE)) throw new Error(`Seed ${seed}: a total is not solve + vote points.`);
+  if (game.players.some((p) => p.bot && p.votesCast !== 0)) throw new Error(`Seed ${seed}: a bot earned vote points.`);
+  const stayed = game.players.filter((p) => p.status !== 'left');
+  const best = Math.max(0, ...stayed.map((p) => p.points));
+  if (game.winners.join() !== (best > 0 ? stayed.filter((p) => p.points === best).map((p) => p.id).join() : '')) throw new Error(`Seed ${seed}: winners are not the top scorers among those who stayed.`);
+}
+passed += 1;
+
+const counts = WHO_AM_I_PACK.map((category) => `${category.id} ${category.entries.length}`).join(', ');
+console.log(`Who Am I engine: ${passed} checks passed. Pack: ${counts}.`);

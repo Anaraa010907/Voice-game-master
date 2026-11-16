@@ -1,14 +1,19 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import {
-  MIN_PLAYERS, allNightActionsSubmitted, allRevealReady, allVerdictsSubmitted, allVotesSubmitted, createInitialGame, finishDay, markRevealReady,
-  openDiscussion, privateView, publicView, recordVerdict, recordVote, removePlayer, resolveNight, resolveTrial, resolveVoting, sanitizeMafiaSettings,
-  startNight, startVoting, submitNightAction, type GameEngineState, type MafiaSettings, type Verdict, type VoteChoice,
+  MIN_PLAYERS, allNightActionsSubmitted, allReady, allVerdictsSubmitted, allVotesSubmitted, createInitialGame, finishDay, markRevealReady,
+  mafiaStageKey, mafiaTickApplies, openDiscussion, privateView, publicView, recordVerdict, recordVote, removePlayer, resolveNight, resolveTrial,
+  resolveVoting, sanitizeMafiaSettings, startNight, startVoting, submitNightAction, type GameEngineState, type MafiaSettings, type PublicGameView,
+  type Verdict, type VoteChoice,
 } from '../_shared/gameEngine.ts';
+import { mafiaBotsAct, nextBotName } from '../_shared/bots.ts';
 import {
-  MIN_MONOPOLY_PLAYERS, applyMonopolyAction, autoPlay, createMonopolyGame, removeMonopolyPlayer, sanitizeMonopolySettings,
-  type MonopolyAction, type MonopolySettings, type MonopolyState,
-} from '../_shared/monopolyEngine.ts';
-import { BOT_STEP_SECONDS, boardBotToMove, mafiaBotsAct, monopolyBotStep, nextBotName } from '../_shared/bots.ts';
+  MIN_WHOAMI_PLAYERS, applyWhoAmIAction, applyWhoAmIPresence, createWhoAmIGame, removeWhoAmIPlayer, sanitizeWhoAmISettings, setWhoAmIConnected,
+  timeoutWhoAmI, whoAmIBotStep, whoAmIDeadlineSeconds, whoAmIPresence, whoAmIPrivateView, whoAmIPublicView, whoAmIStageKey,
+  type WhoAmIAction, type WhoAmIPack, type WhoAmIState,
+} from '../_shared/whoAmIEngine.ts';
+import { WHO_AM_I_PACK } from '../_shared/whoAmIContent.ts';
+import { resolveWhoAmIPack } from '../_shared/whoAmICatalog.ts';
+import { initialsOf } from '../_shared/initials.ts';
 import { isAllowedOrigin } from '../_shared/voiceRequest.ts';
 import type { VoicePhase } from '../_shared/voicePolicy.ts';
 
@@ -18,26 +23,24 @@ import type { VoicePhase } from '../_shared/voicePolicy.ts';
  * per player. Realtime pushes those rows to the right people under RLS.
  */
 
-type GameType = 'mafia' | 'monopoly';
-type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type: GameType; settings?: Partial<MafiaSettings> | Partial<MonopolySettings> | null };
+type GameType = 'mafia' | 'whoami';
+type Room = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type: GameType; settings?: Record<string, unknown> | null };
 /** The stored engine also carries the match id used to record win/loss statistics exactly once. */
-type StoredGame = GameEngineState & { matchId?: string };
-type StoredBoard = MonopolyState & { matchId?: string };
-type AnyGame = StoredGame | StoredBoard;
-const isBoard = (state: AnyGame): state is StoredBoard => (state as StoredBoard).kind === 'monopoly';
-const GAME_TYPES: GameType[] = ['mafia', 'monopoly'];
-const ROOM_SIZES: Record<GameType, number[]> = { mafia: [6, 8, 10, 12], monopoly: [2, 3, 4, 5, 6] };
-const MIN_SEATS: Record<GameType, number> = { mafia: MIN_PLAYERS, monopoly: MIN_MONOPOLY_PLAYERS };
-/** Seconds each board-game player has for every step (roll, buy, finish turn). */
-const BOARD_STEP_SECONDS = 40;
-/** Seconds a bidder has at an auction before passing, and a player has to answer a trade offer. */
-const BOARD_BID_SECONDS = 15;
-const BOARD_TRADE_SECONDS = 30;
-const BOARD_ACTIONS = ['roll', 'buy', 'decline', 'end', 'pay-jail', 'use-card', 'build', 'sell', 'mortgage', 'unmortgage', 'bid', 'pass', 'propose', 'accept', 'reject', 'cancel-trade'];
-const TILE_ACTIONS = ['build', 'sell', 'mortgage', 'unmortgage'];
+type MafiaGame = GameEngineState & { matchId?: string };
+type WhoAmIGame = WhoAmIState & { matchId?: string };
+type StoredGame = MafiaGame | WhoAmIGame;
+const GAME_TYPES: GameType[] = ['mafia', 'whoami'];
+const ROOM_SIZES: Record<GameType, number[]> = { mafia: [6, 8, 10, 12], whoami: [3, 4, 5, 6, 7, 8, 9, 10] };
+const MIN_SEATS: Record<GameType, number> = { mafia: MIN_PLAYERS, whoami: MIN_WHOAMI_PLAYERS };
 const LISTED_LOBBY_HOURS = 6;
-/** Which games let the host fill seats with bots. Mafia bots are a testing aid: set mafia to false to remove them. */
-const BOTS_ALLOWED: Record<GameType, boolean> = { mafia: true, monopoly: true };
+/** Which games let the host fill seats with bots. Both are played by people only (Who Am I bots cannot hear questions). */
+const BOTS_ALLOWED: Record<GameType, boolean> = { mafia: false, whoami: false };
+const isWhoAmI = (state: StoredGame): state is WhoAmIGame => (state as { kind?: string }).kind === 'whoami';
+/** Mafia-only actions refuse a Who Am I table instead of corrupting it. */
+const mafiaOnly = <T extends unknown[]>(change: (state: MafiaGame, ...rest: T) => MafiaGame) => (state: StoredGame, ...rest: T): StoredGame => {
+  if (isWhoAmI(state)) throw new GameError(409, 'Энэ үйлдэл энэ тоглоомд хамаарахгүй.');
+  return change(state, ...rest);
+};
 type Seat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null; is_bot?: boolean };
 type Body = Record<string, unknown>;
 
@@ -109,51 +112,34 @@ function code(body: Body) {
   return value;
 }
 
-const whole = (value: unknown, max: number) => {
-  const number = typeof value === 'number' || typeof value === 'string' ? Number(value) : NaN;
-  return Number.isInteger(number) && number >= 0 && number <= max ? number : null;
-};
-
-/** Turns a validated board move into an engine action; the engine then checks it against the rules. */
-function boardAction(move: string, body: Body): MonopolyAction {
-  if (TILE_ACTIONS.includes(move)) {
-    const tile = whole(body.tile, 31);
-    if (tile === null) throw new GameError(400, 'Нүд буруу байна.');
-    return { type: move, tile } as MonopolyAction;
+/**
+ * The Who Am I content staff edit in the admin panel, read in one call: active categories with their
+ * active entries and pictures. A category with fewer than 10 active entries is left out, and fewer than
+ * 2 usable categories (or a failed read) means the built-in pack (see _shared/whoAmICatalog.ts).
+ */
+async function loadWhoAmIPack(admin: SupabaseClient): Promise<WhoAmIPack> {
+  try {
+    // A slow read must not hold up the table: after 5 s the built-in pack is used instead.
+    const { data, error } = await admin.rpc('whoami_game_pack').abortSignal(AbortSignal.timeout(5000));
+    if (error) throw error;
+    const { pack, source } = resolveWhoAmIPack(data, env('SUPABASE_URL'), WHO_AM_I_PACK);
+    if (source === 'built-in') console.warn('whoami content: fewer than 2 usable categories in the database, dealing from the built-in pack');
+    return pack;
+  } catch (cause) {
+    console.error('whoami content read failed, dealing from the built-in pack', cause);
+    return WHO_AM_I_PACK;
   }
-  if (move === 'bid') {
-    const amount = whole(body.amount, 1_000_000);
-    if (!amount) throw new GameError(400, 'Үнийн санал буруу байна.');
-    return { type: 'bid', amount };
-  }
-  if (move === 'propose') {
-    const offer = (body.offer ?? {}) as Body;
-    const tiles = (value: unknown) => Array.isArray(value) && value.length <= 32 && value.every((tile) => whole(tile, 31) !== null) ? value.map(Number) : null;
-    const to = whole(offer.to, 99);
-    const give = tiles(offer.give ?? []);
-    const get = tiles(offer.get ?? []);
-    const giveCash = whole(offer.giveCash ?? 0, 1_000_000);
-    const getCash = whole(offer.getCash ?? 0, 1_000_000);
-    const giveCards = whole(offer.giveCards ?? 0, 2);
-    const getCards = whole(offer.getCards ?? 0, 2);
-    if (to === null || !give || !get || giveCash === null || getCash === null || giveCards === null || getCards === null) throw new GameError(400, 'Арилжааны санал буруу байна.');
-    return { type: 'propose', offer: { to, give, get, giveCash, getCash, giveCards, getCards } };
-  }
-  return { type: move } as MonopolyAction;
 }
 
-/** Validated room rules for this kind of game. */
-function roomSettings(type: GameType, input: unknown) {
-  return type === 'monopoly' ? sanitizeMonopolySettings(input) : sanitizeMafiaSettings(input);
+/** Validated room rules. Who Am I categories are checked against the live content. */
+async function roomSettings(admin: SupabaseClient, type: GameType, input: unknown): Promise<Record<string, unknown>> {
+  return type === 'whoami' ? sanitizeWhoAmISettings(input, await loadWhoAmIPack(admin)) : sanitizeMafiaSettings(input);
 }
 
-function deadlineFor(state: AnyGame): string | null {
-  if (isBoard(state)) {
-    if (state.phase === 'finished') return null;
-    // A bot "thinks" for a moment; whoever's phone sees the timer run out asks the server to move it.
-    const seconds = boardBotToMove(state) ? BOT_STEP_SECONDS
-      : state.trade ? BOARD_TRADE_SECONDS : state.phase === 'auction' ? BOARD_BID_SECONDS : BOARD_STEP_SECONDS;
-    return new Date(Date.now() + seconds * 1000).toISOString();
+function deadlineFor(state: StoredGame): string | null {
+  if (isWhoAmI(state)) {
+    const seconds = whoAmIDeadlineSeconds(state);
+    return seconds === null ? null : new Date(Date.now() + seconds * 1000).toISOString();
   }
   if (state.phase === 'Results') return null;
   const key = state.phase === 'Voting'
@@ -192,10 +178,27 @@ function advance(state: GameEngineState): GameEngineState {
 
 /** Skips waiting when everyone who must act already has. */
 function settle(state: GameEngineState): GameEngineState {
-  if (state.phase === 'Role Reveal' && allRevealReady(state)) return advance(state);
+  // Role card read, morning report, discussion, revealed ballot: everyone tapped done.
+  if (allReady(state)) return advance(state);
   if (state.phase === 'Night' && !state.nightResolved && allNightActionsSubmitted(state)) return advance(state);
   if (state.phase === 'Voting' && !state.votesRevealed && (state.trial ? allVerdictsSubmitted(state) : allVotesSubmitted(state))) return advance(state);
   return state;
+}
+
+/** Who Am I bots only ever pass their own turn; repeat until a person has to act. */
+function whoAmIProgress(state: WhoAmIGame): WhoAmIGame {
+  let current = state;
+  for (let step = 0; step < 24; step += 1) {
+    const next = whoAmIBotStep(current) as WhoAmIGame;
+    if (next === current) return current;
+    current = next;
+  }
+  return current;
+}
+
+/** Keeps the stored match id on a Who Am I state the engine returned (the same object when nothing changed). */
+function withMatch(next: WhoAmIState, stored: WhoAmIGame): WhoAmIGame {
+  return next === stored || (next as WhoAmIGame).matchId === stored.matchId ? next as WhoAmIGame : { ...next, matchId: stored.matchId };
 }
 
 /** Lets bots act in every phase that opens, then skips waiting, until nothing more happens. */
@@ -209,12 +212,40 @@ function progress(state: GameEngineState): GameEngineState {
   return current;
 }
 
-// Board games keep voice open for everyone the whole match.
-const voicePhase = (state: AnyGame): VoicePhase => isBoard(state)
-  ? state.phase === 'finished' ? 'results' : 'discussion'
+/** Who Am I is talked through out loud: every seat may speak in every phase (the "discussion" voice rule), then post-game voice. */
+const voicePhase = (state: StoredGame): VoicePhase => isWhoAmI(state)
+  ? state.phase === 'results' ? 'results' : 'discussion'
   : state.phase === 'Role Reveal' ? 'role-reveal' : state.phase.toLowerCase() as VoicePhase;
-const isFinished = (state: AnyGame) => isBoard(state) ? state.phase === 'finished' : state.phase === 'Results';
+const isFinished = (state: StoredGame) => isWhoAmI(state) ? state.phase === 'results' : state.phase === 'Results';
 const gameType = (value: unknown): GameType => GAME_TYPES.includes(value as GameType) ? value as GameType : 'mafia';
+/** A game type a client asked for: older apps send none (Mafia), but a type this server doesn't know is refused rather than silently turned into a Mafia room. */
+const requestedGameType = (value: unknown): GameType => {
+  if (value === undefined || value === null || value === '') return 'mafia';
+  if (GAME_TYPES.includes(value as GameType)) return value as GameType;
+  throw new GameError(400, 'Энэ тоглоом серверт хараахан алга. Аппаа шинэчилнэ үү.');
+};
+/** Rooms are split into language pools so strangers in a voice room can talk; older apps send no language and are Mongolian. */
+const roomLanguage = (value: unknown): 'mn' | 'en' => value === 'en' ? 'en' : 'mn';
+
+/** The client's Who Am I move, checked for shape here and for legality by the engine. */
+function whoAmIActionOf(body: Body): WhoAmIAction {
+  switch (body.type) {
+    case 'ready': case 'asked': case 'pass': case 'giveUp': case 'hostSkip':
+      return { type: body.type };
+    case 'answer':
+      if (body.vote !== 'yes' && body.vote !== 'no' && body.vote !== 'unknown') throw new GameError(400, 'Буруу хариулт.');
+      return { type: 'answer', vote: body.vote };
+    case 'judge':
+      if (body.verdict !== 'correct' && body.verdict !== 'wrong') throw new GameError(400, 'Буруу санал.');
+      return { type: 'judge', verdict: body.verdict };
+    case 'guess': {
+      const guess = typeof body.text === 'string' ? body.text.trim().slice(0, 60) : '';
+      return { type: 'guess', text: guess || null };
+    }
+    default:
+      throw new GameError(400, 'Үйлдэл буруу байна.');
+  }
+}
 
 class GameServer {
   constructor(private admin: SupabaseClient, private userId: string) {}
@@ -248,9 +279,28 @@ class GameServer {
     await this.admin.from('voice_room_members').upsert({ room_code: roomCode, user_id: seat.user_id, participant_name: seat.display_name, is_host: isHost, is_alive: true, is_muted: false });
   }
 
+  /**
+   * Who Am I presence: each seated app reports in every few seconds (a `tick` with `heartbeat`, and every
+   * move it makes). The heartbeats live in their own table, outside Realtime, so they wake nobody's screen.
+   */
+  async heartbeat(roomCode: string, userIds: string[] = [this.userId]) {
+    if (!userIds.length) return;
+    const now = new Date().toISOString();
+    const { error } = await this.admin.from('game_seat_presence')
+      .upsert(userIds.map((userId) => ({ room_code: roomCode, user_id: userId, last_seen_at: now })));
+    if (error) console.error('presence write failed', error);
+  }
+
+  /** The last heartbeat of every seat at the table, by user id (epoch ms). */
+  async lastSeen(roomCode: string): Promise<Map<string, number>> {
+    const { data, error } = await this.admin.from('game_seat_presence').select('user_id,last_seen_at').eq('room_code', roomCode);
+    if (error) console.error('presence read failed', error);
+    return new Map(((data ?? []) as Array<{ user_id: string; last_seen_at: string }>).map((row) => [row.user_id, Date.parse(row.last_seen_at)]));
+  }
+
   async create(body: Body) {
     const name = text(body, 'name', 32);
-    const type = gameType(body.gameType);
+    const type = requestedGameType(body.gameType);
     const maxPlayers = Number(body.maxPlayers);
     if (!ROOM_SIZES[type].includes(maxPlayers)) throw new GameError(400, 'Тоглогчийн тоо буруу байна.');
     // Public rooms appear in the room list; private rooms are joined by code only (optionally with a password).
@@ -258,11 +308,12 @@ class GameServer {
     const password = isPrivate ? text(body, 'password', 32, false) : '';
     if (password && password.length < 4) throw new GameError(400, 'Өрөөний нууц үг хамгийн багадаа 4 тэмдэгт байна.');
     const me = await this.profile();
+    const settings = await roomSettings(this.admin, type, body.settings);
     await this.closeIdleRoomsOfHost();
 
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const roomCodeValue = roomCode();
-      const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate, game_type: type, settings: roomSettings(type, body.settings) });
+      const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate, game_type: type, settings, language: roomLanguage(body.language) });
       if (error?.code === '23505') continue;
       if (error) throw error;
       const seat: Seat = { user_id: this.userId, seat: 1, display_name: me.name, color: me.color, ready: true, avatar_url: me.url };
@@ -298,7 +349,9 @@ class GameServer {
     const { data: secret } = await this.admin.from('game_states').select('password_hash').eq('room_code', roomCodeValue).maybeSingle();
     if (secret?.password_hash) {
       const password = typeof body.password === 'string' ? body.password : '';
-      if (await hashPassword(roomCodeValue, password) !== secret.password_hash) throw new GameError(403, 'Өрөөний нууц үг таарахгүй байна.');
+      if (await hashPassword(roomCodeValue, password) !== secret.password_hash && !(await this.invitedTo(roomCodeValue, seats))) {
+        throw new GameError(403, 'Өрөөний нууц үг таарахгүй байна.');
+      }
     }
     const me = await this.profile();
     const taken = new Set(seats.map((seat) => seat.seat));
@@ -311,6 +364,14 @@ class GameServer {
     await this.addVoiceMember(roomCodeValue, seat, false);
     await this.touchRoom(roomCodeValue);
     return { roomCode: roomCodeValue };
+  }
+
+  /** A friend seated in the room invited me within the last hour: the invite stands in for the password. */
+  private async invitedTo(roomCode: string, seats: Seat[]) {
+    const since = new Date(Date.now() - 3600_000).toISOString();
+    const { data } = await this.admin.from('direct_messages').select('sender').eq('recipient', this.userId).eq('kind', 'invite')
+      .eq('room_code', roomCode).gte('created_at', since).limit(20);
+    return ((data ?? []) as Array<{ sender: string }>).some((invite) => seats.some((seat) => seat.user_id === invite.sender));
   }
 
   async requireSeat(roomCode: string) {
@@ -341,15 +402,18 @@ class GameServer {
     if (room.status === 'playing') {
       // Leaving a live game counts as a loss, recorded first so the final tally cannot turn it into a win.
       const { data: stored } = await this.admin.from('game_states').select('engine').eq('room_code', roomCodeValue).maybeSingle();
-      const game = stored?.engine as AnyGame | null;
-      if (game && !isFinished(game)) await this.recordOutcome(this.userId, 'loss', game.matchId);
+      const game = stored?.engine as StoredGame | null;
+      if (game && !isFinished(game)) await this.recordOutcome(room, this.userId, 'loss', game.matchId, true);
       // If the leaver was the last one the phase was waiting on, the game moves on right away.
-      await this.mutate(roomCodeValue, (state) => isBoard(state) ? removeMonopolyPlayer(state, mine.seat) : progress(removePlayer(state, mine.seat)));
+      await this.mutate(roomCodeValue, (state) => isWhoAmI(state)
+        ? whoAmIProgress(removeWhoAmIPlayer(state, mine.seat) as WhoAmIGame)
+        : progress(removePlayer(state, mine.seat)));
     }
     await Promise.all([
       this.admin.from('game_room_players').delete().eq('room_code', roomCodeValue).eq('user_id', this.userId),
       this.admin.from('game_private').delete().eq('room_code', roomCodeValue).eq('user_id', this.userId),
       this.admin.from('voice_room_members').delete().eq('room_code', roomCodeValue).eq('user_id', this.userId),
+      this.admin.from('game_seat_presence').delete().eq('room_code', roomCodeValue).eq('user_id', this.userId),
     ]);
     // The host leaving a room that is not mid-game closes it for everyone; a live game keeps going under a new host.
     if (!remaining.length || (room.host_id === this.userId && room.status !== 'playing')) {
@@ -373,40 +437,61 @@ class GameServer {
     if (room.host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн тоглоом эхлүүлнэ.');
     if (room.status === 'playing') throw new GameError(409, 'Тоглоом аль хэдийн эхэлсэн.');
     const seats = await this.seats(roomCodeValue);
-    const minimum = MIN_SEATS[room.game_type ?? 'mafia'];
+    const minimum = MIN_SEATS[gameType(room.game_type)];
     if (seats.length < minimum) throw new GameError(409, `Тоглоом эхлүүлэхэд дор хаяж ${minimum} тоглогч хэрэгтэй.`);
+    if (!BOTS_ALLOWED[gameType(room.game_type)] && seats.some((seat) => seat.is_bot)) throw new GameError(409, 'Тоглоомд бот оролцохгүй. Ботуудыг хасна уу.');
     const notReady = seats.filter((seat) => seat.user_id !== room.host_id && !seat.ready);
     if (notReady.length) throw new GameError(409, `Бэлэн болоогүй: ${notReady.map((seat) => seat.display_name).join(', ')}`);
 
     const people = seats.map((seat) => ({
       id: seat.seat,
       name: seat.display_name,
-      initials: seat.display_name.slice(0, 2).toUpperCase(),
+      initials: initialsOf(seat.display_name),
       color: seat.color,
       avatarUrl: seat.avatar_url ?? null,
       host: seat.user_id === room.host_id,
       bot: seat.is_bot === true,
     }));
-    const engine: AnyGame = room.game_type === 'monopoly'
-      ? { ...createMonopolyGame(people, secureRandom, sanitizeMonopolySettings(room.settings)), matchId: crypto.randomUUID() }
-      : { ...createInitialGame(people, undefined, secureRandom, sanitizeMafiaSettings(room.settings)), matchId: crypto.randomUUID() };
+    const type = gameType(room.game_type);
+    const engine: StoredGame = type === 'whoami'
+      ? whoAmIProgress({ ...await this.dealWhoAmI(people, room.settings), matchId: crypto.randomUUID() })
+      : { ...createInitialGame(people, undefined, secureRandom, sanitizeMafiaSettings(room.settings) as MafiaSettings), matchId: crypto.randomUUID() };
     await this.admin.from('game_private').delete().eq('room_code', roomCodeValue);
     const { error } = await this.admin.from('game_states').update({ engine, version: 1, updated_at: new Date().toISOString() }).eq('room_code', roomCodeValue);
     if (error) throw error;
     await this.touchRoom(roomCodeValue, { status: 'playing' });
     await this.admin.from('voice_room_members').update({ is_alive: true }).eq('room_code', roomCodeValue);
+    // Everyone counts as present at the start; a phone that never reports in is marked away after the grace time.
+    if (type === 'whoami') {
+      await this.admin.from('game_seat_presence').delete().eq('room_code', roomCodeValue);
+      await this.heartbeat(roomCodeValue, seats.filter((seat) => !seat.is_bot).map((seat) => seat.user_id));
+    }
     await this.publish(roomCodeValue, engine, seats, 1);
     return { started: true };
   }
 
+  /**
+   * A new Who Am I table from the live content. The game keeps its own copy of every identity it dealt
+   * (name, spellings, picture URL), so staff hiding or editing an entry later never changes a running table.
+   * A category picked in the room rules that has since been hidden is dropped (none left = every category).
+   */
+  async dealWhoAmI(people: Parameters<typeof createWhoAmIGame>[0], settings: unknown): Promise<WhoAmIState> {
+    const pack = await loadWhoAmIPack(this.admin);
+    try {
+      return createWhoAmIGame(people, pack, secureRandom, sanitizeWhoAmISettings(settings, pack));
+    } catch (cause) {
+      throw new GameError(409, cause instanceof Error ? cause.message : 'Би хэн бэ: сонгосон ангилалд хангалттай дүр алга.');
+    }
+  }
+
   /** Read-modify-write with optimistic locking so simultaneous actions never overwrite each other. */
-  async mutate(roomCode: string, change: (state: AnyGame, seats: Seat[]) => AnyGame) {
+  async mutate(roomCode: string, change: (state: StoredGame, seats: Seat[]) => StoredGame) {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const { data, error } = await this.admin.from('game_states').select('engine,version').eq('room_code', roomCode).maybeSingle();
       if (error) throw error;
       if (!data?.engine) throw new GameError(409, 'Тоглоом эхлээгүй байна.');
       const seats = await this.seats(roomCode);
-      const current = data.engine as AnyGame;
+      const current = data.engine as StoredGame;
       const next = change(current, seats);
       if (next === current) return current;
       const { data: written, error: writeError } = await this.admin.from('game_states')
@@ -415,18 +500,16 @@ class GameServer {
       if (writeError) throw writeError;
       if (!written?.length) continue;
       await this.publish(roomCode, next, seats, data.version + 1, current);
-      if (isFinished(next) && !isFinished(current)) await this.recordResults(next, seats);
+      if (isFinished(next) && !isFinished(current)) await this.recordResults(roomCode, next, seats);
       return next;
     }
     throw new GameError(409, 'Олон хүсэлт зэрэг ирлээ. Дахин оролдоно уу.');
   }
 
-  async publish(roomCode: string, state: AnyGame, seats: Seat[], version: number, previous?: AnyGame) {
-    if (isBoard(state)) return this.publishBoard(roomCode, state, seats, version, previous as StoredBoard | undefined);
-    const prior = previous as StoredGame | undefined;
-    const phaseChanged = !prior || prior.phase !== state.phase || prior.votesRevealed !== state.votesRevealed
-      || prior.runoffCandidates?.join() !== state.runoffCandidates?.join() || prior.round !== state.round
-      || prior.trial?.accusedId !== state.trial?.accusedId;
+  async publish(roomCode: string, state: StoredGame, seats: Seat[], version: number, previous?: StoredGame) {
+    if (isWhoAmI(state)) return this.publishWhoAmI(roomCode, state, seats, version, previous && isWhoAmI(previous) ? previous : undefined);
+    const prior = previous && !isWhoAmI(previous) ? previous : undefined;
+    const phaseChanged = !prior || mafiaStageKey(prior) !== mafiaStageKey(state);
     const { data: currentPublic } = await this.admin.from('game_public').select('deadline').eq('room_code', roomCode).maybeSingle();
     const deadline = phaseChanged ? deadlineFor(state) : currentPublic?.deadline ?? deadlineFor(state);
     const writes = [
@@ -444,23 +527,37 @@ class GameServer {
     }
   }
 
-  /** Board games have no secrets: the whole state is the public view. Every step resets the turn timer. */
-  async publishBoard(roomCode: string, state: StoredBoard, seats: Seat[], version: number, previous?: StoredBoard) {
-    const { matchId: _matchId, ...view } = state;
-    const { error } = await this.admin.from('game_public').upsert({ room_code: roomCode, view, deadline: deadlineFor(state), version, updated_at: new Date().toISOString() });
-    if (error) throw error;
-    if (state.phase === 'finished' && previous?.phase !== 'finished') await this.touchRoom(roomCode, { status: 'finished' });
-    if (!previous || (state.phase === 'finished') !== (previous.phase === 'finished')) await this.syncVoice(roomCode, state, seats);
+  /**
+   * Who Am I: one public view, and one private view per person in which their own identity is left out
+   * by the engine (whoAmIPrivateView) — the full state with every identity never leaves game_states.
+   * The timer restarts when a new phase, turn or question opens, not on every vote.
+   */
+  async publishWhoAmI(roomCode: string, state: WhoAmIGame, seats: Seat[], version: number, prior?: WhoAmIGame) {
+    const stageChanged = !prior || whoAmIStageKey(prior) !== whoAmIStageKey(state);
+    const { data: currentPublic } = await this.admin.from('game_public').select('deadline').eq('room_code', roomCode).maybeSingle();
+    const deadline = stageChanged || state.phase === 'results' ? deadlineFor(state) : currentPublic?.deadline ?? deadlineFor(state);
+    const { matchId: _matchId, ...engine } = state;
+    const seated = seats.filter((seat) => !seat.is_bot && engine.players.some((player) => player.id === seat.seat && player.status !== 'left'));
+    const writes = [
+      this.admin.from('game_public').upsert({ room_code: roomCode, view: whoAmIPublicView(engine), deadline, version, updated_at: new Date().toISOString() }),
+      ...(seated.length ? [this.admin.from('game_private').upsert(seated.map((seat) => ({ room_code: roomCode, user_id: seat.user_id, view: whoAmIPrivateView(engine, seat.seat), version })))] : []),
+    ];
+    const results = await Promise.all(writes);
+    const failed = results.find((result) => result.error);
+    if (failed?.error) throw failed.error;
+    if (state.phase === 'results' && prior?.phase !== 'results') await this.touchRoom(roomCode, { status: 'finished' });
+    if (!prior || voicePhase(prior) !== voicePhase(state)) await this.syncVoice(roomCode, state, seats);
   }
 
   /** Mirrors phase and life/death into the voice tables, then asks LiveKit to apply permissions. */
-  async syncVoice(roomCode: string, state: AnyGame, seats: Seat[]) {
+  async syncVoice(roomCode: string, state: StoredGame, seats: Seat[]) {
     try {
       const phase = voicePhase(state);
       await this.admin.from('voice_rooms').update({ game_phase: phase, post_game_voice: phase === 'results', updated_at: new Date().toISOString() }).eq('room_code', roomCode);
       for (const seat of seats) {
         if (seat.is_bot) continue;
-        const alive = isBoard(state) ? true : state.publicPlayers.find((player) => player.id === seat.seat)?.alive ?? false;
+        // Nobody is eliminated in Who Am I: every seat keeps its voice.
+        const alive = isWhoAmI(state) ? true : state.publicPlayers.find((player) => player.id === seat.seat)?.alive ?? false;
         await this.admin.from('voice_room_members').update({ is_alive: alive }).eq('room_code', roomCode).eq('user_id', seat.user_id);
       }
       const controller = Deno.env.get('ROOM_CONTROLLER_SECRET');
@@ -476,20 +573,27 @@ class GameServer {
     }
   }
 
-  /** Adds the win or loss to the player's profile statistics. Idempotent per match and player. */
-  async recordOutcome(userId: string, outcome: 'win' | 'loss', matchId?: string) {
+  /**
+   * Adds the win or loss to the player's statistics and pays the game's coins and Battle Pass XP
+   * (more for a win; nothing for leaving early). Idempotent per match and player.
+   */
+  async recordOutcome(room: Room, userId: string, outcome: 'win' | 'loss', matchId: string | undefined, leftEarly = false) {
     if (!matchId) return;
-    const { error } = await this.admin.rpc('process_verified_competitive_match', {
-      p_match_id: matchId, p_user_id: userId, p_outcome: outcome, p_match_completed: true, p_match_valid: true,
+    const { error } = await this.admin.rpc('record_match_result', {
+      p_match_id: matchId, p_user_id: userId, p_room_code: room.room_code, p_outcome: outcome, p_left: leftEarly,
     });
-    if (error) console.error('stats update failed', error);
+    if (error) console.error('result update failed', error);
   }
 
-  async recordResults(state: AnyGame, seats: Seat[]) {
-    if (isBoard(state)) {
+  async recordResults(roomCode: string, state: StoredGame, seats: Seat[]) {
+    const room = await this.room(roomCode);
+    if (isWhoAmI(state)) {
+      // Win = the highest score (ties all win); everyone else still seated at the end = loss.
+      // Players who left were already recorded as leavers when they went.
       for (const seat of seats) {
-        if (seat.is_bot || !state.players.some((entry) => entry.id === seat.seat)) continue;
-        await this.recordOutcome(seat.user_id, state.winner === seat.seat ? 'win' : 'loss', state.matchId);
+        const player = state.players.find((entry) => entry.id === seat.seat);
+        if (!player || seat.is_bot || player.bot || player.status === 'left') continue;
+        await this.recordOutcome(room, seat.user_id, state.winners.includes(player.id) ? 'win' : 'loss', state.matchId);
       }
       return;
     }
@@ -499,17 +603,17 @@ class GameServer {
       if (!secret || seat.is_bot) continue;
       // The Jester only ever wins alone; town and Mafia win as teams.
       const won = state.winner === 'Jester' ? secret.role === 'Jester' : secret.team !== 'wildcard' && (state.winner === 'Mafia') === (secret.team === 'mafia');
-      await this.recordOutcome(seat.user_id, won ? 'win' : 'loss', state.matchId);
+      await this.recordOutcome(room, seat.user_id, won ? 'win' : 'loss', state.matchId);
     }
   }
 
-  /** Open public lobbies that still have a free seat, fullest first. */
+  /** Open public lobbies of one language pool that still have a free seat, fullest first. */
   async list(body: Body = {}) {
-    const type = gameType(body.gameType);
+    const type = requestedGameType(body.gameType);
     const since = new Date(Date.now() - LISTED_LOBBY_HOURS * 3600 * 1000).toISOString();
     const { data: rooms, error } = await this.admin.from('game_rooms')
       .select('room_code,name,host_id,max_players,updated_at')
-      .eq('status', 'lobby').eq('is_private', false).eq('game_type', type).gte('updated_at', since)
+      .eq('status', 'lobby').eq('is_private', false).eq('game_type', type).eq('language', roomLanguage(body.language)).gte('updated_at', since)
       .order('updated_at', { ascending: false }).limit(50);
     if (error) throw error;
     type ListedRow = { room_code: string; name: string; host_id: string; max_players: number };
@@ -543,36 +647,17 @@ class GameServer {
     return this.join({ roomCode: pick.roomCode });
   }
 
-  /** One board-game move: the current player's turn, a bid at an auction, or an answer to a trade offer. */
-  async board(body: Body) {
-    const roomCodeValue = code(body);
-    const { mine } = await this.requireSeat(roomCodeValue);
-    const move = typeof body.move === 'string' && BOARD_ACTIONS.includes(body.move) ? body.move : null;
-    if (!move) throw new GameError(400, 'Үйлдэл буруу байна.');
-    const action = boardAction(move, body);
-    let failure = '';
-    await this.mutate(roomCodeValue, (state) => {
-      if (!isBoard(state)) { failure = 'Энэ өрөөнд board game явагдаагүй байна.'; return state; }
-      const result = applyMonopolyAction(state, mine.seat, action, secureRandom);
-      failure = result.error ?? '';
-      return result.error ? state : result.state;
-    });
-    if (failure) throw new GameError(409, failure);
-    return { ok: true };
-  }
-
   async night(body: Body) {
     const roomCodeValue = code(body);
     const { mine } = await this.requireSeat(roomCodeValue);
     const targetId = Number(body.targetId);
     if (!Number.isInteger(targetId)) throw new GameError(400, 'Зорилт буруу байна.');
     let failure = '';
-    await this.mutate(roomCodeValue, (state) => {
-      if (isBoard(state)) return state;
+    await this.mutate(roomCodeValue, mafiaOnly((state) => {
       const result = submitNightAction(state, mine.seat, targetId);
       failure = result.error ?? '';
       return result.error ? state : progress(result.state);
-    });
+    }));
     if (failure) throw new GameError(409, failure);
     return { ok: true };
   }
@@ -583,23 +668,22 @@ class GameServer {
     const roomCodeValue = code(body);
     const { mine } = await this.requireSeat(roomCodeValue);
     let failure = '';
-    await this.mutate(roomCodeValue, (state) => {
-      if (isBoard(state)) return state;
+    await this.mutate(roomCodeValue, mafiaOnly((state) => {
       const result = markRevealReady(state, mine.seat);
       failure = result.error ?? '';
       return result.error ? state : progress(result.state);
-    });
+    }));
     if (failure) throw new GameError(409, failure);
     return { ok: true };
   }
 
-  /** Host-only, in the lobby: the room rules (Mafia: mode, roles, reveal, ballots, discussion; board game: round limit). */
+  /** Host-only, in the lobby: the room rules (mode, roles, reveal, ballots, discussion). */
   async settings(body: Body) {
     const roomCodeValue = code(body);
     const room = await this.room(roomCodeValue);
     if (room.host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн дүрэм өөрчилнө.');
     if (room.status !== 'lobby') throw new GameError(409, 'Тоглоом эхэлсэн үед дүрэм өөрчлөх боломжгүй.');
-    const settings = roomSettings(room.game_type ?? 'mafia', body.settings);
+    const settings = await roomSettings(this.admin, gameType(room.game_type), body.settings);
     await this.touchRoom(roomCodeValue, { settings });
     return { settings };
   }
@@ -610,12 +694,11 @@ class GameServer {
     const choice = body.choice === 'guilty' || body.choice === 'innocent' ? body.choice as Verdict : null;
     if (!choice) throw new GameError(400, 'Шийдвэр буруу байна.');
     let failure = '';
-    await this.mutate(roomCodeValue, (state) => {
-      if (isBoard(state)) return state;
+    await this.mutate(roomCodeValue, mafiaOnly((state) => {
       const result = recordVerdict(state, mine.seat, choice);
       failure = result.error ?? '';
       return result.error ? state : progress(result.state);
-    });
+    }));
     if (failure) throw new GameError(409, failure);
     return { ok: true };
   }
@@ -625,12 +708,11 @@ class GameServer {
     const { mine } = await this.requireSeat(roomCodeValue);
     const choice: VoteChoice = body.choice === 'skip' ? 'skip' : Number.isInteger(body.choice) ? body.choice as number : null;
     let failure = '';
-    await this.mutate(roomCodeValue, (state) => {
-      if (isBoard(state)) return state;
+    await this.mutate(roomCodeValue, mafiaOnly((state) => {
       const result = recordVote(state, mine.seat, choice);
       failure = result.error ?? '';
       return result.error ? state : progress(result.state);
-    });
+    }));
     if (failure) throw new GameError(409, failure);
     return { ok: true };
   }
@@ -641,16 +723,57 @@ class GameServer {
     const room = await this.room(roomCodeValue);
     await this.requireSeat(roomCodeValue);
     if (room.status !== 'playing') return { ok: true };
-    const { data: pub } = await this.admin.from('game_public').select('deadline').eq('room_code', roomCodeValue).maybeSingle();
+    const { data: pub } = await this.admin.from('game_public').select('deadline,view').eq('room_code', roomCodeValue).maybeSingle();
     const expired = pub?.deadline ? Date.parse(pub.deadline) <= Date.now() + 500 : false;
     const hostSkip = body.skip === true && room.host_id === this.userId;
-    await this.mutate(roomCodeValue, (state) => {
-      // On a bot's turn the bot plays a real step; for a human who ran out of time the safe default is taken.
-      if (isBoard(state)) return !expired ? state : boardBotToMove(state) ? monopolyBotStep(state, secureRandom) : autoPlay(state, secureRandom);
-      const skippable = state.phase === 'Role Reveal' || state.phase === 'Morning' || state.phase === 'Discussion' || (state.phase === 'Voting' && state.votesRevealed);
-      if (!expired && !(hostSkip && skippable)) return state;
+    // Who Am I: this tick is also my heartbeat; then every seat's connection flag follows its own heartbeats,
+    // so a phone that dropped stops holding up votes, and one that came back counts again.
+    let lastSeen: Map<string, number> | null = null;
+    if (gameType(room.game_type) === 'whoami') {
+      await this.heartbeat(roomCodeValue);
+      lastSeen = await this.lastSeen(roomCodeValue);
+    }
+    const now = Date.now();
+    await this.mutate(roomCodeValue, (state, seats) => {
+      if (isWhoAmI(state)) {
+        const bySeat: Record<number, number | undefined> = {};
+        for (const seat of seats) if (!seat.is_bot) bySeat[seat.seat] = lastSeen?.get(seat.user_id);
+        const present = withMatch(applyWhoAmIPresence(state, whoAmIPresence(state, bySeat, now)), state);
+        // Every client ticks when the clock hits zero. The expired deadline belongs to the stage published with it,
+        // so a stage that opened since (another tick won, a presence change closed a vote, or this is a retry on
+        // newer state) keeps its own timer.
+        const sameStage = pub?.view ? whoAmIStageKey(pub.view as WhoAmIState) === whoAmIStageKey(present) : false;
+        return expired && sameStage ? whoAmIProgress(withMatch(timeoutWhoAmI(present), state)) : whoAmIProgress(present);
+      }
+      // Same rule as Who Am I: the deadline (and the host's skip) belong to the step published with them. A late or
+      // retried tick from another phone, arriving after the first tick opened the next step, leaves that step alone.
+      if (!mafiaTickApplies(pub?.view as PublicGameView | null | undefined, state, expired, hostSkip)) return state;
       return progress(advance(state));
     });
+    return { ok: true };
+  }
+
+  /** Who Am I moves: ready, asked, answer, guess, judge, pass, giveUp, and the host's hostSkip. */
+  async whoami(body: Body) {
+    const roomCodeValue = code(body);
+    const { mine } = await this.requireSeat(roomCodeValue);
+    const action = whoAmIActionOf(body);
+    // The room's current host may skip, including one who took over after the first host left mid-game
+    // (the engine's own host flag is only set at the start).
+    const hostSkip = action.type === 'hostSkip';
+    if (hostSkip && (await this.room(roomCodeValue)).host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн алгасна.');
+    // A move is proof of presence: it refreshes my heartbeat and, if I had been marked away, brings me back first.
+    await this.heartbeat(roomCodeValue);
+    let failure = '';
+    await this.mutate(roomCodeValue, (stored) => {
+      if (!isWhoAmI(stored)) throw new GameError(409, 'Энэ үйлдэл энэ тоглоомд хамаарахгүй.');
+      const state = withMatch(setWhoAmIConnected(stored, mine.seat, true), stored);
+      if (hostSkip) return state.phase === 'results' ? state : whoAmIProgress(withMatch(timeoutWhoAmI(state), stored));
+      const result = applyWhoAmIAction(state, mine.seat, action);
+      failure = result.error ?? '';
+      return result.error ? state : whoAmIProgress(withMatch(result.state, stored));
+    });
+    if (failure) throw new GameError(409, failure);
     return { ok: true };
   }
 
@@ -659,7 +782,7 @@ class GameServer {
     const roomCodeValue = code(body);
     const room = await this.room(roomCodeValue);
     if (room.host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн бот нэмнэ.');
-    if (!BOTS_ALLOWED[room.game_type ?? 'mafia']) throw new GameError(409, 'Энэ тоглоомд бот нэмэх боломжгүй.');
+    if (!BOTS_ALLOWED[gameType(room.game_type)]) throw new GameError(409, 'Энэ тоглоомд бот нэмэх боломжгүй.');
     if (room.status !== 'lobby') throw new GameError(409, 'Тоглоом эхэлсэн үед бот нэмэх боломжгүй.');
     const seats = await this.seats(roomCodeValue);
     if (seats.length >= room.max_players) throw new GameError(409, 'Өрөө дүүрсэн байна.');
@@ -702,6 +825,7 @@ class GameServer {
       this.admin.from('game_room_players').update({ ready: false }).eq('room_code', roomCodeValue).neq('user_id', room.host_id).eq('is_bot', false),
       this.admin.from('voice_rooms').update({ game_phase: 'lobby', post_game_voice: false }).eq('room_code', roomCodeValue),
       this.admin.from('voice_room_members').update({ is_alive: true }).eq('room_code', roomCodeValue),
+      this.admin.from('game_seat_presence').delete().eq('room_code', roomCodeValue),
     ]);
     await this.touchRoom(roomCodeValue, { status: 'lobby' });
     return { ok: true };
@@ -730,10 +854,16 @@ function banMessage(ban: { reason: string; banned_until: string | null }) {
 class AdminTools {
   constructor(private admin: SupabaseClient, private userId: string) {}
 
-  private async requireAdmin() {
-    const { data, error } = await this.admin.from('admin_users').select('user_id').eq('user_id', this.userId).maybeSingle();
+  /** 'admin' or 'moderator'; anyone else is refused. Moderators may ban and unban, admins may do everything. */
+  private async requireStaff(adminOnly = false) {
+    const { data, error } = await this.admin.from('admin_users').select('role').eq('user_id', this.userId).maybeSingle();
     if (error) throw error;
-    if (!data) throw new GameError(403, 'Зөвхөн админ хийх боломжтой.');
+    if (!data) throw new GameError(403, 'Зөвхөн админ, модератор хийх боломжтой.');
+    if (adminOnly && data.role !== 'admin') throw new GameError(403, 'Зөвхөн админ хийх боломжтой.');
+  }
+
+  private requireAdmin() {
+    return this.requireStaff(true);
   }
 
   private target(body: Body) {
@@ -747,11 +877,11 @@ class AdminTools {
   }
 
   async ban(body: Body) {
-    await this.requireAdmin();
+    await this.requireStaff();
     const target = this.target(body);
     if (target === this.userId) throw new GameError(400, 'Өөрийгөө хаах боломжгүй.');
-    const { data: otherAdmin } = await this.admin.from('admin_users').select('user_id').eq('user_id', target).maybeSingle();
-    if (otherAdmin) throw new GameError(400, 'Админыг хаах боломжгүй.');
+    const { data: otherStaff } = await this.admin.from('admin_users').select('user_id').eq('user_id', target).maybeSingle();
+    if (otherStaff) throw new GameError(400, 'Админ, модераторыг хаах боломжгүй. Эхлээд эрхийг нь хасна уу.');
     const hours = Number(body.hours);
     if (!BAN_HOURS.includes(hours)) throw new GameError(400, 'Хаах хугацаа буруу байна.');
     const reason = (typeof body.reason === 'string' ? body.reason : '').trim().slice(0, 200);
@@ -774,7 +904,7 @@ class AdminTools {
   }
 
   async unban(body: Body) {
-    await this.requireAdmin();
+    await this.requireStaff();
     const target = this.target(body);
     const { error: authError } = await this.admin.auth.admin.updateUserById(target, { ban_duration: 'none' });
     if (authError) throw new GameError(404, 'Тоглогч олдсонгүй.');
@@ -782,6 +912,18 @@ class AdminTools {
     const { data: profile } = await this.admin.from('profiles').select('display_name').eq('id', target).maybeSingle();
     await this.log('unban', target, profile?.display_name ?? '');
     return { unbanned: true };
+  }
+
+  /** Mafia roles for an admin watching a room. */
+  async watch(body: Body) {
+    await this.requireAdmin();
+    const roomCodeValue = code(body);
+    const { data: stored, error } = await this.admin.from('game_states').select('engine').eq('room_code', roomCodeValue).maybeSingle();
+    if (error) throw error;
+    const game = stored?.engine as StoredGame | null;
+    if (!game || isWhoAmI(game)) return { roles: null };
+    const roles = Object.fromEntries(Object.entries(game.privatePlayers).map(([seat, secret]) => [seat, secret.role]));
+    return { roles };
   }
 
   async closeRoom(body: Body) {
@@ -838,6 +980,7 @@ Deno.serve(async (request) => {
       'admin-ban': (value) => tools.ban(value),
       'admin-unban': (value) => tools.unban(value),
       'admin-close-room': (value) => tools.closeRoom(value),
+      'admin-watch': (value) => tools.watch(value),
       create: (value) => server.create(value),
       join: (value) => server.join(value),
       leave: (value) => server.leave(value),
@@ -847,12 +990,12 @@ Deno.serve(async (request) => {
       vote: (value) => server.vote(value),
       verdict: (value) => server.verdict(value),
       'reveal-ready': (value) => server.revealReady(value),
+      whoami: (value) => server.whoami(value),
       settings: (value) => server.settings(value),
       tick: (value) => server.tick(value),
       rematch: (value) => server.rematch(value),
       list: (value) => server.list(value),
       quick: (value) => server.quick(value),
-      board: (value) => server.board(value),
       'bot-add': (value) => server.addBot(value),
       'bot-remove': (value) => server.removeBot(value),
     };

@@ -1,0 +1,53 @@
+/*
+ * The player's language: Mongolian (default) or English. It is read once at start-up; changing it
+ * saves the choice and reloads the app, so every screen, memo and module-level table is rebuilt in
+ * the new language without each one having to listen for the change.
+ */
+export type Lang = 'mn' | 'en';
+
+const STORAGE_KEY = 'mafia-shadows:lang';
+
+function storedLang(): Lang {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === 'en' ? 'en' : 'mn';
+  } catch {
+    return 'mn';
+  }
+}
+
+export const LANG: Lang = storedLang();
+export const isEnglish = LANG === 'en';
+
+if (typeof document !== 'undefined') document.documentElement.lang = LANG;
+
+/** Picks the text for the current language: t('Буцах', 'Back'). */
+export const t = (mn: string, en: string) => (isEnglish ? en : mn);
+
+export function setLang(next: Lang) {
+  if (next === LANG) return;
+  try {
+    localStorage.setItem(STORAGE_KEY, next);
+  } catch {
+    // Private mode: the choice lasts until the reload only.
+  }
+  window.location.reload();
+}
+
+/** English count with the right noun form: plural(1, 'night') → "1 night", plural(2, 'night') → "2 nights". */
+export const plural = (count: number, noun: string, many = `${noun}s`) => `${count} ${count === 1 ? noun : many}`;
+
+/** Rooms belong to one language pool so strangers in a voice room can talk. */
+export const ROOM_LANGS: Array<{ code: Lang; label: string }> = [{ code: 'mn', label: 'Монгол' }, { code: 'en', label: 'English' }];
+export const roomLangName = (code?: string | null) => (code === 'en' ? t('Англи', 'English') : t('Монгол', 'Mongolian'));
+
+/**
+ * A month and year, e.g. "2026 оны 3-р сар" / "Mar 2026". Mongolian is written out by hand: many
+ * browsers have no mn-MN month names and fall back to English.
+ */
+export function formatJoinDate(value: string, english = isEnglish) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return english ? 'Unknown date' : 'Тодорхойгүй огноо';
+  return english
+    ? new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(date)
+    : `${date.getFullYear()} оны ${date.getMonth() + 1}-р сар`;
+}

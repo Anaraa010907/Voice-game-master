@@ -1,0 +1,286 @@
+import { useEffect, useMemo, useState, type ComponentType } from 'react';
+import { X } from 'lucide-react';
+import type { LobbyViewProps } from './App';
+import { initialsOf } from './Avatar';
+import type { FullscreenState } from './fullscreen';
+import { i18n } from './i18n';
+import { isEnglish, t } from './lang';
+import type { NotifyFn, RoomInfo, RoomSeat } from './multiplayer';
+import { playSfx } from './sfx';
+import { GiftPicker, GiftPop, type ShopItem } from './Social';
+import { VoiceChatProvider } from './VoiceChat';
+import { DEMO_PHASES, DEMO_SEAT_COUNT, demoRequest, type DemoPhase, type DemoRequest } from './whoAmIDemoRequest';
+import { WhoAmITable, seatLooks } from './WhoAmI';
+import { WHO_AM_I_PACK } from './whoAmIContent';
+import {
+  activeWhoAmIPlayerId, applyWhoAmIAction, createSeededRandom, createWhoAmIGame, eligibleVoters, sanitizeWhoAmISettings, timeoutWhoAmI,
+  whoAmIDeadlineSeconds, whoAmIPrivateView, whoAmIPublicView, whoAmIStageKey, type WhoAmIAction, type WhoAmIPack, type WhoAmISeat, type WhoAmIState,
+} from './whoAmIEngine';
+
+/*
+ * Server-free preview of Who Am I for development and screenshots. It runs the real engine in the
+ * browser and shows the table exactly as the server would: the public view plus the private view of
+ * the chosen seat (so that seat's own identity is hidden here too).
+ *
+ *   ?demo=hub                      game picker
+ *   ?demo=create                   create-room form for Who Am I
+ *   ?demo=lobby[&seat=2]           lobby (seat 1 is the host)
+ *   ?demo=create&game=mafia, ?demo=lobby&game=mafia   the same screens for Mafia (rules card, no rounds)
+ *   ?demo=game&phase=reveal|ask|answer|guess|results[&seat=3][&auto=1][&bar=0]
+ *   any of the above with &players=3..10 for another table size (6 by default)
+ *   &images=1 gives two entries in three a placeholder picture (as staff add them in the admin panel)
+ *
+ * Seats wear shop looks (frames, nameplates, name borders) like real ones. Tapping a player, or the gift
+ * button, opens the real gift picker on a local catalogue; sending one pops it up here (nothing is bought).
+ *
+ * Only in dev builds, or in any build that has no Supabase keys (so never on the live app). App.tsx
+ * imports this file lazily behind DEMO_ENABLED, so keyed builds do not ship it (whoAmIDemoRequest.ts).
+ */
+
+const PHASES = DEMO_PHASES;
+
+const DEMO_NAMES = isEnglish
+  ? ['Bat', 'Saraa', 'Temuulen', 'Nomin', 'Ganaa', 'Khulan', 'Enkhjin', 'Dorj', 'Oyunchimeg', 'Boldbaatar']
+  : ['Бат', 'Сараа', 'Тэмүүлэн', 'Номин', 'Ганаа', 'Хулан', 'Энхжин', 'Дорж', 'Оюунчимэг', 'Болдбаатар'];
+const DEMO_COLORS = ['rose', 'violet', 'gold', 'teal', 'blue', 'plum', 'rose', 'violet', 'gold', 'teal'];
+const ALL_DEMO_SEATS: WhoAmISeat[] = DEMO_NAMES.map((name, index) => ({ id: index + 1, name, initials: initialsOf(name), color: DEMO_COLORS[index], host: index === 0 }));
+/** The demo table: the first `players` seats (see whoAmIDemoRequest.ts). */
+const DEMO_SEATS = ALL_DEMO_SEATS.slice(0, demoRequest()?.players ?? DEMO_SEAT_COUNT);
+
+/** Shop looks per seat (keys from Avatar.tsx): painted, animated and plain frames, picture and plain plates, borders; seat 5 wears none. */
+const DEMO_LOOKS: Array<Pick<RoomSeat, 'frame_key' | 'nameplate_key' | 'border_key'>> = [
+  { frame_key: 'frame-gold-skull', nameplate_key: 'plate-royal-crown', border_key: 'border-gold' },
+  { frame_key: 'frame-ice', nameplate_key: 'plate-ice-crystal' },
+  { frame_key: 'frame-fire-dragon', border_key: 'border-neon' },
+  { frame_key: 'frame-khana', nameplate_key: 'plate-marble' },
+  {},
+  { frame_key: 'frame-butterfly', border_key: 'border-silver' },
+  { nameplate_key: 'plate-neon-alley', border_key: 'border-fire' },
+  { frame_key: 'frame-rose-night', nameplate_key: 'plate-paper' },
+  { frame_key: 'frame-silver', nameplate_key: 'plate-skull-king' },
+  { frame_key: 'frame-royal', border_key: 'border-royal' },
+];
+
+/** The shop's emoji gifts (as seeded in 20261028_shop_gifts_reports.sql), so the picker has something to show without a server. */
+const DEMO_GIFTS: ShopItem[] = ([
+  ['gift-rose', '🌹', 10, 'Сарнай', 'Rose'], ['gift-coffee', '☕', 20, 'Кофе', 'Coffee'], ['gift-clover', '🍀', 30, 'Азын навч', 'Lucky clover'],
+  ['gift-cake', '🎂', 50, 'Бялуу', 'Cake'], ['gift-hat', '🎩', 80, 'Мафи малгай', 'Mafia hat'], ['gift-diamond', '💎', 150, 'Алмаз', 'Diamond'],
+  ['gift-crown', '👑', 300, 'Титэм', 'Crown'], ['gift-car', '🏎️', 500, 'Спорт машин', 'Sports car'],
+] as const).map(([key, icon, price, mn, en], index) => ({ key, kind: 'gift', name: t(mn, en), description: '', icon, price, sort: index + 1, currency: 'coin', source: 'shop' }));
+
+/** Placeholder entry pictures for `&images=1`: a tinted tile with the category's symbol and the entry's initials. */
+const DEMO_TINTS: Record<string, [string, string, string]> = {
+  animal: ['#3f6b45', '#122317', '♞'], figure: ['#7a5a2a', '#24180a', '♛'], profession: ['#355a7a', '#0e1b28', '⚒'], food: ['#8a4b2a', '#2a140a', '☕'],
+  place: ['#2f6670', '#0b2226', '⌂'], object: ['#5d4a7a', '#1a1326', '✦'], character: ['#6a2f4f', '#220c18', '☾'], sport: ['#7a6a2a', '#262009', '⚑'],
+};
+function demoPicture(categoryId: string, entryId: string, name: string) {
+  const [from, to, glyph] = DEMO_TINTS[categoryId] ?? ['#555', '#111', '?'];
+  const initials = name.split(/\s+/).slice(0, 2).map((word) => word[0] ?? '').join('').toUpperCase();
+  // The entry id makes each URL unique, as real picture URLs are (whoami/<entry-id>.webp).
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120' data-entry='${entryId}'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${from}'/><stop offset='1' stop-color='${to}'/></linearGradient></defs>`
+    + `<rect width='120' height='120' fill='url(#g)'/><circle cx='96' cy='22' r='42' fill='#ffffff12'/><text x='60' y='62' font-size='46' text-anchor='middle' fill='#ffffffd0' font-family='serif'>${glyph}</text>`
+    + `<text x='60' y='104' font-size='28' text-anchor='middle' fill='#fff7e0' font-family='sans-serif' font-weight='700'>${initials}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+const DEMO_PACK: WhoAmIPack = demoRequest()?.images
+  ? WHO_AM_I_PACK.map((category) => ({ ...category, entries: category.entries.map((entry, index) => index % 3 === 2 ? entry : { ...entry, image: demoPicture(category.id, entry.id, entry.name) }) }))
+  : WHO_AM_I_PACK;
+
+const step = (state: WhoAmIState, id: number, action: WhoAmIAction) => applyWhoAmIAction(state, id, action).state;
+const asker = (state: WhoAmIState) => activeWhoAmIPlayerId(state)!;
+function vote(state: WhoAmIState, votes: Array<'yes' | 'no' | 'unknown'>) {
+  let next = step(state, asker(state), { type: 'asked' });
+  eligibleVoters(next).forEach((id, index) => { if (next.phase === 'answer') next = step(next, id, { type: 'answer', vote: votes[index % votes.length] }); });
+  return next;
+}
+function judge(state: WhoAmIState, verdicts: Array<'correct' | 'wrong'>, text: string | null = null) {
+  let next = step(state, asker(state), { type: 'guess', text });
+  eligibleVoters(next).forEach((id, index) => { if (next.phase === 'guess') next = step(next, id, { type: 'judge', verdict: verdicts[index % verdicts.length] }); });
+  return next;
+}
+
+/** A believable table in the requested phase, always the same for the same phase. */
+function scenario(phase: DemoPhase): WhoAmIState {
+  let state = createWhoAmIGame(DEMO_SEATS, DEMO_PACK, createSeededRandom(2026), { rounds: 5, categories: [], kidsSafe: false });
+  if (phase === 'reveal') return step(step(state, 3, { type: 'ready' }), 5, { type: 'ready' });
+  state = state.players.reduce((value, player) => step(value, player.id, { type: 'ready' }), state);
+  // Round 1: the first player answers two questions and solves; the second is told "no".
+  state = vote(state, ['yes', 'yes', 'yes', 'no', 'unknown']);
+  state = vote(state, ['yes', 'yes', 'unknown', 'yes', 'no']);
+  state = judge(state, ['correct', 'correct', 'correct', 'wrong', 'correct']);
+  state = vote(state, ['no', 'no', 'yes', 'no', 'no']);
+  // The third player is on: one "yes" so far.
+  state = vote(state, ['yes', 'yes', 'yes', 'no', 'yes']);
+  if (phase === 'ask') return state;
+  if (phase === 'answer') {
+    let next = step(state, asker(state), { type: 'asked' });
+    const [first, second] = eligibleVoters(next);
+    next = step(step(next, first, { type: 'answer', vote: 'yes' }), second, { type: 'answer', vote: 'no' });
+    return next;
+  }
+  if (phase === 'guess') {
+    let next = step(state, asker(state), { type: 'guess', text: isEnglish ? 'A camel?' : 'Тэмээ?' });
+    next = step(next, eligibleVoters(next)[0], { type: 'judge', verdict: 'wrong' });
+    return next;
+  }
+  // Results: a few more solves and give-ups, then the round limit.
+  state = judge(state, ['correct', 'correct', 'correct', 'correct', 'wrong']);
+  state = vote(state, ['yes', 'no', 'no', 'no', 'yes']);
+  state = vote(state, ['yes', 'yes', 'yes', 'unknown', 'yes']);
+  state = judge(state, ['wrong', 'wrong', 'correct', 'wrong', 'wrong']);
+  state = step(state, state.order[state.order.length - 1], { type: 'giveUp' });
+  let guard = 0;
+  while (state.phase !== 'results' && guard < 200) { state = guard % 3 === 0 && state.phase === 'ask' ? vote(state, ['yes', 'no', 'yes', 'no', 'unknown']) : timeoutWhoAmI(state); guard += 1; }
+  return state;
+}
+
+function setUrl(patch: Record<string, string | null>) {
+  try {
+    const url = new URL(window.location.href);
+    for (const [key, value] of Object.entries(patch)) { if (value === null) url.searchParams.delete(key); else url.searchParams.set(key, value); }
+    window.history.replaceState(null, '', url);
+  } catch {
+    // Not important for a preview.
+  }
+}
+
+export type DemoProps = { request: DemoRequest; fullscreen: FullscreenState; notify: NotifyFn; lobby: ComponentType<LobbyViewProps> };
+
+export function WhoAmIDemo({ request, notify, lobby: Lobby }: DemoProps) {
+  const [mode, setMode] = useState<'lobby' | DemoPhase>(request.screen === 'lobby' ? 'lobby' : request.phase);
+  const [state, setState] = useState<WhoAmIState>(() => scenario(request.screen === 'lobby' ? 'reveal' : request.phase));
+  const [auto, setAuto] = useState(request.auto);
+  const [barOpen, setBarOpen] = useState(false);
+  const [viewer, setViewer] = useState<number>(() => request.seat ?? defaultViewer(state, mode));
+  const [deadline, setDeadline] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [settings, setSettings] = useState<Record<string, unknown>>({ rounds: 5, categories: [], kidsSafe: false });
+  const [mafiaSettings, setMafiaSettings] = useState<Record<string, unknown>>({});
+  const [ready, setReady] = useState<Record<string, boolean>>({ 'demo-2': true, 'demo-3': true, 'demo-5': true });
+  const [giftTo, setGiftTo] = useState<number | null>(null);
+  const [gift, setGift] = useState<{ id: number; from: string; to: string; item: ShopItem } | null>(null);
+  useEffect(() => {
+    if (!gift) return;
+    playSfx('buy');
+    const timer = window.setTimeout(() => setGift(null), 3400);
+    return () => window.clearTimeout(timer);
+  }, [gift]);
+
+  const stage = whoAmIStageKey(state);
+  useEffect(() => {
+    const seconds = whoAmIDeadlineSeconds(state);
+    setDeadline(seconds === null ? null : Date.now() + seconds * 1000);
+  }, [stage]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!auto) return;
+    const id = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(id);
+  }, [auto]);
+  const seconds = deadline === null ? null : auto ? Math.max(0, Math.ceil((deadline - now) / 1000)) : whoAmIDeadlineSeconds(state);
+
+  // Auto play: the clock runs and the other seats vote and ask on their own.
+  useEffect(() => {
+    if (!auto || state.phase === 'results') return;
+    if (seconds === 0) { setState((current) => timeoutWhoAmI(current)); return; }
+    const timer = window.setTimeout(() => setState((current) => simulateOthers(current, viewer)), 1600);
+    return () => window.clearTimeout(timer);
+  }, [auto, seconds === 0, state.step, viewer]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const choosePhase = (next: 'lobby' | DemoPhase) => {
+    setMode(next);
+    const fresh = scenario(next === 'lobby' ? 'reveal' : next);
+    setState(fresh);
+    setViewer(defaultViewer(fresh, next));
+    setUrl(next === 'lobby' ? { demo: 'lobby', phase: null, seat: null } : { demo: 'game', phase: next, seat: null });
+  };
+  const chooseViewer = (seat: number) => { setViewer(seat); setUrl({ seat: String(seat) }); };
+
+  const bar = request.bar && (!barOpen
+    ? <button type="button" className="whoami-demo-pill" onClick={() => setBarOpen(true)}>{i18n.whoAmI.demoBanner} ▸</button>
+    : <div className="whoami-demo-bar" role="toolbar" aria-label="Demo">
+    <button type="button" onClick={() => setBarOpen(false)} aria-label="Close">✕</button>
+    <b>{i18n.whoAmI.demoBanner}</b>
+    <span className="whoami-demo-group">{(['lobby', ...PHASES] as const).map((phase) => <button type="button" key={phase} className={mode === phase ? 'is-picked' : ''} onClick={() => choosePhase(phase)}>{phase === 'lobby' ? t('Лобби', 'Lobby') : i18n.whoAmI.phase[phase]}</button>)}</span>
+    <span className="whoami-demo-group"><small>{i18n.whoAmI.demoViewAs}</small>{DEMO_SEATS.map((seat) => <button type="button" key={seat.id} className={viewer === seat.id ? 'is-picked' : ''} onClick={() => chooseViewer(seat.id)}>{seat.name}</button>)}</span>
+    {mode !== 'lobby' && <button type="button" className={auto ? 'is-picked' : ''} onClick={() => setAuto((value) => !value)}>Auto {auto ? 'ON' : 'OFF'}</button>}
+  </div>);
+
+  const seats: RoomSeat[] = useMemo(() => DEMO_SEATS.map((seat) => ({ user_id: `demo-${seat.id}`, seat: seat.id, display_name: seat.name, color: seat.color, ready: seat.id === 1 || ready[`demo-${seat.id}`] === true, ...DEMO_LOOKS[seat.id - 1] })), [ready]);
+  const looks = useMemo(() => seatLooks(seats), [seats]);
+
+  // The gift picker for a seat (never the viewer's own: the server refuses a gift to oneself), then the table's pop-up.
+  const openGift = (seat: number) => { if (seat !== viewer) setGiftTo(seat); };
+  const nameOf = (seat: number) => DEMO_SEATS.find((entry) => entry.id === seat)?.name ?? '?';
+  const gifts = <>
+    {giftTo !== null && <div className="game-modal-backdrop pcard-backdrop" onClick={() => setGiftTo(null)}>
+      <section className="game-modal pcard" role="dialog" aria-modal="true" aria-label={t(`${nameOf(giftTo)} — бэлэг`, `${nameOf(giftTo)} — gift`)} onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="icon-button pcard-close" onClick={() => setGiftTo(null)} aria-label={t('Хаах', 'Close')}><X size={15} /></button>
+        <GiftPicker targetName={nameOf(giftTo)} allowCosmetics={false} busy={false} items={DEMO_GIFTS} note={t('Бэлэг ширээн дээрх бүх хүнд харагдана.', 'Everyone at the table sees the gift.')}
+          onSend={(item) => { setGift({ id: Date.now(), from: nameOf(viewer), to: nameOf(giftTo), item }); setGiftTo(null); }} />
+      </section>
+    </div>}
+    {gift && <GiftPop key={gift.id} from={gift.from} to={gift.to} item={gift.item} />}
+  </>;
+
+  if (mode === 'lobby') {
+    const mafia = request.game === 'mafia';
+    const room: RoomInfo = mafia
+      ? { room_code: 'NIGHT-MAF1', name: isEnglish ? 'Night Table' : 'Шөнийн ширээ', host_id: 'demo-1', max_players: Math.max(8, DEMO_SEATS.length), is_private: false, status: 'lobby', game_type: 'mafia', settings: mafiaSettings, language: isEnglish ? 'en' : 'mn' }
+      : { room_code: 'NIGHT-WHO1', name: isEnglish ? 'Guess Who I Am' : 'Хэн бэ би?', host_id: 'demo-1', max_players: Math.max(8, DEMO_SEATS.length), is_private: false, status: 'lobby', game_type: 'whoami', settings, language: isEnglish ? 'en' : 'mn' };
+    const onRun = async (action: string, body: Record<string, unknown> = {}) => {
+      if (action === 'settings' && mafia) setMafiaSettings((body.settings ?? {}) as Record<string, unknown>);
+      else if (action === 'settings') setSettings(sanitizeWhoAmISettings(body.settings, DEMO_PACK));
+      else if (action === 'start' && mafia) notify(t('Туршилтын горимд сервер алга.', 'There is no server in the demo.'));
+      else if (action === 'ready') setReady((current) => ({ ...current, [`demo-${viewer}`]: body.ready === true }));
+      else if (action === 'start') choosePhase('reveal');
+      else notify(t('Туршилтын горимд сервер алга.', 'There is no server in the demo.'));
+      return true;
+    };
+    return <>
+      <Lobby room={room} seats={seats} roomCode={room.room_code} userId={`demo-${viewer}`} copied={false} busy={false} onCopy={() => undefined}
+        onLeave={() => notify(t('Туршилтын горим', 'Demo mode'))} onRun={onRun} onProfileSeat={(seat) => openGift(seat.seat)} onInvite={() => undefined}>
+        {gifts}
+      </Lobby>
+      {bar}
+    </>;
+  }
+
+  const onAction = (action: WhoAmIAction) => {
+    const result = applyWhoAmIAction(state, viewer, action);
+    if (result.error) notify(result.error, 'error');
+    else setState(result.state);
+  };
+
+  return <VoiceChatProvider roomCode="NIGHT-WHO1" userId={null} seats={seats} phase={state.phase === 'results' ? 'results' : 'discussion'} alive isHost={viewer === 1}>
+    <WhoAmITable game={whoAmIPublicView(state)} me={whoAmIPrivateView(state, viewer)} roomName={isEnglish ? 'Guess Who I Am' : 'Хэн бэ би?'} isHost={viewer === 1} busy={false}
+      secondsLeft={seconds} onAction={onAction} onLeave={() => notify(t('Туршилтын горим', 'Demo mode'))} onRematch={() => choosePhase('reveal')} banner={bar}
+      looks={looks} onProfile={openGift} onGift={openGift} />
+    {gifts}
+  </VoiceChatProvider>;
+}
+
+/** The seat whose view shows the most: someone other than the asker (they see the asker's identity and can vote). */
+function defaultViewer(state: WhoAmIState, mode: 'lobby' | DemoPhase) {
+  if (mode === 'lobby' || mode === 'reveal' || mode === 'results') return 1;
+  const active = activeWhoAmIPlayerId(state);
+  return eligibleVoters(state).find((id) => id !== active && !(state.answerVotes[id] || state.judgeVotes[id])) ?? state.order.find((id) => id !== active) ?? 1;
+}
+
+/** Auto play: every other seat votes at random once the viewer has acted; an asker who is not the viewer asks. */
+function simulateOthers(state: WhoAmIState, viewer: number): WhoAmIState {
+  const random = Math.random;
+  const active = activeWhoAmIPlayerId(state);
+  if (state.phase === 'reveal') return state.players.reduce((value, player) => player.id === viewer ? value : step(value, player.id, { type: 'ready' }), state);
+  if (state.phase === 'ask' && active !== viewer && active !== null) return step(state, active, random() < 0.2 ? { type: 'guess', text: null } : { type: 'asked' });
+  if (state.phase === 'answer' || state.phase === 'guess') {
+    const waitingOnViewer = eligibleVoters(state).includes(viewer) && state.answerVotes[viewer] === undefined && state.judgeVotes[viewer] === undefined;
+    if (waitingOnViewer) return state;
+    return eligibleVoters(state).reduce((value, id) => {
+      if (id === viewer || value.phase !== state.phase) return value;
+      return state.phase === 'answer'
+        ? step(value, id, { type: 'answer', vote: (['yes', 'no', 'unknown'] as const)[Math.floor(random() * 3)] })
+        : step(value, id, { type: 'judge', verdict: random() < 0.5 ? 'correct' : 'wrong' });
+    }, state);
+  }
+  return state;
+}

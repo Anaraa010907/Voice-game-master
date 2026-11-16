@@ -15,6 +15,15 @@ export const supabase = supabaseConfigured
     })
   : null;
 
+/**
+ * The database is in Tokyo (ap-northeast-1). Edge Functions otherwise start in whichever region is
+ * nearest the player and then reach the database across the sea on every query; the game function
+ * makes many queries per move, so it runs next to the database instead. The region goes in the query
+ * string rather than the x-region header, so the functions' CORS rules need no change.
+ */
+export const FUNCTION_REGION = 'ap-northeast-1';
+export const regionalFunction = (name: string) => `${name}?forceFunctionRegion=${FUNCTION_REGION}`;
+
 export type PublicProfile = {
   id: string;
   display_name: string;
@@ -23,8 +32,6 @@ export type PublicProfile = {
   registration_method: 'email' | 'phone';
   created_at: string;
   is_verified: boolean;
-  rank_name: string;
-  rank_points: number;
   player_level: number;
   total_matches: number;
   wins: number;
@@ -33,16 +40,14 @@ export type PublicProfile = {
   win_rate: number;
   current_win_streak: number;
   best_win_streak: number;
+  coins?: number;
+  diamonds?: number;
+  frame_key?: string | null;
+  title_key?: string | null;
+  nameplate_key?: string | null;
+  player_no?: number;
+  border_key?: string | null;
+  /** The picture behind the avatar on the profile showcase and the player card (see backdrops.ts). */
+  backdrop_key?: string | null;
 };
 
-export type RatingChange = {
-  id: number;
-  match_id: string;
-  outcome: 'win' | 'loss' | 'draw';
-  rp_change: number;
-  rank_points_before: number;
-  rank_points_after: number;
-  previous_rank: string;
-  new_rank: string;
-  created_at: string;
-};

@@ -1,25 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { supabase } from './supabaseClient';
+import { regionalFunction, supabase } from './supabaseClient';
 import { translateMessage } from './i18n';
 import type { PrivateGameView, PublicGameView } from './gameEngine';
+import type { GameType } from './games';
 
+import { t } from './lang.ts';
 /** How a toast looks: errors red, confirmations green, everything else neutral. */
 export type NoticeTone = 'info' | 'success' | 'error';
 export type NotifyFn = (text: string, tone?: NoticeTone) => void;
 
-export type RoomInfo = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type?: 'mafia' | 'monopoly'; settings?: Record<string, unknown> | null };
+export type RoomInfo = { room_code: string; name: string; host_id: string; max_players: number; is_private: boolean; status: 'lobby' | 'playing' | 'finished'; game_type?: GameType; settings?: Record<string, unknown> | null; language?: 'mn' | 'en' };
 export type ListedRoom = { roomCode: string; name: string; players: number; maxPlayers: number; hostName: string; joined: boolean };
-export type RoomSeat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null; is_bot?: boolean };
+export type RoomSeat = { user_id: string; seat: number; display_name: string; color: string; ready: boolean; avatar_url?: string | null; is_bot?: boolean; frame_key?: string | null; nameplate_key?: string | null; border_key?: string | null };
 
 /**
  * Calls an Edge Function on the same Supabase project the app signs in to, with the player's
  * session attached. Returns the data or throws the server's (translated) error message.
  */
 export async function invokeFunction<T>(name: 'game' | 'livekit-voice', body: Record<string, unknown>): Promise<T> {
-  if (!supabase) throw new Error('Сервер тохируулагдаагүй байна. .env.local файлыг шалгана уу.');
-  const { data, error } = await supabase.functions.invoke(name, { body });
+  if (!supabase) throw new Error(t('Сервер тохируулагдаагүй байна. .env.local файлыг шалгана уу.', 'The server is not set up. Check the .env.local file.'));
+  const { data, error } = await supabase.functions.invoke(regionalFunction(name), { body });
   if (error) {
-    let message = 'Сервертэй холбогдож чадсангүй. Дахин оролдоно уу.';
+    let message = t('Сервертэй холбогдож чадсангүй. Дахин оролдоно уу.', 'Could not reach the server. Please try again.');
     const response = (error as { context?: Response }).context;
     if (response && typeof response.json === 'function') {
       try {
@@ -50,13 +52,13 @@ export function useRoom(roomCode: string | null) {
   const reload = useCallback(async () => {
     if (!supabase || !roomCode) return;
     const [roomResult, seatResult] = await Promise.all([
-      supabase.from('game_rooms').select('room_code,name,host_id,max_players,is_private,status,game_type,settings').eq('room_code', roomCode).maybeSingle(),
+      supabase.from('game_rooms').select('room_code,name,host_id,max_players,is_private,status,game_type,settings,language').eq('room_code', roomCode).maybeSingle(),
       supabase.from('game_room_players').select('*').eq('room_code', roomCode).order('seat'),
     ]);
     const failure = roomResult.error ?? seatResult.error;
     if (failure) {
       // Keep the last good state; surface the problem instead of spinning on "connecting" forever.
-      setError('Өрөөний мэдээллийг уншиж чадсангүй. Сервер шинэчлэгдээгүй байж магадгүй.');
+      setError(t('Өрөөний мэдээллийг уншиж чадсангүй. Сервер шинэчлэгдээгүй байж магадгүй.', 'Could not read the room. The server may not be updated yet.'));
       setLoaded(true);
       return;
     }
@@ -83,10 +85,10 @@ export function useRoom(roomCode: string | null) {
   return { room, seats, loaded, missing, error, reload };
 }
 
-/** Live public table view, this player's private view, and the phase deadline. */
-export function useGame(roomCode: string | null, userId: string | null) {
-  const [publicView, setPublicView] = useState<PublicGameView | null>(null);
-  const [privateView, setPrivateView] = useState<PrivateGameView | null>(null);
+/** Live public table view, this player's private view, and the phase deadline. Mafia views by default; Who Am I passes its own. */
+export function useGame<Public = PublicGameView, Private = PrivateGameView>(roomCode: string | null, userId: string | null) {
+  const [publicView, setPublicView] = useState<Public | null>(null);
+  const [privateView, setPrivateView] = useState<Private | null>(null);
   const [deadline, setDeadline] = useState<number | null>(null);
   const versionRef = useRef(0);
 
@@ -98,12 +100,12 @@ export function useGame(roomCode: string | null, userId: string | null) {
     ]);
     if (pub.data) {
       versionRef.current = pub.data.version as number;
-      setPublicView(pub.data.view as PublicGameView);
+      setPublicView(pub.data.view as Public);
       setDeadline(pub.data.deadline ? Date.parse(pub.data.deadline as string) : null);
     } else {
       setPublicView(null);
     }
-    setPrivateView((priv.data?.view as PrivateGameView | undefined) ?? null);
+    setPrivateView((priv.data?.view as Private | undefined) ?? null);
   }, [roomCode, userId]);
 
   useEffect(() => {
