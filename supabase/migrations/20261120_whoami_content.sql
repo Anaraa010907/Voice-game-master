@@ -604,7 +604,8 @@ declare
 begin
   perform public.whoami_check_category_names(null, clean_name, clean_en);
   base := btrim(regexp_replace(lower(clean_en), '[^a-z0-9]+', '-', 'g'), '-');
-  if base !~ '^[a-z]' then base := 'cat-' || base; end if;
+  -- An id starts with a letter and has 2+ characters ("X" or "3D" become "cat-x", "cat-3d").
+  if base !~ '^[a-z]' or char_length(base) < 2 then base := 'cat-' || base; end if;
   base := rtrim(left(base, 24), '-');
   slug := base;
   while exists (select 1 from public.whoami_categories where id = slug) loop

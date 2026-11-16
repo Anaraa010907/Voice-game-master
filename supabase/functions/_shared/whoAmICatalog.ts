@@ -61,14 +61,17 @@ export function whoAmIImageUrl(supabaseUrl: string, path: string, version?: stri
 export function buildWhoAmIPack(rows: unknown, supabaseUrl: string): WhoAmIPack | null {
   if (!Array.isArray(rows)) return null;
   const taken = new Set<string>();
+  // Entry and category ids are kept apart: a staff category's id (made from its English name, e.g. "animal-horse")
+  // may equal a built-in entry's id, and that must not drop the category.
   const ids = new Set<string>();
+  const categoryIds = new Set<string>();
   const pack: WhoAmICategory[] = [];
   const ordered = [...rows as WhoAmICategoryRow[]].filter((row) => row && typeof row === 'object')
     .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || String(a.id).localeCompare(String(b.id)));
   for (const row of ordered) {
     const id = text(row.id);
     const name = text(row.name);
-    if (!id || !name || ids.has(id) || !Array.isArray(row.entries)) continue;
+    if (!id || !name || categoryIds.has(id) || !Array.isArray(row.entries)) continue;
     const entries: WhoAmIEntry[] = [];
     for (const item of row.entries) {
       const entryId = text(item?.id);
@@ -90,7 +93,7 @@ export function buildWhoAmIPack(rows: unknown, supabaseUrl: string): WhoAmIPack 
       });
     }
     if (entries.length < MIN_CATEGORY_ENTRIES) continue;
-    ids.add(id);
+    categoryIds.add(id);
     pack.push({ id, name, nameEn: text(row.name_en) || name, kidsSafe: row.kid_safe !== false, entries });
   }
   return pack.length >= MIN_USABLE_CATEGORIES ? pack : null;

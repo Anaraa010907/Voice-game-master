@@ -49,6 +49,11 @@ const cleanedIds = cleaned.flatMap((category) => category.entries.map((entry) =>
 require(!cleanedIds.includes('figure-copy'), 'An entry that repeats another entry’s spelling is skipped.');
 require(!cleanedIds.includes('figure-blank') && new Set(cleanedIds).size === cleanedIds.length, 'Blank names and repeated ids are skipped.');
 
+// A staff category whose id equals a built-in entry id (both are slugs) is still dealt from.
+const clashing = [...builtInRows, { id: 'animal-horse', name: 'Морин хуур аялгуу', name_en: 'Animal horse', kid_safe: true, sort: 90,
+  entries: Array.from({ length: MIN_CATEGORY_ENTRIES }, (_, index) => ({ id: `animal-horse-${index}`, name: `Аялгуу ${index + 1}`, aliases: [] })) }];
+require(buildWhoAmIPack(clashing, URL_BASE)?.some((category) => category.id === 'animal-horse'), 'A category id equal to an entry id does not drop the category.');
+
 // --- Room settings list ---------------------------------------------------------------------------
 const listRows = builtInRows.map((row) => ({ id: row.id, name: row.name, name_en: row.name_en, kid_safe: row.kid_safe, sort: row.sort, entries: row.entries!.length }));
 require(usableWhoAmICategories(listRows)?.length === 8, 'The settings list shows the 8 seeded categories.');

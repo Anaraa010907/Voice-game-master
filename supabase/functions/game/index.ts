@@ -119,7 +119,8 @@ function code(body: Body) {
  */
 async function loadWhoAmIPack(admin: SupabaseClient): Promise<WhoAmIPack> {
   try {
-    const { data, error } = await admin.rpc('whoami_game_pack');
+    // A slow read must not hold up the table: after 5 s the built-in pack is used instead.
+    const { data, error } = await admin.rpc('whoami_game_pack').abortSignal(AbortSignal.timeout(5000));
     if (error) throw error;
     const { pack, source } = resolveWhoAmIPack(data, env('SUPABASE_URL'), WHO_AM_I_PACK);
     if (source === 'built-in') console.warn('whoami content: fewer than 2 usable categories in the database, dealing from the built-in pack');
