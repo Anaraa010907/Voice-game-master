@@ -8,12 +8,14 @@
  * Anti-cheat: the full state holds every player's identity. The server must never send it as is.
  * Send `whoAmIPublicView(state)` to everyone and `whoAmIPrivateView(state, seat)` to each seat: a
  * player's own identity is left out of their private view until they solve it, give up, or the game ends.
+ * An entry's picture is part of its identity, so it is hidden from its owner by the same rule.
  *
  * Rules and numbers are documented in docs/who-am-i.md.
  */
 
 // ---------------------------------------------------------------------------------------------
-// Content pack types (the Mongolian pack lives in src/whoAmIContent.ts)
+// Content pack types (the built-in pack lives in whoAmIContent.ts; the live one comes from the database,
+// see whoAmICatalog.ts)
 // ---------------------------------------------------------------------------------------------
 
 export type WhoAmIEntry = {
@@ -24,6 +26,11 @@ export type WhoAmIEntry = {
   nameEn?: string;
   /** Extra spellings accepted by the typed-guess matcher. */
   aliases?: string[];
+  /**
+   * Public URL of the entry's picture (staff add them in the admin panel). It travels inside the identity,
+   * so it follows exactly the same secrecy rule as the name: never in the owner's view while they guess.
+   */
+  image?: string;
 };
 
 export type WhoAmICategory = {
@@ -89,8 +96,11 @@ export type WhoAmIIdentity = {
   name: string;
   nameEn?: string;
   aliases: string[];
+  /** The entry's picture, when it has one. Secret exactly like the name. */
+  image?: string;
   categoryId: string;
   categoryName: string;
+  categoryNameEn?: string;
 };
 
 export type WhoAmIPlayerStatus = 'playing' | 'solved' | 'gaveUp' | 'left';
@@ -211,7 +221,8 @@ export function guessMatches(identity: WhoAmIIdentity, text: string): boolean {
   return [identity.name, identity.nameEn ?? '', ...identity.aliases].some((name) => name && normalizeGuess(name) === guess);
 }
 
-export function sanitizeWhoAmISettings(input: unknown, pack?: WhoAmIPack): WhoAmISettings {
+/** `pack` (or just its category ids) drops unknown categories; left out, any category id is kept. */
+export function sanitizeWhoAmISettings(input: unknown, pack?: ReadonlyArray<Pick<WhoAmICategory, 'id'>>): WhoAmISettings {
   const raw = (input && typeof input === 'object' ? input : {}) as Partial<Record<keyof WhoAmISettings, unknown>>;
   const rounds = WHOAMI_ROUND_CHOICES.includes(raw.rounds as never) ? raw.rounds as number : DEFAULT_WHOAMI_ROUNDS;
   const known = pack ? new Set(pack.map((category) => category.id)) : null;
@@ -266,8 +277,10 @@ export function identityPool(pack: WhoAmIPack, settings: WhoAmISettings): WhoAmI
     name: entry.name,
     ...(entry.nameEn ? { nameEn: entry.nameEn } : {}),
     aliases: entry.aliases ?? [],
+    ...(entry.image ? { image: entry.image } : {}),
     categoryId: category.id,
     categoryName: category.name,
+    categoryNameEn: category.nameEn,
   })));
 }
 
@@ -623,7 +636,8 @@ export function whoAmIRanking(state: WhoAmIState): WhoAmIPlayer[] {
 
 const identityIsPublic = (state: WhoAmIState, value: WhoAmIPlayer) => state.phase === 'results' || value.status === 'solved' || value.status === 'gaveUp';
 
-export type WhoAmIPublicPlayer = WhoAmIPlayer & { identity: WhoAmIIdentity | null; categoryId: string; categoryName: string };
+/** `identity` (name, picture) is null until it is public; the category is always public, even to its owner. */
+export type WhoAmIPublicPlayer = WhoAmIPlayer & { identity: WhoAmIIdentity | null; categoryId: string; categoryName: string; categoryNameEn: string };
 
 export type WhoAmIPublicView = Omit<WhoAmIState, 'identities' | 'players' | 'answerVotes' | 'judgeVotes'> & {
   activeId: number | null;
@@ -641,7 +655,13 @@ export function whoAmIPublicView(state: WhoAmIState): WhoAmIPublicView {
   return {
     ...rest,
     activeId: activeWhoAmIPlayerId(state),
-    players: players.map((value) => ({ ...value, identity: identityIsPublic(state, value) ? identities[value.id] : null, categoryId: identities[value.id]?.categoryId ?? '', categoryName: identities[value.id]?.categoryName ?? '' })),
+    players: players.map((value) => ({
+      ...value,
+      identity: identityIsPublic(state, value) ? identities[value.id] : null,
+      categoryId: identities[value.id]?.categoryId ?? '',
+      categoryName: identities[value.id]?.categoryName ?? '',
+      categoryNameEn: identities[value.id]?.categoryNameEn ?? '',
+    })),
     votedIds: Object.keys(votes).map(Number),
     voterIds: state.phase === 'answer' || state.phase === 'guess' ? eligibleVoters(state) : [],
     maxQuestionsPerTurn: MAX_QUESTIONS_PER_TURN,

@@ -9,9 +9,10 @@ import { mafiaBotsAct, nextBotName } from '../_shared/bots.ts';
 import {
   MIN_WHOAMI_PLAYERS, applyWhoAmIAction, applyWhoAmIPresence, createWhoAmIGame, removeWhoAmIPlayer, sanitizeWhoAmISettings, setWhoAmIConnected,
   timeoutWhoAmI, whoAmIBotStep, whoAmIDeadlineSeconds, whoAmIPresence, whoAmIPrivateView, whoAmIPublicView, whoAmIStageKey,
-  type WhoAmIAction, type WhoAmIState,
+  type WhoAmIAction, type WhoAmIPack, type WhoAmIState,
 } from '../_shared/whoAmIEngine.ts';
 import { WHO_AM_I_PACK } from '../_shared/whoAmIContent.ts';
+import { resolveWhoAmIPack } from '../_shared/whoAmICatalog.ts';
 import { initialsOf } from '../_shared/initials.ts';
 import { isAllowedOrigin } from '../_shared/voiceRequest.ts';
 import type { VoicePhase } from '../_shared/voicePolicy.ts';
@@ -111,9 +112,27 @@ function code(body: Body) {
   return value;
 }
 
-/** Validated room rules. */
-function roomSettings(type: GameType, input: unknown): Record<string, unknown> {
-  return type === 'whoami' ? sanitizeWhoAmISettings(input, WHO_AM_I_PACK) : sanitizeMafiaSettings(input);
+/**
+ * The Who Am I content staff edit in the admin panel, read in one call: active categories with their
+ * active entries and pictures. A category with fewer than 10 active entries is left out, and fewer than
+ * 2 usable categories (or a failed read) means the built-in pack (see _shared/whoAmICatalog.ts).
+ */
+async function loadWhoAmIPack(admin: SupabaseClient): Promise<WhoAmIPack> {
+  try {
+    const { data, error } = await admin.rpc('whoami_game_pack');
+    if (error) throw error;
+    const { pack, source } = resolveWhoAmIPack(data, env('SUPABASE_URL'), WHO_AM_I_PACK);
+    if (source === 'built-in') console.warn('whoami content: fewer than 2 usable categories in the database, dealing from the built-in pack');
+    return pack;
+  } catch (cause) {
+    console.error('whoami content read failed, dealing from the built-in pack', cause);
+    return WHO_AM_I_PACK;
+  }
+}
+
+/** Validated room rules. Who Am I categories are checked against the live content. */
+async function roomSettings(admin: SupabaseClient, type: GameType, input: unknown): Promise<Record<string, unknown>> {
+  return type === 'whoami' ? sanitizeWhoAmISettings(input, await loadWhoAmIPack(admin)) : sanitizeMafiaSettings(input);
 }
 
 function deadlineFor(state: StoredGame): string | null {
@@ -288,11 +307,12 @@ class GameServer {
     const password = isPrivate ? text(body, 'password', 32, false) : '';
     if (password && password.length < 4) throw new GameError(400, 'Өрөөний нууц үг хамгийн багадаа 4 тэмдэгт байна.');
     const me = await this.profile();
+    const settings = await roomSettings(this.admin, type, body.settings);
     await this.closeIdleRoomsOfHost();
 
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const roomCodeValue = roomCode();
-      const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate, game_type: type, settings: roomSettings(type, body.settings), language: roomLanguage(body.language) });
+      const { error } = await this.admin.from('game_rooms').insert({ room_code: roomCodeValue, name, host_id: this.userId, max_players: maxPlayers, is_private: isPrivate, game_type: type, settings, language: roomLanguage(body.language) });
       if (error?.code === '23505') continue;
       if (error) throw error;
       const seat: Seat = { user_id: this.userId, seat: 1, display_name: me.name, color: me.color, ready: true, avatar_url: me.url };
@@ -433,8 +453,8 @@ class GameServer {
     }));
     const type = gameType(room.game_type);
     const engine: StoredGame = type === 'whoami'
-      ? whoAmIProgress({ ...createWhoAmIGame(people, WHO_AM_I_PACK, secureRandom, sanitizeWhoAmISettings(room.settings, WHO_AM_I_PACK)), matchId: crypto.randomUUID() })
-      : { ...createInitialGame(people, undefined, secureRandom, roomSettings('mafia', room.settings) as MafiaSettings), matchId: crypto.randomUUID() };
+      ? whoAmIProgress({ ...await this.dealWhoAmI(people, room.settings), matchId: crypto.randomUUID() })
+      : { ...createInitialGame(people, undefined, secureRandom, sanitizeMafiaSettings(room.settings) as MafiaSettings), matchId: crypto.randomUUID() };
     await this.admin.from('game_private').delete().eq('room_code', roomCodeValue);
     const { error } = await this.admin.from('game_states').update({ engine, version: 1, updated_at: new Date().toISOString() }).eq('room_code', roomCodeValue);
     if (error) throw error;
@@ -447,6 +467,20 @@ class GameServer {
     }
     await this.publish(roomCodeValue, engine, seats, 1);
     return { started: true };
+  }
+
+  /**
+   * A new Who Am I table from the live content. The game keeps its own copy of every identity it dealt
+   * (name, spellings, picture URL), so staff hiding or editing an entry later never changes a running table.
+   * A category picked in the room rules that has since been hidden is dropped (none left = every category).
+   */
+  async dealWhoAmI(people: Parameters<typeof createWhoAmIGame>[0], settings: unknown): Promise<WhoAmIState> {
+    const pack = await loadWhoAmIPack(this.admin);
+    try {
+      return createWhoAmIGame(people, pack, secureRandom, sanitizeWhoAmISettings(settings, pack));
+    } catch (cause) {
+      throw new GameError(409, cause instanceof Error ? cause.message : 'Би хэн бэ: сонгосон ангилалд хангалттай дүр алга.');
+    }
   }
 
   /** Read-modify-write with optimistic locking so simultaneous actions never overwrite each other. */
@@ -648,7 +682,7 @@ class GameServer {
     const room = await this.room(roomCodeValue);
     if (room.host_id !== this.userId) throw new GameError(403, 'Зөвхөн өрөөний эзэн дүрэм өөрчилнө.');
     if (room.status !== 'lobby') throw new GameError(409, 'Тоглоом эхэлсэн үед дүрэм өөрчлөх боломжгүй.');
-    const settings = roomSettings(gameType(room.game_type), body.settings);
+    const settings = await roomSettings(this.admin, gameType(room.game_type), body.settings);
     await this.touchRoom(roomCodeValue, { settings });
     return { settings };
   }

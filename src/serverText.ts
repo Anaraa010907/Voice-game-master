@@ -125,12 +125,27 @@ const EXACT: Record<string, string> = {
   'Өөрийнхөө эрхийг өөрчлөх боломжгүй.': 'You can\u2019t change your own role.',
   'Өөртөө бэлэг илгээх боломжгүй.': 'You can\u2019t send a gift to yourself.',
   'Өөртөө найзын хүсэлт илгээх боломжгүй.': 'You can\u2019t send a friend request to yourself.',
+  // Who Am I content (20261120_whoami_content.sql, admin panel).
+  'Нэр 1–40 тэмдэгт байх ёстой.': 'A name must be 1\u201340 characters.',
+  'Англи нэр 1–40 тэмдэгт байх ёстой.': 'An English name must be 1\u201340 characters.',
+  'Өөр нэр 40 тэмдэгтээс урт байж болохгүй.': 'An alternative name can be at most 40 characters.',
+  'Өөр нэр 8-аас олон байж болохгүй.': 'At most 8 alternative names.',
+  'Ийм нэртэй ангилал аль хэдийн байна.': 'A category with this name already exists.',
+  'Ангилал олдсонгүй.': 'Category not found.',
+  'Дүр олдсонгүй.': 'Entry not found.',
+  'Үндсэн ангиллыг устгах боломжгүй. Нууж болно.': 'Built-in categories can\u2019t be deleted. You can hide them.',
+  'Үндсэн дүрийг устгах боломжгүй. Нууж болно.': 'Built-in entries can\u2019t be deleted. You can hide them.',
+  'Зургийн нэр буруу байна.': 'The picture file name is invalid.',
+  'Зураг олдсонгүй. Дахин хуулна уу.': 'The picture was not found. Please upload it again.',
+  'Би хэн бэ: сонгосон ангилалд хангалттай дүр алга.': 'Who Am I: the chosen categories don\u2019t have enough entries.',
+  'Би хэн бэ: 3–10 тоглогч хэрэгтэй.': 'Who Am I needs 3\u201310 players.',
 };
 
 const PATTERNS: Array<[RegExp, (...groups: string[]) => string]> = [
   [/^Өдрийн бонусыг (\d+) цагийн дараа дахин авна\.$/, (hours) => `You can claim the daily bonus again in ${hours} hours.`],
   [/^Тоглоом эхлүүлэхэд дор хаяж (\d+) тоглогч хэрэгтэй\.$/, (count) => `At least ${count} players are needed to start.`],
   [/^Бэлэн болоогүй: (.+)$/, (names) => `Not ready yet: ${names}`],
+  [/^Давхардсан нэр: «(.+)» нь «(.+)» дүрд аль хэдийн байна\.$/, (name, other) => `Duplicate name: \u00ab${name}\u00bb is already used by \u00ab${other}\u00bb.`],
   [/^Таны бүртгэл (.+) \(UTC\) хүртэл хаагдсан байна\.(?: Шалтгаан: (.+))?$/, (until, reason) => `Your account is banned until ${until} (UTC).${reason ? ` Reason: ${reason}` : ''}`],
   [/^Таны бүртгэл бүрмөсөн хаагдсан байна\.(?: Шалтгаан: (.+))?$/, (reason) => `Your account is banned permanently.${reason ? ` Reason: ${reason}` : ''}`],
 ];

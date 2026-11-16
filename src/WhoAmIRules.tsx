@@ -3,25 +3,32 @@ import { Check, ScrollText, SlidersHorizontal } from 'lucide-react';
 import { i18n } from './i18n';
 import { ScrollCue } from './ScrollCue';
 import { isEnglish } from './lang';
-import { WHO_AM_I_PACK } from './whoAmIContent';
+import { useWhoAmICategories, whoAmICategoryInfo } from './whoAmICatalog';
 import { WHOAMI_ROUND_CHOICES, sanitizeWhoAmISettings, type WhoAmISettings } from './whoAmIEngine';
 
 const w = () => i18n.whoAmI;
 const categoryName = (id: string) => {
-  const category = WHO_AM_I_PACK.find((entry) => entry.id === id);
+  const category = whoAmICategoryInfo(id);
   return category ? (isEnglish ? category.nameEn : category.name) : id;
 };
 
+/*
+ * The categories come from the database (staff edit them in the admin panel), see whoAmICatalog.ts.
+ * A category the host picked that staff have hidden since is left out here, as the server leaves it out
+ * when the game starts.
+ */
+
 /** "5 тойрог · Амьтан, Хоол" for the lobby card. */
 export function whoAmIRulesSummary(raw: unknown) {
-  const rules = sanitizeWhoAmISettings(raw, WHO_AM_I_PACK);
+  const rules = sanitizeWhoAmISettings(raw);
   const categories = rules.categories.length ? rules.categories.map(categoryName).join(', ') : w().allCategories;
   return [w().roundsCount(rules.rounds), categories, ...(rules.kidsSafe ? [w().kidsSafe] : [])].join(' · ');
 }
 
 /** The lobby card: rounds, categories and scoring, plus (for the host) the button to change them. */
 export function WhoAmIRulesCard({ settings, isHost, busy, onEdit }: { settings: unknown; isHost: boolean; busy: boolean; onEdit: () => void }) {
-  const rules = sanitizeWhoAmISettings(settings, WHO_AM_I_PACK);
+  const categories = useWhoAmICategories();
+  const rules = sanitizeWhoAmISettings(settings, categories);
   return <section className="lobby-rules whoami-rules" aria-label={w().rulesTitle}>
     <header>
       <span><ScrollText size={13} /> {w().title.toUpperCase()} · <b>{w().roundsCount(rules.rounds).toUpperCase()}</b></span>
@@ -31,7 +38,7 @@ export function WhoAmIRulesCard({ settings, isHost, busy, onEdit }: { settings: 
       {/* Every category (the default) is one chip, so the card stays short; a picked set lists its names. */}
       <div className="rules-roles">{rules.categories.length
         ? rules.categories.map((id) => <span key={id} className="team-town">{categoryName(id)}</span>)
-        : <span className="team-town">{w().allCategoriesCount(WHO_AM_I_PACK.filter((entry) => !rules.kidsSafe || entry.kidsSafe).length)}</span>}
+        : <span className="team-town">{w().allCategoriesCount(categories.filter((entry) => !rules.kidsSafe || entry.kidsSafe).length)}</span>}
         {rules.kidsSafe && <span className="team-town">{w().kidsSafe}</span>}</div>
       <p>{w().rulesLine}</p>{' '}
       <p className="whoami-rules-scoring">{w().scoringLine}</p>
@@ -41,8 +48,9 @@ export function WhoAmIRulesCard({ settings, isHost, busy, onEdit }: { settings: 
 
 /** Host-only editor: rounds (3 / 5 / 8), categories (none picked = all) and kid-friendly content. */
 export function WhoAmIRulesEditor({ initial, busy, onSave, onClose }: { initial: unknown; busy: boolean; onSave: (settings: WhoAmISettings) => void; onClose: () => void }) {
-  const [draft, setDraft] = useState(() => sanitizeWhoAmISettings(initial, WHO_AM_I_PACK));
-  const change = (patch: Partial<WhoAmISettings>) => setDraft((current) => sanitizeWhoAmISettings({ ...current, ...patch }, WHO_AM_I_PACK));
+  const categories = useWhoAmICategories();
+  const [draft, setDraft] = useState(() => sanitizeWhoAmISettings(initial, categories));
+  const change = (patch: Partial<WhoAmISettings>) => setDraft((current) => sanitizeWhoAmISettings({ ...current, ...patch }, categories));
   const toggle = (id: string) => change({ categories: draft.categories.includes(id) ? draft.categories.filter((entry) => entry !== id) : [...draft.categories, id] });
   return <div className="game-modal-backdrop" onClick={onClose}>
     <section className="game-modal rules-modal" role="dialog" aria-modal="true" aria-labelledby="whoami-rules-title" onClick={(event) => event.stopPropagation()}>
@@ -55,7 +63,7 @@ export function WhoAmIRulesEditor({ initial, busy, onSave, onClose }: { initial:
       </div>
       <div className="rules-switches">
         <button type="button" aria-pressed={draft.categories.length === 0} className={draft.categories.length === 0 ? 'is-on' : ''} onClick={() => change({ categories: [] })}>{draft.categories.length === 0 && <Check size={12} />}{w().allCategories}</button>
-        {WHO_AM_I_PACK.map((category) => {
+        {categories.map((category) => {
           const on = draft.categories.includes(category.id);
           const locked = draft.kidsSafe && !category.kidsSafe;
           return <button type="button" key={category.id} disabled={locked} aria-pressed={on} className={on ? 'is-on' : ''} onClick={() => toggle(category.id)}>{on && <Check size={12} />}{categoryName(category.id)}</button>;
