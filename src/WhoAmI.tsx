@@ -9,7 +9,7 @@ import { ScrollCue } from './ScrollCue';
 import { playSfx } from './sfx';
 import { useLongPress } from './Social';
 import { VoiceAvatarIndicator, VoiceChatProvider } from './VoiceChat';
-import { WHO_AM_I_PACK } from './whoAmIContent';
+import { whoAmICategoryInfo } from './whoAmICatalog';
 import { WHOAMI_HEARTBEAT_MS } from './whoAmIEngine';
 import type {
   AnswerVote, JudgeVote, WhoAmIAction, WhoAmIIdentity, WhoAmILastResult, WhoAmIPrivateView, WhoAmIPublicPlayer, WhoAmIPublicView,
@@ -21,9 +21,23 @@ const w = () => i18n.whoAmI;
 export const identityName = (identity: WhoAmIIdentity) => isEnglish ? identity.nameEn ?? identity.name : identity.name;
 
 /** Category name in the app language (the category is public, even to the identity's owner). */
-export function categoryLabel(categoryId: string, fallback = '') {
-  const category = WHO_AM_I_PACK.find((entry) => entry.id === categoryId);
-  return category ? (isEnglish ? category.nameEn : category.name) : fallback;
+export function categoryLabel(player: Pick<WhoAmIPublicPlayer, 'categoryId' | 'categoryName'> & { categoryNameEn?: string }) {
+  const own = isEnglish ? player.categoryNameEn : player.categoryName;
+  if (own) return own;
+  const category = whoAmICategoryInfo(player.categoryId);
+  return category ? (isEnglish ? category.nameEn : category.name) : player.categoryName;
+}
+
+/**
+ * An identity's picture, when staff gave the entry one. It only ever comes from an identity the viewer
+ * may see (the server leaves the owner's own identity, picture included, out of their view), so drawing
+ * it here can never show anyone their own card. A picture that fails to load is simply left out.
+ */
+function IdentityPicture({ identity, className = '' }: { identity: WhoAmIIdentity | null; className?: string }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  const src = identity?.image;
+  if (!src || failed === src) return null;
+  return <img className={`whoami-picture ${className}`} src={src} alt="" loading="lazy" decoding="async" draggable={false} referrerPolicy="no-referrer" onError={() => setFailed(src)} />;
 }
 
 const formatTime = (seconds: number | null) => seconds === null ? '--:--' : `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
@@ -182,7 +196,7 @@ export function WhoAmITable({ game, me, roomName, isHost, busy, secondsLeft, onA
         <p className="whoami-prompt">{w().judgePrompt(active.name)}</p>
         <div className="whoami-guess-compare">
           <span><small>{game.guess?.text ? w().typedGuess : w().spokenGuess}</small><b>{game.guess?.text ? `«${game.guess.text}»` : <Mic size={16} />}</b></span>
-          <span><small>{w().realIdentity}</small><b>{real ? identityName(real) : '?'}</b></span>
+          <span className={real?.image ? 'has-picture' : ''}><small>{w().realIdentity}</small><b><IdentityPicture identity={real} className="is-compare" />{real ? identityName(real) : '?'}</b></span>
         </div>
         <div className="whoami-vote-buttons">
           <VoteButton tone="yes" picked={vote === 'correct'} disabled={busy} onClick={() => onAction({ type: 'judge', verdict: 'correct' })} icon={<Check size={18} />} label={w().correct} />
@@ -268,17 +282,18 @@ function Confirm({ title, body, confirm, onCancel, onConfirm }: { title: string;
 function IdentityCard({ player, identity, isMe, large = false, looks, onProfile, onGift }: {
   player: WhoAmIPublicPlayer; identity: WhoAmIIdentity | null; isMe: boolean; large?: boolean; looks?: SeatLooks; onProfile?: (seat: number) => void; onGift?: (seat: number) => void;
 }) {
-  const category = categoryLabel(player.categoryId, player.categoryName);
+  const category = categoryLabel(player);
   const look = lookOf(looks, player.id);
   const press = usePlayerPress(player.id, onProfile, onGift);
+  const pictured = Boolean(identity?.image);
   // The name border goes round the whole card; the nameplate sits behind the name strip at its top.
-  return <button type="button" className={`whoami-card ${large ? 'is-large' : ''} ${isMe ? 'is-me' : ''} status-${player.status} ${look.borderClass}`} {...press} data-cue-focus={(isMe && !large) || undefined}>
+  return <button type="button" className={`whoami-card ${large ? 'is-large' : ''} ${isMe ? 'is-me' : ''} ${pictured ? 'has-picture' : ''} status-${player.status} ${look.borderClass}`} {...press} data-cue-focus={(isMe && !large) || undefined}>
     <RowBorder borderKey={look.border} />
     <span className={`whoami-card-who ${look.plateClass}`} style={look.plateStyle}>
       <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials} frame={look.frame}>{player.host && <i className="host-badge" title={w().host}><Crown size={9} /></i>}<VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
       <b>{player.name}{isMe && <small>{w().you}</small>}</b>
     </span>
-    <span className="whoami-card-identity">{identity ? identityName(identity) : <><i className="whoami-mystery">?</i><em>{w().hidden}</em></>}</span>
+    <span className="whoami-card-identity">{identity ? <><IdentityPicture identity={identity} className="is-card" /><span>{identityName(identity)}</span></> : <><i className="whoami-mystery">?</i><em>{w().hidden}</em></>}</span>
     <span className="whoami-card-category">{isMe ? w().yourCategory(category) : category}</span>
     {player.status !== 'playing' && <span className={`whoami-status is-${player.status}`}>{w().status[player.status]}</span>}
   </button>;
@@ -287,10 +302,11 @@ function IdentityCard({ player, identity, isMe, large = false, looks, onProfile,
 function PlayerRow({ player, identity, isMe, isActive, voted, looks, onProfile, onGift }: {
   player: WhoAmIPublicPlayer; identity: WhoAmIIdentity | null; isMe: boolean; isActive: boolean; voted: boolean; looks?: SeatLooks; onProfile?: (seat: number) => void; onGift?: (seat: number) => void;
 }) {
-  const category = categoryLabel(player.categoryId, player.categoryName);
+  const category = categoryLabel(player);
   const look = lookOf(looks, player.id);
   const press = usePlayerPress(player.id, onProfile, onGift);
   // A known identity gets the whole second line (the category is in the tooltip); a hidden one shows its category.
+  // Its picture, if any, sits as a small thumbnail before the score.
   return <button type="button" className={`whoami-player ${isActive ? 'is-active' : ''} ${isMe ? 'is-me' : ''} status-${player.status} ${look.plateClass} ${look.borderClass}`} style={look.plateStyle} {...press} title={category} data-cue-focus={isActive || undefined}>
     <RowBorder borderKey={look.border} />
     <Avatar name={player.name} color={player.color} url={player.avatarUrl} initials={player.initials} frame={look.frame}>{player.host && <i className="host-badge" title={w().host}><Crown size={9} /></i>}<VoiceAvatarIndicator name={player.name} seat={player.id} /></Avatar>
@@ -298,6 +314,7 @@ function PlayerRow({ player, identity, isMe, isActive, voted, looks, onProfile, 
       <b>{player.name}{isMe && <small>{w().you}</small>}</b>
       {identity ? <span className="whoami-player-identity">{identityName(identity)}</span> : <span className="whoami-player-identity is-hidden">? · {category}</span>}
     </span>
+    <IdentityPicture identity={identity} className="is-thumb" />
     {voted && <Check className="whoami-voted" size={13} aria-label="✓" />}
     <span className="whoami-player-score"><b>{player.points}</b><small>{player.status === 'playing' ? '' : w().status[player.status]}</small></span>
   </button>;
@@ -344,6 +361,7 @@ function RankingRow({ player, place, winner, isMe, looks, onProfile, onGift }: {
       <b>{player.name}{isMe && <small>{w().you}</small>}{player.status !== 'playing' && <i className={`whoami-status is-${player.status}`}>{w().status[player.status]}</i>}</b>
       <span><span className="whoami-ranking-identity">{player.identity ? identityName(player.identity) : '?'}</span> <small className="whoami-ranking-questions">· {w().questionsUsed(player.questions)}</small></span>
     </span>
+    <IdentityPicture identity={player.identity} className="is-thumb" />
     <span className="whoami-ranking-score"><b>{w().points(player.points)}</b><small>{w().breakdown(player.solveScore, player.votesCast)}</small></span>
   </li>;
 }

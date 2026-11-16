@@ -14,7 +14,7 @@ import { WhoAmITable, seatLooks } from './WhoAmI';
 import { WHO_AM_I_PACK } from './whoAmIContent';
 import {
   activeWhoAmIPlayerId, applyWhoAmIAction, createSeededRandom, createWhoAmIGame, eligibleVoters, sanitizeWhoAmISettings, timeoutWhoAmI,
-  whoAmIDeadlineSeconds, whoAmIPrivateView, whoAmIPublicView, whoAmIStageKey, type WhoAmIAction, type WhoAmISeat, type WhoAmIState,
+  whoAmIDeadlineSeconds, whoAmIPrivateView, whoAmIPublicView, whoAmIStageKey, type WhoAmIAction, type WhoAmIPack, type WhoAmISeat, type WhoAmIState,
 } from './whoAmIEngine';
 
 /*
@@ -28,6 +28,7 @@ import {
  *   ?demo=create&game=mafia, ?demo=lobby&game=mafia   the same screens for Mafia (rules card, no rounds)
  *   ?demo=game&phase=reveal|ask|answer|guess|results[&seat=3][&auto=1][&bar=0]
  *   any of the above with &players=3..10 for another table size (6 by default)
+ *   &images=1 gives two entries in three a placeholder picture (as staff add them in the admin panel)
  *
  * Seats wear shop looks (frames, nameplates, name borders) like real ones. Tapping a player, or the gift
  * button, opens the real gift picker on a local catalogue; sending one pops it up here (nothing is bought).
@@ -67,6 +68,23 @@ const DEMO_GIFTS: ShopItem[] = ([
   ['gift-crown', '👑', 300, 'Титэм', 'Crown'], ['gift-car', '🏎️', 500, 'Спорт машин', 'Sports car'],
 ] as const).map(([key, icon, price, mn, en], index) => ({ key, kind: 'gift', name: t(mn, en), description: '', icon, price, sort: index + 1, currency: 'coin', source: 'shop' }));
 
+/** Placeholder entry pictures for `&images=1`: a tinted tile with the category's symbol and the entry's initials. */
+const DEMO_TINTS: Record<string, [string, string, string]> = {
+  animal: ['#3f6b45', '#122317', '♞'], figure: ['#7a5a2a', '#24180a', '♛'], profession: ['#355a7a', '#0e1b28', '⚒'], food: ['#8a4b2a', '#2a140a', '☕'],
+  place: ['#2f6670', '#0b2226', '⌂'], object: ['#5d4a7a', '#1a1326', '✦'], character: ['#6a2f4f', '#220c18', '☾'], sport: ['#7a6a2a', '#262009', '⚑'],
+};
+function demoPicture(categoryId: string, name: string) {
+  const [from, to, glyph] = DEMO_TINTS[categoryId] ?? ['#555', '#111', '?'];
+  const initials = name.split(/\s+/).slice(0, 2).map((word) => word[0] ?? '').join('').toUpperCase();
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${from}'/><stop offset='1' stop-color='${to}'/></linearGradient></defs>`
+    + `<rect width='120' height='120' fill='url(#g)'/><circle cx='96' cy='22' r='42' fill='#ffffff12'/><text x='60' y='62' font-size='46' text-anchor='middle' fill='#ffffffd0' font-family='serif'>${glyph}</text>`
+    + `<text x='60' y='104' font-size='28' text-anchor='middle' fill='#fff7e0' font-family='sans-serif' font-weight='700'>${initials}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+const DEMO_PACK: WhoAmIPack = demoRequest()?.images
+  ? WHO_AM_I_PACK.map((category) => ({ ...category, entries: category.entries.map((entry, index) => index % 3 === 2 ? entry : { ...entry, image: demoPicture(category.id, entry.name) }) }))
+  : WHO_AM_I_PACK;
+
 const step = (state: WhoAmIState, id: number, action: WhoAmIAction) => applyWhoAmIAction(state, id, action).state;
 const asker = (state: WhoAmIState) => activeWhoAmIPlayerId(state)!;
 function vote(state: WhoAmIState, votes: Array<'yes' | 'no' | 'unknown'>) {
@@ -82,7 +100,7 @@ function judge(state: WhoAmIState, verdicts: Array<'correct' | 'wrong'>, text: s
 
 /** A believable table in the requested phase, always the same for the same phase. */
 function scenario(phase: DemoPhase): WhoAmIState {
-  let state = createWhoAmIGame(DEMO_SEATS, WHO_AM_I_PACK, createSeededRandom(2026), { rounds: 5, categories: [], kidsSafe: false });
+  let state = createWhoAmIGame(DEMO_SEATS, DEMO_PACK, createSeededRandom(2026), { rounds: 5, categories: [], kidsSafe: false });
   if (phase === 'reveal') return step(step(state, 3, { type: 'ready' }), 5, { type: 'ready' });
   state = state.players.reduce((value, player) => step(value, player.id, { type: 'ready' }), state);
   // Round 1: the first player answers two questions and solves; the second is told "no".
@@ -210,7 +228,7 @@ export function WhoAmIDemo({ request, notify, lobby: Lobby }: DemoProps) {
       : { room_code: 'NIGHT-WHO1', name: isEnglish ? 'Guess Who I Am' : 'Хэн бэ би?', host_id: 'demo-1', max_players: Math.max(8, DEMO_SEATS.length), is_private: false, status: 'lobby', game_type: 'whoami', settings, language: isEnglish ? 'en' : 'mn' };
     const onRun = async (action: string, body: Record<string, unknown> = {}) => {
       if (action === 'settings' && mafia) setMafiaSettings((body.settings ?? {}) as Record<string, unknown>);
-      else if (action === 'settings') setSettings(sanitizeWhoAmISettings(body.settings, WHO_AM_I_PACK));
+      else if (action === 'settings') setSettings(sanitizeWhoAmISettings(body.settings, DEMO_PACK));
       else if (action === 'start' && mafia) notify(t('Туршилтын горимд сервер алга.', 'There is no server in the demo.'));
       else if (action === 'ready') setReady((current) => ({ ...current, [`demo-${viewer}`]: body.ready === true }));
       else if (action === 'start') choosePhase('reveal');

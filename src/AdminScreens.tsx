@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  ArrowLeft, Ban, Bug, Check, Clock3, Coins, DoorClosed, Eye, Flag, Flame, Gem, History, Inbox, LayoutDashboard, Lightbulb, Lock, LogOut, Megaphone, MessageSquare, Play, RefreshCw, Search, Send, ShieldCheck, Square, Ticket, Undo2, UserCog, Users, X,
+  ArrowLeft, Ban, Bug, Check, CircleHelp, Clock3, Coins, DoorClosed, Eye, Flag, Flame, Gem, History, Inbox, LayoutDashboard, Lightbulb, Lock, LogOut, Megaphone, MessageSquare, Play, RefreshCw, Search, Send, ShieldCheck, Square, Ticket, Undo2, UserCog, Users, X,
 } from 'lucide-react';
 import Avatar from './Avatar';
 import { supabase } from './supabaseClient';
@@ -8,12 +8,13 @@ import { callGame, type NotifyFn } from './multiplayer';
 import { GAMES, type GameType } from './games';
 import { Price, forSale, timeLeft, useShopItems, type Currency, type ShopOffer } from './Social';
 import type { PassSeason } from './BattlePass';
+import { WhoAmIContentTab } from './AdminWhoAmI';
 
 import { isEnglish, roomLangName, t } from './lang';
 import { translateMessage } from './i18n';
 /* ---------- shared bits ---------- */
 
-/** Admins do everything; moderators read reports and ban. */
+/** Admins do everything; moderators read reports, ban, and edit the Who Am I content. */
 export type StaffRole = 'admin' | 'moderator';
 const ROLE_LABEL: Record<StaffRole, string> = { admin: t('АДМИН', 'ADMIN'), moderator: t('МОДЕРАТОР', 'MODERATOR') };
 
@@ -169,7 +170,7 @@ export function FeedbackScreen({ onBack, notify }: { onBack: () => void; notify:
 
 /* ---------- admin panel ---------- */
 
-type Tab = 'dash' | 'players' | 'feedback' | 'rooms' | 'offers' | 'pass' | 'announce' | 'log';
+type Tab = 'dash' | 'players' | 'feedback' | 'whoami' | 'rooms' | 'offers' | 'pass' | 'announce' | 'log';
 type Stats = { players: number; new_today: number; rooms_live: number; rooms_playing: number; open_feedback: number; banned: number };
 type AdminPlayer = {
   id: string; display_name: string; avatar_url: string | null; email: string | null; provider: string; created_at: string;
@@ -184,6 +185,8 @@ const TABS: { key: Tab; label: string; icon: ReactNode; adminOnly?: boolean }[] 
   { key: 'dash', label: t('Самбар', 'Dashboard'), icon: <LayoutDashboard size={15} /> },
   { key: 'players', label: t('Тоглогчид', 'Players'), icon: <Users size={15} /> },
   { key: 'feedback', label: t('Санал, гомдол', 'Feedback'), icon: <Inbox size={15} /> },
+  // Moderators too: the Who Am I categories, entries and pictures.
+  { key: 'whoami', label: t('Би хэн бэ', 'Who Am I'), icon: <CircleHelp size={15} /> },
   { key: 'rooms', label: t('Өрөөнүүд', 'Rooms'), icon: <DoorClosed size={15} />, adminOnly: true },
   { key: 'offers', label: t('Онцлох', 'Featured'), icon: <Flame size={15} />, adminOnly: true },
   { key: 'pass', label: 'Battle Pass', icon: <Ticket size={15} />, adminOnly: true },
@@ -196,6 +199,12 @@ const ACTION_LABEL: Record<string, string> = {
   'feedback-reopen': t('Санал дахин нээсэн', 'Reopened feedback'), announcement: t('Мэдэгдэл нийтэлсэн', 'Posted an announcement'), 'announcement-clear': t('Мэдэгдэл авсан', 'Removed an announcement'),
   coins: t('Зоос өгсөн', 'Gave coins'), diamonds: t('Алмаз өгсөн', 'Gave diamonds'), role: t('Эрх өөрчилсөн', 'Changed a role'), offer: t('Онцлох санал нэмсэн', 'Added a featured offer'), 'offer-end': t('Онцлох санал зогсоосон', 'Stopped a featured offer'),
   'pass-start': t('Battle Pass эхлүүлсэн', 'Started a Battle Pass'), 'pass-end': t('Battle Pass дуусгасан', 'Ended a Battle Pass'),
+  'whoami-category-add': t('Би хэн бэ: ангилал нэмсэн', 'Who Am I: added a category'), 'whoami-category-edit': t('Би хэн бэ: ангилал зассан', 'Who Am I: edited a category'),
+  'whoami-category-hide': t('Би хэн бэ: ангилал нуусан', 'Who Am I: hid a category'), 'whoami-category-show': t('Би хэн бэ: ангилал харуулсан', 'Who Am I: showed a category'),
+  'whoami-category-delete': t('Би хэн бэ: ангилал устгасан', 'Who Am I: deleted a category'), 'whoami-entry-add': t('Би хэн бэ: дүр нэмсэн', 'Who Am I: added an entry'),
+  'whoami-entry-edit': t('Би хэн бэ: дүр зассан', 'Who Am I: edited an entry'), 'whoami-entry-hide': t('Би хэн бэ: дүр нуусан', 'Who Am I: hid an entry'),
+  'whoami-entry-show': t('Би хэн бэ: дүр харуулсан', 'Who Am I: showed an entry'), 'whoami-entry-delete': t('Би хэн бэ: дүр устгасан', 'Who Am I: deleted an entry'),
+  'whoami-image-set': t('Би хэн бэ: зураг тавьсан', 'Who Am I: set a picture'), 'whoami-image-remove': t('Би хэн бэ: зураг авсан', 'Who Am I: removed a picture'),
 };
 const ROOM_STATUS: Record<string, string> = { lobby: t('ЛОББИ', 'LOBBY'), playing: t('ТОГЛОЖ БАЙНА', 'PLAYING'), finished: t('ДУУССАН', 'FINISHED') };
 
@@ -227,6 +236,7 @@ export function AdminScreen({ role, onBack, notify, onWatch }: { role: StaffRole
         {tab === 'dash' && <Dashboard stats={stats} isAdmin={isAdmin} onOpen={setTab} />}
         {tab === 'players' && <PlayersTab isAdmin={isAdmin} notify={notify} onChanged={loadStats} />}
         {tab === 'feedback' && <FeedbackTab notify={notify} onChanged={loadStats} />}
+        {tab === 'whoami' && <WhoAmIContentTab notify={notify} />}
         {tab === 'rooms' && isAdmin && <RoomsTab notify={notify} onChanged={loadStats} onWatch={onWatch} />}
         {tab === 'offers' && isAdmin && <OffersTab notify={notify} />}
         {tab === 'pass' && isAdmin && <PassTab notify={notify} />}
@@ -250,8 +260,8 @@ function Dashboard({ stats, isAdmin, onOpen }: { stats: Stats | null; isAdmin: b
       <b>{tile.value}</b><span>{tile.label}</span></button>)}</div>
     <p className="admin-note">{t(`Тоглогч хаахад тэр нэвтэрч чадахгүй болж, сууж байсан өрөөнөөсөө гарна. Тоглож байсан тоглолтод нь ялагдал бичигдэнэ.`, `A banned player can’t sign in and is removed from their room. A match they were playing counts as a loss.`)}</p>
     <p className="admin-note">{isAdmin
-      ? t('Админ: тоглогчдод зоос өгөх, админ/модератор эрх олгох, тоглож буй өрөөг ажиглах, өрөө хаах, мэдэгдэл нийтлэх. Дэлгүүр, бэлэг танд үнэгүй.', 'Admin: give players coins, grant admin/moderator roles, watch live rooms, close rooms, post announcements. The shop and gifts are free for you.')
-      : t('Модератор: санал, гомдлыг харж хариулах, тоглогч хаах, хаалт арилгах.', 'Moderator: read and answer feedback and reports, ban and unban players.')}</p>
+      ? t('Админ: тоглогчдод зоос өгөх, админ/модератор эрх олгох, тоглож буй өрөөг ажиглах, өрөө хаах, мэдэгдэл нийтлэх, «Би хэн бэ»-гийн ангилал, дүр, зургийг засах. Дэлгүүр, бэлэг танд үнэгүй.', 'Admin: give players coins, grant admin/moderator roles, watch live rooms, close rooms, post announcements, edit Who Am I categories, entries and pictures. The shop and gifts are free for you.')
+      : t('Модератор: санал, гомдлыг харж хариулах, тоглогч хаах, хаалт арилгах, «Би хэн бэ»-гийн ангилал, дүр, зургийг засах.', 'Moderator: read and answer feedback and reports, ban and unban players, edit Who Am I categories, entries and pictures.')}</p>
   </div>;
 }
 
@@ -406,7 +416,7 @@ function CoinsDialog({ player, initialCurrency = 'coin', onClose, onDone, notify
 
 const ROLE_CHOICES: { value: StaffRole | null; label: string; hint: string }[] = [
   { value: 'admin', label: t('Админ', 'Admin'), hint: t('Бүх эрх: зоос, эрх олгох, өрөө ажиглах, хаах', 'Everything: coins, roles, watching rooms, bans') },
-  { value: 'moderator', label: t('Модератор', 'Moderator'), hint: t('Санал, гомдол харах, тоглогч хаах', 'Reads feedback and reports, bans players') },
+  { value: 'moderator', label: t('Модератор', 'Moderator'), hint: t('Санал, гомдол харах, тоглогч хаах, «Би хэн бэ» агуулга засах', 'Reads feedback and reports, bans players, edits Who Am I content') },
   { value: null, label: t('Энгийн тоглогч', 'Player'), hint: t('Удирдах эрхгүй', 'No staff role') },
 ];
 

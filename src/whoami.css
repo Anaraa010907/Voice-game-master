@@ -1267,3 +1267,48 @@
 @media (orientation: landscape) and (max-height: 360px) {
   .whoami-reveal:not(.is-crowded) .whoami-card-who b { font-size: 14px; }
 }
+
+/* ---------- Entry pictures (staff add them in the admin panel) ----------
+ * Drawn only from an identity the viewer may see (never the viewer's own while they guess). A card, row or
+ * panel without a picture looks exactly as before. */
+.whoami-picture {
+  display: block;
+  flex: none;
+  object-fit: cover;
+  border: 1px solid rgba(210, 176, 115, .45);
+  border-radius: 10px;
+  background: #0c0d12;
+  box-shadow: 0 6px 16px #0007;
+}
+
+.whoami-picture.is-card { width: clamp(40px, 15vh, 84px); aspect-ratio: 1; }
+.whoami-card.is-large .whoami-picture.is-card { width: clamp(48px, 21vh, 104px); }
+.whoami-reveal.is-crowded .whoami-picture.is-card { width: clamp(24px, 9vh, 44px); border-radius: 7px; box-shadow: none; }
+.whoami-picture.is-thumb { width: 32px; height: 32px; border-radius: 8px; box-shadow: none; }
+.whoami-picture.is-compare { width: 1.5em; height: 1.5em; border-radius: 6px; box-shadow: none; }
+.whoami-guess-compare span.has-picture b { display: inline-flex; align-items: center; gap: 6px; }
+
+/* A pictured card keeps picture and name together in the middle (picture above the name); the name steps down
+   a size to make room. On short screens with two rows of cards the picture sits beside the name instead. */
+.whoami-card.has-picture .whoami-card-identity { flex-direction: column; gap: 4px; }
+.whoami-reveal:not(.is-crowded) .whoami-card.has-picture .whoami-card-identity { font-size: clamp(14px, min(4.6vh, 2.3vw), 24px); }
+.whoami-card.is-large.has-picture .whoami-card-identity { font-size: clamp(22px, 7vh, 36px); }
+.whoami-reveal.is-crowded .whoami-card.has-picture .whoami-card-identity { flex-direction: row; gap: 5px; font-size: clamp(12px, 3.8vh, 16px); }
+.whoami-reveal.is-crowded .whoami-card.has-picture .whoami-card-identity > span { min-width: 0; text-align: left; }
+
+@media (orientation: landscape) and (max-height: 420px) {
+  .whoami-card.is-large .whoami-picture.is-card { width: clamp(40px, 15vh, 64px); }
+  .whoami-card.is-large.has-picture .whoami-card-identity { font-size: clamp(20px, 6.4vh, 30px); }
+}
+
+@media (orientation: landscape) and (max-height: 360px) {
+  .whoami-picture.is-card { width: clamp(28px, 11vh, 40px); border-radius: 8px; }
+  .whoami-card.is-large .whoami-picture.is-card { width: clamp(34px, 12vh, 44px); }
+  /* One row of six cards is only ~125 px tall here: the picture goes beside the name, as with two rows. */
+  .whoami-reveal:not(.is-crowded) .whoami-card.has-picture .whoami-card-identity { flex-direction: row; gap: 5px; font-size: clamp(13px, min(4.4vh, 2.3vw), 18px); }
+  .whoami-reveal:not(.is-crowded) .whoami-card.has-picture .whoami-card-identity > span { min-width: 0; text-align: left; }
+  .whoami-reveal:not(.is-crowded) .whoami-picture.is-card { width: 30px; }
+  .whoami-card.is-large.has-picture .whoami-card-identity { gap: 2px; font-size: clamp(18px, 6vh, 24px); }
+  .whoami-reveal.is-crowded .whoami-picture.is-card { width: 24px; }
+  .whoami-picture.is-thumb { width: 28px; height: 28px; }
+}

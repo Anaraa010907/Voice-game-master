@@ -3567,3 +3567,70 @@
   .viewport .game-frame .pcard-showcase { width: 92px; }
   .viewport .game-frame .backdrop-preview.is-large { width: 104px; margin: 4px 0 2px; }
 }
+
+/* ---------- Admin: Who Am I content (AdminWhoAmI.tsx) ----------
+ * Categories, then one category's entries. Every button here is a full 44 px tap target; rows wrap their
+ * actions under the text when the pane is narrow. */
+.whoami-admin-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.whoami-admin-head .admin-refresh { margin-left: auto; }
+.whoami-admin-title { flex: 1; min-width: 120px; display: grid; gap: 1px; }
+.whoami-admin-title b { color: #f4ead7; font-size: 15px; line-height: 1.15; }
+.whoami-admin-title small { color: #9d968f; font-size: 10px; }
+.viewport .game-frame .whoami-admin :is(.whoami-admin-add, .whoami-admin-back, .whoami-admin-icon, .whoami-admin-confirm .danger-button, .whoami-admin-confirm .icon-button) {
+  flex: none; min-height: 44px; min-width: 44px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 10.5px;
+}
+.viewport .game-frame .whoami-admin .whoami-admin-icon { padding: 0; }
+.viewport .game-frame .whoami-admin-head .admin-refresh { width: 44px; height: 44px; }
+.admin-note.is-warning { color: #ffb4ba; }
+.whoami-admin-tools { display: flex; gap: 6px; align-items: center; }
+.viewport .game-frame .whoami-admin-search { flex: 1; min-width: 0; min-height: 44px; }
+.viewport .game-frame .whoami-admin-search input { height: 40px; }
+
+.whoami-admin-list li { flex-wrap: wrap; padding: 4px 6px 4px 4px; gap: 6px; }
+.whoami-admin-list li.is-hidden { opacity: .62; }
+.viewport .game-frame .whoami-admin-entry {
+  flex: 1 1 220px; min-width: 0; min-height: 44px; display: flex; align-items: center; gap: 9px; padding: 3px 6px;
+  border: 0; border-radius: 7px; background: transparent; color: inherit; text-align: left;
+}
+.viewport .game-frame .whoami-admin-entry:hover { background: rgba(255, 255, 255, .04); }
+.whoami-admin-chevron { flex: none; color: var(--gold); }
+.whoami-admin-thumb {
+  flex: none; width: 40px; height: 40px; display: grid; place-items: center; overflow: hidden;
+  border: 1px dashed rgba(210, 176, 115, .35); border-radius: 8px; background: #0c0d12; color: #6f6a66;
+}
+.whoami-admin-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.whoami-admin-list .admin-row-actions { gap: 4px; margin-left: auto; }
+
+.viewport .game-frame .whoami-admin-modal { width: min(560px, 96%); max-height: calc(100% - 16px); overflow-y: auto; gap: 8px; }
+.viewport .game-frame .whoami-admin-modal h2 small { color: #9d968f; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; }
+.whoami-admin-fields { display: grid; gap: 6px; min-width: 0; }
+.viewport .game-frame .whoami-admin-modal .auth-field input { min-height: 44px; }
+.viewport .game-frame .whoami-admin-modal .admin-choice-row > button { min-height: 44px; }
+.viewport .game-frame .whoami-admin-modal .modal-actions > button { min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; gap: 4px; }
+.viewport .game-frame .whoami-admin-modal > header { gap: 8px; flex-wrap: wrap; }
+.viewport .game-frame .whoami-admin-modal > header h2 { flex: 1 1 auto; min-width: 0; }
+.viewport .game-frame .whoami-admin-modal > header .modal-actions { margin: 0; flex: none; }
+.whoami-admin-entry-form { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; align-items: start; }
+.whoami-admin-picture { display: grid; justify-items: center; gap: 6px; text-align: center; }
+.whoami-admin-picture small { color: #9d968f; font-size: 9.5px; line-height: 1.3; }
+.whoami-admin-preview {
+  width: 96px; height: 96px; display: grid; place-items: center; overflow: hidden;
+  border: 1px dashed rgba(210, 176, 115, .45); border-radius: 12px; background: #0c0d12; color: #77716b;
+}
+.whoami-admin-preview img { width: 100%; height: 100%; object-fit: cover; }
+.viewport .game-frame .whoami-admin-pick { position: relative; width: 100%; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 8px; font-size: 10px; cursor: pointer; }
+.whoami-admin-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.whoami-admin-pick.is-busy { opacity: .7; }
+
+@media (orientation: landscape) and (max-height: 420px) {
+  .viewport .game-frame .whoami-admin-modal { padding-top: 10px; padding-bottom: 10px; }
+  .whoami-admin-entry-form { grid-template-columns: 96px minmax(0, 1fr); gap: 10px; }
+  .whoami-admin-preview { width: 80px; height: 80px; }
+}
+
+@media (orientation: portrait) and (max-width: 560px) {
+  .whoami-admin-entry-form { grid-template-columns: 1fr; }
+  .whoami-admin-picture { grid-template-columns: 72px 1fr 1fr; align-items: center; text-align: left; }
+  .whoami-admin-preview { width: 72px; height: 72px; }
+  .whoami-admin-picture small { grid-column: 1 / -1; }
+}
